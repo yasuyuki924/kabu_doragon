@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ローカル株分析ボード | 銘柄詳細</title>
+    <link rel="stylesheet" href="./assets/style.css" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  </head>
+  <body data-page="ticker">
+    <main class="container">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow"><a href="./index.html">← 銘柄一覧へ戻る</a></p>
+          <h1 id="tickerTitle">銘柄詳細</h1>
+          <p id="tickerMeta" class="subtle"></p>
+        </div>
+        <div class="link-row" id="externalLinks"></div>
+      </header>
+
+      <section class="panel controls">
+        <div class="period-group" id="periodButtons" aria-label="表示期間"></div>
+        <div class="meta" id="chartMeta"></div>
+      </section>
+
+      <section class="panel summary-grid" id="tickerSummary">
+        <div class="summary-card">
+          <div class="summary-label">終値</div>
+          <div class="summary-value" id="summaryClose">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">前日比</div>
+          <div class="summary-value" id="summaryChange">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">始値</div>
+          <div class="summary-value" id="summaryOpen">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">高値 / 安値</div>
+          <div class="summary-value" id="summaryRange">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">出来高</div>
+          <div class="summary-value" id="summaryVolume">-</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div id="detailErrorBox" class="status-box error" hidden></div>
+        <div id="chart" class="chart"></div>
+      </section>
+
+      <section class="panel stack">
+        <div class="section-head">
+          <h2>ローカルメモ</h2>
+          <div class="meta" id="noteStatus">未保存</div>
+        </div>
+        <textarea id="tickerNote" class="note-area" placeholder="監視理由、決算メモ、次に見る条件など"></textarea>
+        <div class="form-actions">
+          <button id="saveNoteButton" class="action-button" type="button">メモ保存</button>
+          <button id="clearNoteButton" class="action-button secondary" type="button">クリア</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>

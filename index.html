@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ローカル株分析ボード</title>
+    <link rel="stylesheet" href="./assets/style.css" />
+  </head>
+  <body data-page="watchlist">
+    <main class="container">
+      <section class="portal-top panel">
+        <div class="portal-top-line">
+          <span class="portal-brand">株分析ボード</span>
+          <div class="portal-links">
+            <a href="#">値上がり</a>
+            <a href="#">値下がり</a>
+            <a href="#">出来高</a>
+            <a href="#">売買代金</a>
+            <a href="#">監視銘柄</a>
+            <a href="#">チャート</a>
+          </div>
+        </div>
+        <div class="portal-top-line thin">
+          <div class="portal-links">
+            <a href="#">テクニカル</a>
+            <a href="#">RCI</a>
+            <a href="#">移動平均</a>
+            <a href="#">上放れ</a>
+            <a href="#">押し目</a>
+            <a href="#">急騰候補</a>
+          </div>
+        </div>
+      </section>
+
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">ローカル株分析ボード</p>
+          <h1>株式ランキング / 監視リスト</h1>
+          <p class="subtle">ローカルCSVから値動きを集計して、自分用に一覧表示する</p>
+        </div>
+        <div class="header-actions">
+          <a class="action-button secondary" href="./scanner.html?sort=gainers&limit=50&months=3">50チャート</a>
+          <button id="addTickerButton" class="action-button" type="button">銘柄追加</button>
+          <button id="resetWatchlistButton" class="action-button secondary" type="button">ローカル編集を破棄</button>
+        </div>
+      </header>
+
+      <section class="search-board panel">
+        <div class="search-board-main">
+          <label class="search-field">
+            <span>証券コードまたは銘柄名を入力</span>
+            <input id="searchInput" type="search" placeholder="3133 / 海帆" autocomplete="off" />
+          </label>
+          <div class="meta" id="watchlistMeta"></div>
+        </div>
+        <div class="dashboard-strip">
+          <div class="mini-stat">
+            <div class="mini-stat-label">監視銘柄数</div>
+            <div class="mini-stat-value" id="summaryCount">-</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">上昇</div>
+            <div class="mini-stat-value rise" id="summaryRisers">-</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">下落</div>
+            <div class="mini-stat-value fall" id="summaryFallers">-</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">変わらず</div>
+            <div class="mini-stat-value" id="summaryFlats">-</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="portal-layout">
+        <div class="portal-main">
+          <section class="panel ranking-section">
+            <div class="section-head">
+              <h2>株式ランキング</h2>
+            </div>
+            <div class="ranking-grid">
+              <div class="ranking-box">
+                <div class="ranking-title">値上がり率</div>
+                <div id="rankingUp"></div>
+              </div>
+              <div class="ranking-box">
+                <div class="ranking-title">値下がり率</div>
+                <div id="rankingDown"></div>
+              </div>
+              <div class="ranking-box">
+                <div class="ranking-title">出来高上位</div>
+                <div id="rankingVolume"></div>
+              </div>
+              <div class="ranking-box">
+                <div class="ranking-title">株価上位</div>
+                <div id="rankingPrice"></div>
+              </div>
+              <div class="ranking-box">
+                <div class="ranking-title">短期強い順</div>
+                <div id="rankingMomentum"></div>
+              </div>
+              <div class="ranking-box">
+                <div class="ranking-title">監視タグ順</div>
+                <div id="rankingWatch"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel stack">
+            <div class="section-head">
+              <h2>タグ絞り込み</h2>
+              <button id="clearTagFilterButton" class="text-button" type="button">解除</button>
+            </div>
+            <div id="tagFilters" class="chip-list"></div>
+          </section>
+
+          <section id="editorPanel" class="panel stack" hidden>
+            <div class="section-head">
+              <h2 id="editorTitle">銘柄編集</h2>
+              <button id="cancelEditorButton" class="text-button" type="button">閉じる</button>
+            </div>
+            <form id="tickerForm" class="editor-form">
+              <input id="formMode" name="formMode" type="hidden" value="create" />
+              <input id="originalTicker" name="originalTicker" type="hidden" value="" />
+              <label>
+                <span>コード</span>
+                <input id="tickerField" name="ticker" type="text" required />
+              </label>
+              <label>
+                <span>銘柄名</span>
+                <input id="nameField" name="name" type="text" required />
+              </label>
+              <label>
+                <span>市場</span>
+                <input id="marketField" name="market" type="text" value="TSE" required />
+              </label>
+              <label>
+                <span>タグ</span>
+                <input id="tagsField" name="tags" type="text" placeholder="watch,growth" />
+              </label>
+              <label>
+                <span>IRリンク</span>
+                <input id="irField" name="ir" type="url" placeholder="https://..." />
+              </label>
+              <label>
+                <span>ニュースリンク</span>
+                <input id="newsField" name="news" type="url" placeholder="https://..." />
+              </label>
+              <div class="form-actions">
+                <button class="action-button" type="submit">保存</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div id="errorBox" class="status-box error" hidden></div>
+            <div class="section-head table-head">
+              <h2>監視リスト</h2>
+              <div class="meta">行クリックで詳細チャートへ</div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th><button class="sort-button" data-sort-key="ticker">コード</button></th>
+                    <th><button class="sort-button" data-sort-key="name">銘柄名</button></th>
+                    <th><button class="sort-button" data-sort-key="market">市場</button></th>
+                    <th class="num"><button class="sort-button" data-sort-key="latestClose">終値</button></th>
+                    <th class="num"><button class="sort-button" data-sort-key="changePercent">前日比%</button></th>
+                    <th class="num"><button class="sort-button" data-sort-key="latestVolume">出来高</button></th>
+                    <th>タグ</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="watchlistBody">
+                  <tr>
+                    <td colspan="8" class="empty-cell">読み込み中...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <aside class="portal-side">
+          <section class="panel side-box">
+            <div class="section-head">
+              <h2>今月</h2>
+            </div>
+            <div id="miniCalendar"></div>
+          </section>
+
+          <section class="panel side-box">
+            <div class="section-head">
+              <h2>よく使うリンク</h2>
+            </div>
+            <div class="side-links">
+              <a href="./ticker.html?t=3133">3133 海帆</a>
+              <a href="./ticker.html?t=6521">6521 オキサイド</a>
+              <a href="./ticker.html?t=7203">7203 トヨタ自動車</a>
+              <a href="#">決算メモ</a>
+              <a href="#">タグ監視</a>
+            </div>
+          </section>
+
+          <section class="panel side-box">
+            <div class="section-head">
+              <h2>メモ</h2>
+            </div>
+            <div class="meta side-note">
+              実データCSVに差し替えると、この一覧の終値・前日比・出来高も自動で反映されます。
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>

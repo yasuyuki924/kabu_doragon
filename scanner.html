@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ローカル株分析ボード | 連続チャート</title>
+    <link rel="stylesheet" href="./assets/style.css" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  </head>
+  <body data-page="scanner">
+    <main class="container">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow"><a href="./index.html">← ランキングへ戻る</a></p>
+          <h1>連続チャートビュー</h1>
+          <p class="subtle">条件に合った銘柄を最大50件まで下スクロールで確認</p>
+        </div>
+      </header>
+
+      <section class="panel scanner-toolbar">
+        <label>
+          <span>並び順</span>
+          <select id="scannerSort">
+            <option value="gainers">値上がり率順</option>
+            <option value="losers">値下がり率順</option>
+            <option value="volume">出来高順</option>
+            <option value="code">コード順</option>
+          </select>
+        </label>
+        <label>
+          <span>タグ</span>
+          <select id="scannerTag">
+            <option value="">すべて</option>
+          </select>
+        </label>
+        <label>
+          <span>表示件数</span>
+          <select id="scannerLimit">
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="50" selected>50</option>
+          </select>
+        </label>
+        <label>
+          <span>期間</span>
+          <select id="scannerMonths">
+            <option value="3" selected>3ヶ月</option>
+            <option value="6">6ヶ月</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel">
+        <div id="scannerMeta" class="meta"></div>
+        <div id="scannerError" class="status-box error" hidden></div>
+        <div id="scannerList" class="scanner-list"></div>
+      </section>
+    </main>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>
