@@ -1,7 +1,7 @@
 # Local Stock Dashboard MVP
 
 静的ファイルだけで動く、ローカル専用の株分析ダッシュボードです。  
-データは `/data/watchlist.json` と `/data/ohlcv/{ticker}.csv` を読み込みます。
+データは `/data/watchlist.json` と `/data/market_summary.json` と `/data/ohlcv/{ticker}.csv` を読み込みます。
 
 ## 追加した構成
 
@@ -11,8 +11,10 @@
 │   ├── app.js
 │   └── style.css
 ├── data/
+│   ├── market_summary.json
 │   ├── ohlcv/
 │   │   └── 3133.csv
+│   ├── tse_listed_components.csv
 │   └── watchlist.json
 ├── index.html
 └── ticker.html
@@ -23,20 +25,52 @@
 `fetch()` で JSON / CSV を読むため、`file://` 直開きではなく簡易HTTPサーバー経由を推奨します。
 
 ```bash
-cd "/Users/okamoto/Documents/Codex GPT"
+cd "/Users/okamoto/kabu_doragon"
 python3 -m http.server 8000
 open http://localhost:8000/index.html
 ```
 
-## 日経225データ取得
+## データ取得
 
-日経225の構成銘柄CSVは `data/nikkei225_components.csv` に固定しています。  
-日足データを `data/ohlcv/*.csv` と `data/watchlist.json` に再生成するには:
+### 日経225
+
+日経225の構成銘柄CSVは `data/nikkei225_components.csv` を使います。  
+日足データを `data/ohlcv/*.csv` と `data/watchlist.json` と `data/market_summary.json` に再生成するには:
 
 ```bash
-cd "/Users/okamoto/Documents/Codex GPT"
+cd "/Users/okamoto/kabu_doragon"
 ./.venv/bin/python src/fetch_nikkei225.py --period 5y --batch-size 25
 ```
+
+### 東証プライム / スタンダード / グロース全銘柄
+
+JPX公式の「東証上場銘柄一覧」から、3市場の内国株式を抽出して watchlist 化できます。
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python src/fetch_nikkei225.py \
+  --universe tse \
+  --segments prime,standard,growth \
+  --period 5y \
+  --batch-size 50
+```
+
+既存の OHLCV を使って watchlist / summary だけ作り直す場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python src/fetch_nikkei225.py \
+  --universe tse \
+  --segments prime,standard,growth \
+  --skip-price-download
+```
+
+主な生成物:
+
+- `data/tse_listed_components.csv`
+- `data/watchlist.json`
+- `data/market_summary.json`
+- `data/ohlcv/*.csv`
 
 ## 連続チャート
 
@@ -64,6 +98,7 @@ http://localhost:8000/scanner.html?sort=gainers&limit=50&months=3
   - `ticker`, `name`, `market` のソート
   - タグ絞り込み
   - タグ表示
+  - `market_summary.json` 優先読込
   - ローカル保存の watchlist 追加 / 編集 / 削除
 - `ticker.html?t=3133`
   - ローソク足
@@ -81,6 +116,7 @@ http://localhost:8000/scanner.html?sort=gainers&limit=50&months=3
 - 元の `data/watchlist.json` は初期データとして残ります
 - 「ローカル編集を破棄」で `localStorage` を消して初期状態へ戻せます
 - 銘柄メモも `localStorage` に保存されます
+- `market_summary.json` がある場合、一覧画面は銘柄ごとの CSV fetch を省略します
 
 ## データ形式
 
@@ -106,6 +142,24 @@ http://localhost:8000/scanner.html?sort=gainers&limit=50&months=3
 ```csv
 date,open,high,low,close,volume
 2025-08-01,842,861,831,854,421300
+```
+
+### `data/market_summary.json`
+
+```json
+{
+  "generatedAt": "2026-02-28T18:00:00",
+  "universe": "tse",
+  "recordCount": 1800,
+  "records": [
+    {
+      "ticker": "1301",
+      "latestDate": "2026-02-27",
+      "latestClose": 4120,
+      "changePercent": 1.42
+    }
+  ]
+}
 ```
 
 # Monex Scouter Test Fetcher

@@ -35,8 +35,11 @@
       <header class="page-header">
         <div>
           <p class="eyebrow">ローカル株分析ボード</p>
-          <h1>株式ランキング / 監視リスト</h1>
-          <p class="subtle">ローカルCSVから値動きを集計して、自分用に一覧表示する</p>
+          <h1>東証全銘柄ランキング / 監視リスト</h1>
+          <p class="subtle">プライム・スタンダード・グロースのローカルCSVを集計して一覧表示する</p>
+          <p class="runtime-note">
+            開き方: <strong>http://127.0.0.1:8010/index.html</strong> または <strong>http://localhost:8010/index.html</strong>
+          </p>
         </div>
         <div class="header-actions">
           <a class="action-button secondary" href="./scanner.html?sort=gainers&limit=50&months=3">50チャート</a>
@@ -155,6 +158,14 @@
                 <div id="rankingWatchBody"></div>
               </div>
             </div>
+          </section>
+
+          <section class="panel stack">
+            <div class="section-head">
+              <h2>市場絞り込み</h2>
+              <button id="clearMarketFilterButton" class="text-button" type="button">解除</button>
+            </div>
+            <div id="marketFilters" class="chip-list"></div>
           </section>
 
           <section class="panel stack">

@@ -1,6 +1,7 @@
 (function () {
   const WATCHLIST_PATH = "./data/watchlist.json";
-  const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v2";
+  const SUMMARY_PATH = "./data/market_summary.json";
+  const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v3";
   const NOTE_STORAGE_PREFIX = "local-stock-dashboard.note.";
   const PERIOD_MONTHS = [1, 2, 3, 4, 5, 6];
   const MA_WINDOWS = [5, 25, 75, 200];
@@ -46,6 +47,8 @@
     const sectorHeatmap = document.getElementById("sectorHeatmap");
     const tagHeatmap = document.getElementById("tagHeatmap");
     const sortButtons = Array.from(document.querySelectorAll(".sort-button"));
+    const marketFilters = document.getElementById("marketFilters");
+    const clearMarketFilterButton = document.getElementById("clearMarketFilterButton");
     const tagFilters = document.getElementById("tagFilters");
     const clearTagFilterButton = document.getElementById("clearTagFilterButton");
     const addTickerButton = document.getElementById("addTickerButton");
@@ -60,6 +63,7 @@
       query: "",
       sortKey: "ticker",
       sortDirection: "asc",
+      activeMarket: "",
       activeTag: "",
     };
 
@@ -83,6 +87,11 @@
 
     clearTagFilterButton.addEventListener("click", () => {
       state.activeTag = "";
+      render();
+    });
+
+    clearMarketFilterButton.addEventListener("click", () => {
+      state.activeMarket = "";
       render();
     });
 
@@ -149,10 +158,14 @@
     } catch (error) {
       showError(errorBox, error.message);
       body.innerHTML = '<tr><td colspan="10" class="empty-cell">銘柄一覧を読み込めませんでした。</td></tr>';
-      meta.textContent = "データ未読込";
+      meta.textContent = `データ未読込: ${error.message} / http://127.0.0.1:8010/index.html で開いてください`;
     }
 
     function render() {
+      renderMarketFilters(marketFilters, state.records, state.activeMarket, (market) => {
+        state.activeMarket = state.activeMarket === market ? "" : market;
+        render();
+      });
       renderTagFilters(tagFilters, state.records, state.activeTag, (tag) => {
         state.activeTag = state.activeTag === tag ? "" : tag;
         render();
@@ -167,8 +180,9 @@
                 .toLowerCase()
                 .includes(state.query)
             );
+          const marketMatch = !state.activeMarket || record.market === state.activeMarket;
           const tagMatch = !state.activeTag || (record.tags || []).includes(state.activeTag);
-          return queryMatch && tagMatch;
+          return queryMatch && marketMatch && tagMatch;
         })
         .sort((left, right) => compareRecords(left, right, state.sortKey, state.sortDirection));
 
@@ -184,11 +198,13 @@
       summaryRisers.textContent = formatNumber(risers, 0);
       summaryFallers.textContent = formatNumber(fallers, 0);
       summaryFlats.textContent = formatNumber(flats, 0);
-      meta.textContent = `${filtered.length} / ${state.records.length} 件${state.activeTag ? ` | タグ: ${state.activeTag}` : ""}`;
+      meta.textContent = `${filtered.length} / ${state.records.length} 件${state.activeMarket ? ` | 市場: ${state.activeMarket}` : ""}${state.activeTag ? ` | タグ: ${state.activeTag}` : ""}`;
       marketPulseMeta.textContent = state.query
-        ? `検索: ${state.query}${state.activeTag ? ` / タグ: ${state.activeTag}` : ""}`
-        : state.activeTag
-          ? `タグ: ${state.activeTag}`
+        ? `検索: ${state.query}${state.activeMarket ? ` / 市場: ${state.activeMarket}` : ""}${state.activeTag ? ` / タグ: ${state.activeTag}` : ""}`
+        : state.activeMarket
+          ? `市場: ${state.activeMarket}${state.activeTag ? ` / タグ: ${state.activeTag}` : ""}`
+          : state.activeTag
+            ? `タグ: ${state.activeTag}`
           : "全監視銘柄ベース";
       overviewLatestDate.textContent = latestDates.length ? latestDates.sort().at(-1) : "-";
       overviewDataCoverage.textContent = validTrendRecords.length
@@ -733,52 +749,109 @@
   }
 
   async function loadWatchlist() {
+    const baseRecords = sortWatchlistRecords((await fetchJson(WATCHLIST_PATH)).map(normalizeWatchlistRecord));
     const local = localStorage.getItem(WATCHLIST_STORAGE_KEY);
-    if (local) {
-      return sortWatchlistRecords(JSON.parse(local).map(normalizeWatchlistRecord));
+    if (!local) {
+      return baseRecords;
     }
-    const records = await fetchJson(WATCHLIST_PATH);
-    return sortWatchlistRecords(records.map(normalizeWatchlistRecord));
+
+    try {
+      const parsed = JSON.parse(local);
+      const localRecords = Array.isArray(parsed) ? parsed : parsed.records;
+      const baseRecordCount = Array.isArray(parsed) ? null : Number(parsed.baseRecordCount || 0);
+      if (!Array.isArray(localRecords)) {
+        return baseRecords;
+      }
+
+      // Ignore stale localStorage created against an older, much smaller universe.
+      if (baseRecords.length >= 500) {
+        if ((baseRecordCount && baseRecordCount !== baseRecords.length) || localRecords.length < baseRecords.length * 0.9) {
+          localStorage.removeItem(WATCHLIST_STORAGE_KEY);
+          return baseRecords;
+        }
+      }
+
+      return sortWatchlistRecords(localRecords.map(normalizeWatchlistRecord));
+    } catch (_error) {
+      localStorage.removeItem(WATCHLIST_STORAGE_KEY);
+      return baseRecords;
+    }
   }
 
   async function loadWatchlistWithQuotes() {
     const records = await loadWatchlist();
-    const enriched = await Promise.all(
-      records.map(async (record) => {
-        try {
-          const rows = await fetchCsv(`./data/ohlcv/${record.ticker}.csv`);
-          const latest = rows[rows.length - 1] || null;
-          const previous = rows[rows.length - 2] || null;
-          const latestClose = latest?.close ?? null;
-          const latestVolume = latest?.volume ?? null;
-          const changePercent =
-            latest && previous && previous.close ? ((latest.close - previous.close) / previous.close) * 100 : null;
-          const metrics = calculateTechnicalSnapshot(rows);
-          return { ...record, latestClose, latestVolume, changePercent, latestDate: latest?.date ?? null, ...metrics };
-        } catch (_error) {
-          return {
-            ...record,
-            latestClose: null,
-            latestVolume: null,
-            changePercent: null,
-            latestDate: null,
-            distanceToMa25: null,
-            distanceToMa75: null,
-            distanceToMa200: null,
-            volumeRatio25: null,
-            rci12: null,
-            rci24: null,
-            rci48: null,
-            rangePosition52w: null,
-          };
-        }
-      })
-    );
+    const summaryMap = await loadSummaryMap();
+
+    if (summaryMap.size) {
+      return records.map((record) => ({
+        ...record,
+        ...emptySummaryMetrics(),
+        ...(summaryMap.get(record.ticker) || {}),
+      }));
+    }
+
+    const enriched = await Promise.all(records.map((record) => enrichRecordFromCsv(record)));
     return enriched;
   }
 
+  async function loadSummaryMap() {
+    try {
+      const payload = await fetchJson(SUMMARY_PATH);
+      const records = Array.isArray(payload) ? payload : payload.records;
+      if (!Array.isArray(records)) {
+        return new Map();
+      }
+      return new Map(
+        records
+          .filter((record) => record?.ticker)
+          .map((record) => [String(record.ticker), { ...emptySummaryMetrics(), ...record }])
+      );
+    } catch (_error) {
+      return new Map();
+    }
+  }
+
+  async function enrichRecordFromCsv(record) {
+    try {
+      const rows = await fetchCsv(`./data/ohlcv/${record.ticker}.csv`);
+      const latest = rows[rows.length - 1] || null;
+      const previous = rows[rows.length - 2] || null;
+      const latestClose = latest?.close ?? null;
+      const latestVolume = latest?.volume ?? null;
+      const changePercent =
+        latest && previous && previous.close ? ((latest.close - previous.close) / previous.close) * 100 : null;
+      const metrics = calculateTechnicalSnapshot(rows);
+      return { ...record, latestClose, latestVolume, changePercent, latestDate: latest?.date ?? null, ...metrics };
+    } catch (_error) {
+      return { ...record, ...emptySummaryMetrics() };
+    }
+  }
+
+  function emptySummaryMetrics() {
+    return {
+      latestClose: null,
+      latestVolume: null,
+      changePercent: null,
+      latestDate: null,
+      distanceToMa25: null,
+      distanceToMa75: null,
+      distanceToMa200: null,
+      volumeRatio25: null,
+      rci12: null,
+      rci24: null,
+      rci48: null,
+      rangePosition52w: null,
+    };
+  }
+
   function persistWatchlist(records) {
-    localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(sortWatchlistRecords(records)));
+    localStorage.setItem(
+      WATCHLIST_STORAGE_KEY,
+      JSON.stringify({
+        baseRecordCount: records.length,
+        records: sortWatchlistRecords(records),
+      })
+    );
   }
 
   function normalizeWatchlistRecord(record) {
@@ -833,6 +906,24 @@
 
     Array.from(container.querySelectorAll("button[data-tag-filter]")).forEach((button) => {
       button.addEventListener("click", () => onClick(button.dataset.tagFilter));
+    });
+  }
+
+  function renderMarketFilters(container, records, activeMarket, onClick) {
+    const markets = [...new Set(records.map((record) => record.market).filter(Boolean))].sort((left, right) =>
+      left.localeCompare(right, "ja", { sensitivity: "base" })
+    );
+    container.innerHTML = markets.length
+      ? markets
+          .map(
+            (market) =>
+              `<button type="button" class="chip filter-chip${market === activeMarket ? " active" : ""}" data-market-filter="${escapeHtml(market)}">${escapeHtml(market)}</button>`
+          )
+          .join("")
+      : '<span class="subtle">市場区分がありません。</span>';
+
+    Array.from(container.querySelectorAll("button[data-market-filter]")).forEach((button) => {
+      button.addEventListener("click", () => onClick(button.dataset.marketFilter));
     });
   }
 
@@ -1018,6 +1109,7 @@
   function showError(element, message) {
     element.textContent = message;
     element.hidden = false;
+    element.scrollIntoView({ block: "nearest" });
   }
 
   function parseDate(value) {
