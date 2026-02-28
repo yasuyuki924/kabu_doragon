@@ -158,6 +158,10 @@ h2 {
   margin-bottom: 8px;
 }
 
+.market-pulse {
+  margin-bottom: 8px;
+}
+
 .search-board-main {
   display: flex;
   flex-direction: column;
@@ -205,6 +209,105 @@ h2 {
 
 .ranking-section {
   margin-bottom: 8px;
+}
+
+.overview-grid,
+.profile-grid,
+.technical-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.overview-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr);
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.profile-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.technical-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.overview-card,
+.profile-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.overview-label,
+.profile-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-bottom: 6px;
+}
+
+.overview-value,
+.profile-value {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.overview-note {
+  color: var(--muted);
+  font-size: 0.74rem;
+  margin-top: 4px;
+}
+
+.breadth-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.breadth-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfe;
+  padding: 10px;
+}
+
+.breadth-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.breadth-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e7edf5;
+  font-size: 0.8rem;
+}
+
+.breadth-item:last-child {
+  border-bottom: 0;
+}
+
+.breadth-item-label {
+  font-weight: 700;
+}
+
+.breadth-item-value {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.section-head.compact h3 {
+  margin: 0;
+  font-size: 0.92rem;
 }
 
 .ranking-grid {
@@ -622,7 +725,9 @@ tbody tr:hover {
 
   .portal-layout,
   .search-board,
-  .scanner-toolbar {
+  .scanner-toolbar,
+  .breadth-board,
+  .profile-layout {
     grid-template-columns: 1fr;
   }
 
@@ -630,12 +735,18 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
+  .overview-grid,
+  .technical-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .editor-form {
     grid-template-columns: 1fr;
   }
 
   .dashboard-strip,
-  .summary-grid {
+  .summary-grid,
+  .profile-grid {
     grid-template-columns: 1fr 1fr;
   }
 

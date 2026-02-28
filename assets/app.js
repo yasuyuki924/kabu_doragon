@@ -29,13 +29,22 @@
     const summaryFallers = document.getElementById("summaryFallers");
     const summaryFlats = document.getElementById("summaryFlats");
     const searchInput = document.getElementById("searchInput");
-    const rankingUp = document.getElementById("rankingUp");
-    const rankingDown = document.getElementById("rankingDown");
-    const rankingVolume = document.getElementById("rankingVolume");
-    const rankingPrice = document.getElementById("rankingPrice");
-    const rankingMomentum = document.getElementById("rankingMomentum");
-    const rankingWatch = document.getElementById("rankingWatch");
+    const rankingUp = document.getElementById("rankingUpBody");
+    const rankingDown = document.getElementById("rankingDownBody");
+    const rankingVolume = document.getElementById("rankingVolumeBody");
+    const rankingPrice = document.getElementById("rankingPriceBody");
+    const rankingMomentum = document.getElementById("rankingMomentumBody");
+    const rankingWatch = document.getElementById("rankingWatchBody");
     const miniCalendar = document.getElementById("miniCalendar");
+    const marketPulseMeta = document.getElementById("marketPulseMeta");
+    const overviewLatestDate = document.getElementById("overviewLatestDate");
+    const overviewDataCoverage = document.getElementById("overviewDataCoverage");
+    const overviewAboveMa25 = document.getElementById("overviewAboveMa25");
+    const overviewAboveMa75 = document.getElementById("overviewAboveMa75");
+    const overviewAboveMa200 = document.getElementById("overviewAboveMa200");
+    const overviewAverageChange = document.getElementById("overviewAverageChange");
+    const sectorHeatmap = document.getElementById("sectorHeatmap");
+    const tagHeatmap = document.getElementById("tagHeatmap");
     const sortButtons = Array.from(document.querySelectorAll(".sort-button"));
     const tagFilters = document.getElementById("tagFilters");
     const clearTagFilterButton = document.getElementById("clearTagFilterButton");
@@ -89,18 +98,22 @@
 
     tickerForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const originalTicker = String(tickerForm.elements.originalTicker.value || "");
+      const existingRecord = state.records.find((record) => record.ticker === originalTicker);
       const formData = new FormData(tickerForm);
       const nextRecord = normalizeWatchlistRecord({
         ticker: formData.get("ticker"),
         name: formData.get("name"),
         market: formData.get("market"),
         tags: splitTags(formData.get("tags")),
+        sector: existingRecord?.sector || "",
+        industry: existingRecord?.industry || "",
         links: {
+          ...(existingRecord?.links || {}),
           ir: formData.get("ir"),
           news: formData.get("news"),
         },
       });
-      const originalTicker = String(formData.get("originalTicker") || "");
 
       if (!nextRecord.ticker || !nextRecord.name) {
         showError(errorBox, "コードと銘柄名は必須です。");
@@ -135,7 +148,7 @@
       render();
     } catch (error) {
       showError(errorBox, error.message);
-      body.innerHTML = '<tr><td colspan="8" class="empty-cell">銘柄一覧を読み込めませんでした。</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="empty-cell">銘柄一覧を読み込めませんでした。</td></tr>';
       meta.textContent = "データ未読込";
     }
 
@@ -162,11 +175,56 @@
       const risers = filtered.filter((record) => (record.changePercent || 0) > 0).length;
       const fallers = filtered.filter((record) => (record.changePercent || 0) < 0).length;
       const flats = filtered.length - risers - fallers;
+      const latestDates = filtered.map((record) => record.latestDate).filter(Boolean);
+      const validTrendRecords = filtered.filter((record) => record.latestClose != null);
+      const averageChange = average(
+        filtered.map((record) => record.changePercent).filter((value) => value != null)
+      );
       summaryCount.textContent = formatNumber(filtered.length, 0);
       summaryRisers.textContent = formatNumber(risers, 0);
       summaryFallers.textContent = formatNumber(fallers, 0);
       summaryFlats.textContent = formatNumber(flats, 0);
       meta.textContent = `${filtered.length} / ${state.records.length} 件${state.activeTag ? ` | タグ: ${state.activeTag}` : ""}`;
+      marketPulseMeta.textContent = state.query
+        ? `検索: ${state.query}${state.activeTag ? ` / タグ: ${state.activeTag}` : ""}`
+        : state.activeTag
+          ? `タグ: ${state.activeTag}`
+          : "全監視銘柄ベース";
+      overviewLatestDate.textContent = latestDates.length ? latestDates.sort().at(-1) : "-";
+      overviewDataCoverage.textContent = validTrendRecords.length
+        ? `${formatNumber(validTrendRecords.length, 0)}銘柄に価格データあり`
+        : "価格データなし";
+      overviewAboveMa25.textContent = formatRatioCount(
+        validTrendRecords.filter((record) => (record.distanceToMa25 || 0) > 0).length,
+        validTrendRecords.length
+      );
+      overviewAboveMa75.textContent = formatRatioCount(
+        validTrendRecords.filter((record) => (record.distanceToMa75 || 0) > 0).length,
+        validTrendRecords.length
+      );
+      overviewAboveMa200.textContent = formatRatioCount(
+        validTrendRecords.filter((record) => (record.distanceToMa200 || 0) > 0).length,
+        validTrendRecords.length
+      );
+      overviewAverageChange.textContent = formatSignedPercent(averageChange);
+      renderBreadthList(
+        sectorHeatmap,
+        summarizeGroups(filtered, (record) => record.sector || record.market || "未分類", (record) => record.changePercent),
+        ({ label, value, count }) => ({
+          label,
+          value: `${formatSignedPercent(value)} / ${formatNumber(count, 0)}件`,
+          className: getChangeClass(value),
+        })
+      );
+      renderBreadthList(
+        tagHeatmap,
+        summarizeTagCounts(filtered),
+        ({ label, count }) => ({
+          label,
+          value: `${formatNumber(count, 0)}件`,
+          className: "",
+        })
+      );
       renderRankingTable(
         rankingUp,
         topN(filtered, (record) => record.changePercent, true),
@@ -201,7 +259,7 @@
       );
 
       if (!filtered.length) {
-        body.innerHTML = '<tr><td colspan="8" class="empty-cell">該当する銘柄がありません。</td></tr>';
+        body.innerHTML = '<tr><td colspan="10" class="empty-cell">該当する銘柄がありません。</td></tr>';
         return;
       }
 
@@ -220,7 +278,9 @@
               <td>${escapeHtml(record.market)}</td>
               <td class="num">${formatNumber(record.latestClose)}</td>
               <td class="num ${getChangeClass(record.changePercent)}">${formatSignedPercent(record.changePercent)}</td>
+              <td class="num ${getSignedValueClass(record.distanceToMa25)}">${formatSignedPercent(record.distanceToMa25)}</td>
               <td class="num">${formatNumber(record.latestVolume, 0)}</td>
+              <td>${escapeHtml(record.sector || "-")}</td>
               <td>${tags}</td>
               <td>
                 <div class="actions-cell">
@@ -306,6 +366,17 @@
     const summaryOpen = document.getElementById("summaryOpen");
     const summaryRange = document.getElementById("summaryRange");
     const summaryVolume = document.getElementById("summaryVolume");
+    const profileMeta = document.getElementById("profileMeta");
+    const profileMarket = document.getElementById("profileMarket");
+    const profileSector = document.getElementById("profileSector");
+    const profileIndustry = document.getElementById("profileIndustry");
+    const profileTags = document.getElementById("profileTags");
+    const techDistanceMa25 = document.getElementById("techDistanceMa25");
+    const techDistanceMa75 = document.getElementById("techDistanceMa75");
+    const techDistanceMa200 = document.getElementById("techDistanceMa200");
+    const techVolumeRatio = document.getElementById("techVolumeRatio");
+    const techRciSummary = document.getElementById("techRciSummary");
+    const techRangePosition = document.getElementById("techRangePosition");
 
     const params = new URLSearchParams(window.location.search);
     const ticker = params.get("t");
@@ -368,6 +439,7 @@
     const previous = state.rows[state.rows.length - 2] || null;
     const change = previous ? latest.close - previous.close : 0;
     const changePercent = previous && previous.close ? (change / previous.close) * 100 : 0;
+    const metrics = calculateTechnicalSnapshot(state.rows);
     tickerTitle.textContent = `${ticker} ${state.info?.name || ""}`.trim();
     tickerMeta.textContent = [
       state.info?.market || "市場未設定",
@@ -382,6 +454,30 @@
     summaryOpen.textContent = formatNumber(latest.open);
     summaryRange.textContent = `${formatNumber(latest.high)} / ${formatNumber(latest.low)}`;
     summaryVolume.textContent = formatNumber(latest.volume, 0);
+    profileMeta.textContent = state.rows.length ? `${formatNumber(state.rows.length, 0)}本のローソク足` : "-";
+    profileMarket.textContent = state.info?.market || "-";
+    profileSector.textContent = state.info?.sector || "-";
+    profileIndustry.textContent = state.info?.industry || "-";
+    profileTags.textContent = state.info?.tags?.length ? state.info.tags.join(", ") : "-";
+    techDistanceMa25.textContent = formatSignedPercent(metrics.distanceToMa25);
+    techDistanceMa75.textContent = formatSignedPercent(metrics.distanceToMa75);
+    techDistanceMa200.textContent = formatSignedPercent(metrics.distanceToMa200);
+    techVolumeRatio.textContent = formatRatio(metrics.volumeRatio25);
+    techRciSummary.textContent = [metrics.rci12, metrics.rci24, metrics.rci48]
+      .map((value) => (value == null ? "-" : Number(value).toFixed(1)))
+      .join(" / ");
+    techRangePosition.textContent = formatPercent(metrics.rangePosition52w);
+    [
+      [techDistanceMa25, metrics.distanceToMa25],
+      [techDistanceMa75, metrics.distanceToMa75],
+      [techDistanceMa200, metrics.distanceToMa200],
+      [techRangePosition, metrics.rangePosition52w],
+    ].forEach(([element, value]) => {
+      const className = getSignedValueClass(value);
+      if (className) {
+        element.classList.add(className);
+      }
+    });
 
     externalLinks.innerHTML = state.info?.links
       ? Object.entries(state.info.links)
@@ -657,9 +753,24 @@
           const latestVolume = latest?.volume ?? null;
           const changePercent =
             latest && previous && previous.close ? ((latest.close - previous.close) / previous.close) * 100 : null;
-          return { ...record, latestClose, latestVolume, changePercent };
+          const metrics = calculateTechnicalSnapshot(rows);
+          return { ...record, latestClose, latestVolume, changePercent, latestDate: latest?.date ?? null, ...metrics };
         } catch (_error) {
-          return { ...record, latestClose: null, latestVolume: null, changePercent: null };
+          return {
+            ...record,
+            latestClose: null,
+            latestVolume: null,
+            changePercent: null,
+            latestDate: null,
+            distanceToMa25: null,
+            distanceToMa75: null,
+            distanceToMa200: null,
+            volumeRatio25: null,
+            rci12: null,
+            rci24: null,
+            rci48: null,
+            rangePosition52w: null,
+          };
         }
       })
     );
@@ -671,15 +782,23 @@
   }
 
   function normalizeWatchlistRecord(record) {
+    const links = Object.entries(record?.links || {}).reduce((accumulator, [key, value]) => {
+      const normalizedKey = String(key || "").trim();
+      const normalizedValue = String(value || "").trim();
+      if (normalizedKey && normalizedValue) {
+        accumulator[normalizedKey] = normalizedValue;
+      }
+      return accumulator;
+    }, {});
+
     return {
       ticker: String(record.ticker || "").trim(),
       name: String(record.name || "").trim(),
       market: String(record.market || "").trim(),
       tags: splitTags(record.tags),
-      links: {
-        ir: String(record?.links?.ir || "").trim(),
-        news: String(record?.links?.news || "").trim(),
-      },
+      sector: String(record.sector || "").trim(),
+      industry: String(record.industry || "").trim(),
+      links,
     };
   }
 
@@ -785,6 +904,68 @@
     });
   }
 
+  function average(values) {
+    if (!values.length) {
+      return null;
+    }
+    return values.reduce((total, value) => total + value, 0) / values.length;
+  }
+
+  function latestMovingAverage(values, windowSize) {
+    return movingAverage(values, windowSize).at(-1) ?? null;
+  }
+
+  function distanceFromBaseline(value, baseline) {
+    if (value == null || baseline == null || baseline === 0) {
+      return null;
+    }
+    return ((value - baseline) / baseline) * 100;
+  }
+
+  function calculateTechnicalSnapshot(rows) {
+    if (!rows.length) {
+      return {
+        distanceToMa25: null,
+        distanceToMa75: null,
+        distanceToMa200: null,
+        volumeRatio25: null,
+        rci12: null,
+        rci24: null,
+        rci48: null,
+        rangePosition52w: null,
+      };
+    }
+
+    const closes = rows.map((row) => row.close);
+    const volumes = rows.map((row) => row.volume);
+    const latestClose = closes.at(-1) ?? null;
+    const latestVolume = volumes.at(-1) ?? null;
+    const ma25 = latestMovingAverage(closes, 25);
+    const ma75 = latestMovingAverage(closes, 75);
+    const ma200 = latestMovingAverage(closes, 200);
+    const volumeMa25 = latestMovingAverage(volumes, 25);
+    const lookback252 = rows.slice(-252);
+    const highs = lookback252.map((row) => row.high);
+    const lows = lookback252.map((row) => row.low);
+    const highest52w = highs.length ? Math.max(...highs) : null;
+    const lowest52w = lows.length ? Math.min(...lows) : null;
+    const rangePosition52w =
+      latestClose != null && highest52w != null && lowest52w != null && highest52w !== lowest52w
+        ? ((latestClose - lowest52w) / (highest52w - lowest52w)) * 100
+        : null;
+
+    return {
+      distanceToMa25: distanceFromBaseline(latestClose, ma25),
+      distanceToMa75: distanceFromBaseline(latestClose, ma75),
+      distanceToMa200: distanceFromBaseline(latestClose, ma200),
+      volumeRatio25: latestVolume != null && volumeMa25 != null && volumeMa25 !== 0 ? latestVolume / volumeMa25 : null,
+      rci12: calculateRciSeries(rows, 12).at(-1) ?? null,
+      rci24: calculateRciSeries(rows, 24).at(-1) ?? null,
+      rci48: calculateRciSeries(rows, 48).at(-1) ?? null,
+      rangePosition52w,
+    };
+  }
+
   function calculateRciSeries(rows, windowSize) {
     const closes = rows.map((row) => row.close);
     return closes.map((_, index) => {
@@ -884,7 +1065,41 @@
     return `${sign}${Number(value).toFixed(2)}%`;
   }
 
+  function formatRatio(value) {
+    if (value == null || Number.isNaN(value)) {
+      return "-";
+    }
+    return `${Number(value).toFixed(2)}x`;
+  }
+
+  function formatPercent(value) {
+    if (value == null || Number.isNaN(value)) {
+      return "-";
+    }
+    return `${Number(value).toFixed(2)}%`;
+  }
+
+  function formatRatioCount(count, total) {
+    if (!total) {
+      return "-";
+    }
+    return `${formatNumber(count, 0)} / ${formatNumber(total, 0)} (${((count / total) * 100).toFixed(1)}%)`;
+  }
+
   function getChangeClass(value) {
+    if (value > 0) {
+      return "rise";
+    }
+    if (value < 0) {
+      return "fall";
+    }
+    return "";
+  }
+
+  function getSignedValueClass(value) {
+    if (value == null || Number.isNaN(value)) {
+      return "";
+    }
     if (value > 0) {
       return "rise";
     }
@@ -916,6 +1131,56 @@
             return `<tr><td>${index + 1}</td>${cols}</tr>`;
           })
           .join("")}</tbody></table>`
+      : '<div class="empty-cell">表示データなし</div>';
+  }
+
+  function summarizeGroups(records, groupSelector, valueSelector) {
+    const groups = new Map();
+    records.forEach((record) => {
+      const label = groupSelector(record);
+      const value = valueSelector(record);
+      if (value == null) {
+        return;
+      }
+      if (!groups.has(label)) {
+        groups.set(label, { label, count: 0, total: 0 });
+      }
+      const current = groups.get(label);
+      current.count += 1;
+      current.total += value;
+    });
+    return [...groups.values()]
+      .map((item) => ({ ...item, value: item.total / item.count }))
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 8);
+  }
+
+  function summarizeTagCounts(records) {
+    const counts = new Map();
+    records.forEach((record) => {
+      (record.tags || []).forEach((tag) => {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      });
+    });
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "ja"))
+      .slice(0, 12);
+  }
+
+  function renderBreadthList(container, items, formatter) {
+    container.innerHTML = items.length
+      ? items
+          .map((item) => {
+            const view = formatter(item);
+            return `
+              <div class="breadth-item">
+                <div class="breadth-item-label">${escapeHtml(view.label)}</div>
+                <div class="breadth-item-value ${escapeHtml(view.className || "")}">${escapeHtml(view.value)}</div>
+              </div>
+            `;
+          })
+          .join("")
       : '<div class="empty-cell">表示データなし</div>';
   }
 

@@ -12,22 +12,22 @@
         <div class="portal-top-line">
           <span class="portal-brand">株分析ボード</span>
           <div class="portal-links">
-            <a href="#">値上がり</a>
-            <a href="#">値下がり</a>
-            <a href="#">出来高</a>
-            <a href="#">売買代金</a>
-            <a href="#">監視銘柄</a>
-            <a href="#">チャート</a>
+            <a href="./scanner.html?sort=gainers&limit=50&months=3">値上がり</a>
+            <a href="./scanner.html?sort=losers&limit=50&months=3">値下がり</a>
+            <a href="./scanner.html?sort=volume&limit=50&months=3">出来高</a>
+            <a href="#marketPulse">相場概況</a>
+            <a href="#watchlistTable">監視銘柄</a>
+            <a href="./scanner.html?sort=code&limit=50&months=6">チャート</a>
           </div>
         </div>
         <div class="portal-top-line thin">
           <div class="portal-links">
-            <a href="#">テクニカル</a>
-            <a href="#">RCI</a>
-            <a href="#">移動平均</a>
-            <a href="#">上放れ</a>
-            <a href="#">押し目</a>
-            <a href="#">急騰候補</a>
+            <a href="./scanner.html?sort=gainers&limit=30&months=6">テクニカル</a>
+            <a href="#marketPulse">RCI</a>
+            <a href="#marketPulse">移動平均</a>
+            <a href="#rankingUp">上放れ</a>
+            <a href="#rankingDown">押し目</a>
+            <a href="#rankingMomentum">急騰候補</a>
           </div>
         </div>
       </section>
@@ -73,6 +73,56 @@
         </div>
       </section>
 
+      <section id="marketPulse" class="panel stack market-pulse">
+        <div class="section-head">
+          <h2>相場概況</h2>
+          <div class="meta" id="marketPulseMeta"></div>
+        </div>
+        <div class="overview-grid">
+          <div class="overview-card">
+            <div class="overview-label">最新データ日</div>
+            <div class="overview-value" id="overviewLatestDate">-</div>
+            <div class="overview-note" id="overviewDataCoverage">-</div>
+          </div>
+          <div class="overview-card">
+            <div class="overview-label">MA25 上</div>
+            <div class="overview-value" id="overviewAboveMa25">-</div>
+            <div class="overview-note">短期トレンド</div>
+          </div>
+          <div class="overview-card">
+            <div class="overview-label">MA75 上</div>
+            <div class="overview-value" id="overviewAboveMa75">-</div>
+            <div class="overview-note">中期トレンド</div>
+          </div>
+          <div class="overview-card">
+            <div class="overview-label">MA200 上</div>
+            <div class="overview-value" id="overviewAboveMa200">-</div>
+            <div class="overview-note">長期トレンド</div>
+          </div>
+          <div class="overview-card">
+            <div class="overview-label">平均前日比</div>
+            <div class="overview-value" id="overviewAverageChange">-</div>
+            <div class="overview-note">当日騰落の地合い</div>
+          </div>
+        </div>
+        <div class="breadth-board">
+          <section class="breadth-panel">
+            <div class="section-head compact">
+              <h3>業種別の強さ</h3>
+              <div class="meta">平均前日比順</div>
+            </div>
+            <div id="sectorHeatmap" class="breadth-list"></div>
+          </section>
+          <section class="breadth-panel">
+            <div class="section-head compact">
+              <h3>監視タグの偏り</h3>
+              <div class="meta">件数順</div>
+            </div>
+            <div id="tagHeatmap" class="breadth-list"></div>
+          </section>
+        </div>
+      </section>
+
       <section class="portal-layout">
         <div class="portal-main">
           <section class="panel ranking-section">
@@ -81,28 +131,28 @@
             </div>
             <div class="ranking-grid">
               <div class="ranking-box">
-                <div class="ranking-title">値上がり率</div>
-                <div id="rankingUp"></div>
+                <div class="ranking-title" id="rankingUp">値上がり率</div>
+                <div id="rankingUpBody"></div>
               </div>
               <div class="ranking-box">
-                <div class="ranking-title">値下がり率</div>
-                <div id="rankingDown"></div>
+                <div class="ranking-title" id="rankingDown">値下がり率</div>
+                <div id="rankingDownBody"></div>
               </div>
               <div class="ranking-box">
                 <div class="ranking-title">出来高上位</div>
-                <div id="rankingVolume"></div>
+                <div id="rankingVolumeBody"></div>
               </div>
               <div class="ranking-box">
                 <div class="ranking-title">株価上位</div>
-                <div id="rankingPrice"></div>
+                <div id="rankingPriceBody"></div>
               </div>
               <div class="ranking-box">
-                <div class="ranking-title">短期強い順</div>
-                <div id="rankingMomentum"></div>
+                <div class="ranking-title" id="rankingMomentum">短期強い順</div>
+                <div id="rankingMomentumBody"></div>
               </div>
               <div class="ranking-box">
                 <div class="ranking-title">監視タグ順</div>
-                <div id="rankingWatch"></div>
+                <div id="rankingWatchBody"></div>
               </div>
             </div>
           </section>
@@ -153,7 +203,7 @@
             </form>
           </section>
 
-          <section class="panel">
+          <section id="watchlistTable" class="panel">
             <div id="errorBox" class="status-box error" hidden></div>
             <div class="section-head table-head">
               <h2>監視リスト</h2>
@@ -168,14 +218,16 @@
                     <th><button class="sort-button" data-sort-key="market">市場</button></th>
                     <th class="num"><button class="sort-button" data-sort-key="latestClose">終値</button></th>
                     <th class="num"><button class="sort-button" data-sort-key="changePercent">前日比%</button></th>
+                    <th class="num"><button class="sort-button" data-sort-key="distanceToMa25">乖離25%</button></th>
                     <th class="num"><button class="sort-button" data-sort-key="latestVolume">出来高</button></th>
+                    <th>業種</th>
                     <th>タグ</th>
                     <th>操作</th>
                   </tr>
                 </thead>
                 <tbody id="watchlistBody">
                   <tr>
-                    <td colspan="8" class="empty-cell">読み込み中...</td>
+                    <td colspan="10" class="empty-cell">読み込み中...</td>
                   </tr>
                 </tbody>
               </table>
@@ -199,8 +251,8 @@
               <a href="./ticker.html?t=3133">3133 海帆</a>
               <a href="./ticker.html?t=6521">6521 オキサイド</a>
               <a href="./ticker.html?t=7203">7203 トヨタ自動車</a>
-              <a href="#">決算メモ</a>
-              <a href="#">タグ監視</a>
+              <a href="./scanner.html?sort=gainers&limit=20&months=3">3ヶ月強い順</a>
+              <a href="./scanner.html?sort=volume&limit=30&months=3">出来高監視</a>
             </div>
           </section>
 

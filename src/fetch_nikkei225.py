@@ -5,8 +5,11 @@ import argparse
 import csv
 import json
 import math
+import re
 import time
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 import pandas as pd
 import yfinance as yf
@@ -15,6 +18,8 @@ ROOT = Path(__file__).resolve().parent.parent
 COMPONENTS_CSV = ROOT / "data" / "nikkei225_components.csv"
 WATCHLIST_JSON = ROOT / "data" / "watchlist.json"
 OHLCV_DIR = ROOT / "data" / "ohlcv"
+YAHOO_QUOTE_URL = "https://finance.yahoo.co.jp/quote/{code}.T"
+TITLE_PATTERN = re.compile(r"<title>\s*(.*?)\s*</title>", re.IGNORECASE | re.DOTALL)
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,10 +60,11 @@ def make_watchlist(components: list[dict[str, str]]) -> list[dict[str, object]]:
         code = row["code"]
         sector = slugify(row["sector"])
         industry = slugify(row["industry"])
+        japanese_name = resolve_japanese_name(code) or row["name"]
         watchlist.append(
             {
                 "ticker": code,
-                "name": row["name"],
+                "name": japanese_name,
                 "market": "TSE",
                 "tags": ["nikkei225", sector, industry],
                 "links": {
@@ -81,6 +87,28 @@ def slugify(text: str) -> str:
         .replace(".", "")
         .replace(" ", "-")
     )
+
+
+def resolve_japanese_name(code: str) -> str | None:
+    request = Request(
+        YAHOO_QUOTE_URL.format(code=code),
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            html = response.read().decode("utf-8", errors="ignore")
+    except (TimeoutError, URLError):
+        return None
+
+    title_match = TITLE_PATTERN.search(html)
+    if not title_match:
+        return None
+
+    title = title_match.group(1).strip()
+    name = title.split("【", 1)[0].strip()
+    if not name or "Yahoo!ファイナンス" in name:
+        return None
+    return name
 
 
 def batch_download(tickers: list[str], period: str) -> dict[str, pd.DataFrame]:
