@@ -226,6 +226,35 @@ h2 {
   grid-column: 2 / -1;
 }
 
+.board-control-line.date-line {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.date-picker-wrap,
+.ticker-date-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.date-picker {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+.date-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
 .search-board-main {
   display: flex;
   flex-direction: column;
@@ -273,7 +302,7 @@ h2 {
 }
 
 .summary-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .ranking-section {
@@ -798,6 +827,12 @@ tbody tr:hover {
   text-align: center;
   padding: 5px 0;
   border: 1px solid #e6ebf2;
+}
+
+.mini-calendar td.active-day {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .chart {

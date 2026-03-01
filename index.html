@@ -49,6 +49,18 @@
           </div>
         </header>
 
+        <div class="board-control-line date-line">
+          <div class="board-control-label">
+            <span>日付</span>
+          </div>
+          <div class="date-picker-wrap">
+            <button id="prevDateButton" class="text-button" type="button">前日</button>
+            <input id="datePicker" class="date-picker" type="date" />
+            <button id="nextDateButton" class="text-button" type="button">翌日</button>
+            <div id="dateMeta" class="meta"></div>
+          </div>
+        </div>
+
         <div class="board-control-line">
           <div class="board-control-label">
             <span>検索</span>
@@ -99,27 +111,27 @@
           </div>
           <div class="ranking-grid compact">
             <div class="ranking-box">
-              <div class="ranking-title" id="rankingUp">値上がり率</div>
+              <div id="rankingUp" class="ranking-title">値上がり率</div>
               <div id="rankingUpBody"></div>
             </div>
             <div class="ranking-box">
-              <div class="ranking-title" id="rankingDown">値下がり率</div>
+              <div id="rankingDown" class="ranking-title">値下がり率</div>
               <div id="rankingDownBody"></div>
             </div>
             <div class="ranking-box">
-              <div class="ranking-title">出来高上位</div>
+              <div class="ranking-title">出来高増加</div>
               <div id="rankingVolumeBody"></div>
             </div>
             <div class="ranking-box">
-              <div class="ranking-title">株価上位</div>
+              <div class="ranking-title">新高値</div>
               <div id="rankingPriceBody"></div>
             </div>
             <div class="ranking-box">
-              <div class="ranking-title" id="rankingMomentum">短期強い順</div>
+              <div id="rankingMomentum" class="ranking-title">25日線乖離</div>
               <div id="rankingMomentumBody"></div>
             </div>
             <div class="ranking-box">
-              <div class="ranking-title">監視タグ順</div>
+              <div class="ranking-title">監視候補</div>
               <div id="rankingWatchBody"></div>
             </div>
           </div>

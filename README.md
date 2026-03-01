@@ -1,166 +1,192 @@
 # Local Stock Dashboard MVP
 
-静的ファイルだけで動く、ローカル専用の株分析ダッシュボードです。  
-データは `/data/watchlist.json` と `/data/market_summary.json` と `/data/ohlcv/{ticker}.csv` を読み込みます。
+既存の `index.html` を活かしながら、日付指定で過去ランキングを遡れるローカル専用の株分析サイトです。  
+フロントは `JSON -> 描画` に寄せ、計算とランキング生成は Python 側で行います。
 
-## 追加した構成
+## 現在の構成
 
 ```text
 .
 ├── assets/
 │   ├── app.js
 │   └── style.css
+├── scripts/
+│   ├── build_market_overview.py
+│   ├── build_rankings.py
+│   ├── build_ticker_data.py
+│   ├── common.py
+│   ├── fetch_prices.py
+│   └── run_daily.py
 ├── data/
-│   ├── market_summary.json
+│   ├── manifest.json
+│   ├── overview/
+│   │   └── YYYY-MM-DD/market_pulse.json
+│   ├── rankings/
+│   │   └── YYYY-MM-DD/*.json
+│   ├── tickers/
+│   │   └── 3133.json
 │   ├── ohlcv/
 │   │   └── 3133.csv
 │   ├── tse_listed_components.csv
 │   └── watchlist.json
 ├── index.html
-└── ticker.html
+├── ticker.html
+└── scanner.html
 ```
+
+## ファイルの役割
+
+- `index.html`
+  - 日付選択、ランキング、相場概況、監視リストのトップページ
+- `ticker.html`
+  - `code` と `date` を受けて、その日基準のチャートを表示
+- `scanner.html`
+  - 指定日基準の縦スクロール連続チャート
+- `assets/app.js`
+  - `manifest / rankings / overview / tickers` を読んで描画するフロント
+- `scripts/fetch_prices.py`
+  - 既存 `src/fetch_nikkei225.py` を呼び出して OHLCV と watchlist を更新
+- `scripts/build_ticker_data.py`
+  - `data/ohlcv/*.csv` から銘柄ごとの `data/tickers/*.json` を生成
+- `scripts/build_rankings.py`
+  - 日付ごとのランキング JSON を生成
+- `scripts/build_market_overview.py`
+  - 日付ごとの相場概況 JSON と `data/manifest.json` を生成
+- `scripts/run_daily.py`
+  - 一連の処理をまとめて実行する入口
 
 ## 起動方法
 
-`fetch()` で JSON / CSV を読むため、`file://` 直開きではなく簡易HTTPサーバー経由を推奨します。
-
 ```bash
 cd "/Users/okamoto/kabu_doragon"
-python3 -m http.server 8000
-open http://localhost:8000/index.html
+python3 -m http.server 8010
 ```
 
-## データ取得
+ブラウザで開く:
 
-### 日経225
-
-日経225の構成銘柄CSVは `data/nikkei225_components.csv` を使います。  
-日足データを `data/ohlcv/*.csv` と `data/watchlist.json` と `data/market_summary.json` に再生成するには:
-
-```bash
-cd "/Users/okamoto/kabu_doragon"
-./.venv/bin/python src/fetch_nikkei225.py --period 5y --batch-size 25
+```text
+http://127.0.0.1:8010/index.html
 ```
 
-### 東証プライム / スタンダード / グロース全銘柄
+`file://` 直開きでは `fetch()` が失敗するので、HTTP サーバー経由で開いてください。
 
-JPX公式の「東証上場銘柄一覧」から、3市場の内国株式を抽出して watchlist 化できます。
+## データ更新方法
+
+### 価格データの取得
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
-./.venv/bin/python src/fetch_nikkei225.py \
+./.venv/bin/python scripts/fetch_prices.py \
   --universe tse \
   --segments prime,standard,growth \
   --period 5y \
   --batch-size 50
 ```
 
-既存の OHLCV を使って watchlist / summary だけ作り直す場合:
+### JSON の再生成
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
-./.venv/bin/python src/fetch_nikkei225.py \
-  --universe tse \
-  --segments prime,standard,growth \
-  --skip-price-download
+./.venv/bin/python scripts/run_daily.py --skip-fetch --days 60
 ```
 
-主な生成物:
+`--days 60` は、直近 60 営業日ぶんの `rankings / overview / manifest` を作る最小構成です。  
+保持日数を増やしたい場合は `--days` を大きくしてください。
 
-- `data/tse_listed_components.csv`
-- `data/watchlist.json`
-- `data/market_summary.json`
-- `data/ohlcv/*.csv`
+### 少数銘柄でのテスト
 
-## 連続チャート
-
-フィルタ済み銘柄を最大50件まで下スクロールで見るページ:
-
-```text
-http://localhost:8000/scanner.html?sort=gainers&limit=50&months=3
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/run_daily.py \
+  --skip-fetch \
+  --days 10 \
+  --codes 1301,3133,7203
 ```
 
-主なパラメータ:
+## データ構造
 
-- `sort=gainers|losers|volume|code`
-- `limit=20|30|50`
-- `months=3|6`
-- `tag=<tag名>`
-
-`open index.html` だけでもファイル自体は開けますが、ブラウザの制約でローカルデータ読込に失敗する場合があります。  
-その場合は上記の `python3 -m http.server` を使ってください。
-
-## 画面
-
-- `index.html`
-  - watchlist 一覧
-  - ticker / name の部分一致検索
-  - `ticker`, `name`, `market` のソート
-  - タグ絞り込み
-  - タグ表示
-  - `market_summary.json` 優先読込
-  - ローカル保存の watchlist 追加 / 編集 / 削除
-- `ticker.html?t=3133`
-  - ローソク足
-  - 出来高
-  - 出来高移動平均 `5 / 25`
-  - 移動平均線 `5 / 25 / 75 / 200`
-  - RCI `12 / 24 / 48`
-  - 期間切替 `1〜6ヶ月`
-  - ローカルメモ保存
-  - ファイル欠損時のエラー表示
-
-## ローカル保存仕様
-
-- watchlist 編集内容は `localStorage` に保存されます
-- 元の `data/watchlist.json` は初期データとして残ります
-- 「ローカル編集を破棄」で `localStorage` を消して初期状態へ戻せます
-- 銘柄メモも `localStorage` に保存されます
-- `market_summary.json` がある場合、一覧画面は銘柄ごとの CSV fetch を省略します
-
-## データ形式
-
-### `data/watchlist.json`
-
-```json
-[
-  {
-    "ticker": "3133",
-    "name": "海帆",
-    "market": "TSE",
-    "tags": ["vortex", "watch"],
-    "links": {
-      "ir": "https://example.com/3133/ir",
-      "news": "https://example.com/3133/news"
-    }
-  }
-]
-```
-
-### `data/ohlcv/{ticker}.csv`
-
-```csv
-date,open,high,low,close,volume
-2025-08-01,842,861,831,854,421300
-```
-
-### `data/market_summary.json`
+### `data/manifest.json`
 
 ```json
 {
-  "generatedAt": "2026-02-28T18:00:00",
-  "universe": "tse",
-  "recordCount": 1800,
-  "records": [
+  "generatedAt": "2026-03-01T11:00:00",
+  "latestDate": "2026-02-27",
+  "availableDates": ["2026-02-20", "2026-02-21", "2026-02-27"],
+  "rankingFiles": [
+    "gainers",
+    "losers",
+    "volume_spike",
+    "new_high",
+    "deviation25",
+    "watch_candidates"
+  ]
+}
+```
+
+### `data/rankings/YYYY-MM-DD/gainers.json`
+
+```json
+{
+  "date": "2026-02-27",
+  "ranking": "値上がり率",
+  "count": 50,
+  "items": [
     {
-      "ticker": "1301",
-      "latestDate": "2026-02-27",
-      "latestClose": 4120,
-      "changePercent": 1.42
+      "rank": 1,
+      "code": "3133",
+      "name": "海帆",
+      "changePercent": 12.34
     }
   ]
 }
 ```
+
+### `data/overview/YYYY-MM-DD/market_pulse.json`
+
+```json
+{
+  "date": "2026-02-27",
+  "recordCount": 3765,
+  "riseCount": 1820,
+  "fallCount": 1640,
+  "aboveMa25Count": 2011,
+  "averageChangePercent": 0.42,
+  "records": []
+}
+```
+
+### `data/tickers/3133.json`
+
+```json
+{
+  "code": "3133",
+  "name": "海帆",
+  "market": "グロース",
+  "sector": "小売業",
+  "ohlcv": [
+    {
+      "date": "2026-02-27",
+      "open": 1000,
+      "high": 1080,
+      "low": 980,
+      "close": 1050,
+      "ma25": 912.4,
+      "rci12": 88.2
+    }
+  ]
+}
+```
+
+## 拡張しやすいポイント
+
+- `data/rankings/YYYY-MM-DD/*.json`
+  - 独自ランキングをファイル追加するだけで増やしやすい
+- `data/overview/YYYY-MM-DD/market_pulse.json`
+  - 市場別集計や騰落レシオなどを追加しやすい
+- `data/tickers/<code>.json`
+  - IR 要約、決算要約、ニュース要約、イベントフラグを銘柄単位で載せやすい
+- `assets/app.js`
+  - 画面ロジックは JSON を読むだけなので、計算追加の影響を受けにくい
 
 # Monex Scouter Test Fetcher
 

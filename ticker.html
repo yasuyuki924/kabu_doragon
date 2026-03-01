@@ -20,10 +20,25 @@
 
       <section class="panel controls">
         <div class="period-group" id="periodButtons" aria-label="表示期間"></div>
+        <div class="ticker-date-tools">
+          <label class="date-inline">
+            <span>基準日</span>
+            <input id="tickerDatePicker" class="date-picker" type="date" />
+          </label>
+          <div class="meta" id="tickerRankMeta">-</div>
+        </div>
         <div class="meta" id="chartMeta"></div>
       </section>
 
       <section class="panel summary-grid" id="tickerSummary">
+        <div class="summary-card">
+          <div class="summary-label">基準日</div>
+          <div class="summary-value" id="summaryDate">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">ランキング順位</div>
+          <div class="summary-value" id="summaryRank">-</div>
+        </div>
         <div class="summary-card">
           <div class="summary-label">終値</div>
           <div class="summary-value" id="summaryClose">-</div>
