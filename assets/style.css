@@ -56,7 +56,7 @@ a {
 
 .portal-top {
   margin-bottom: 6px;
-  padding: 6px 8px;
+  padding: 5px 8px;
 }
 
 .portal-top-line {
@@ -76,12 +76,41 @@ a {
   font-weight: 700;
 }
 
+.portal-filter-line {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.portal-filter-line + .portal-filter-line {
+  margin-top: 4px;
+}
+
+.portal-filter-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.portal-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
 .portal-links {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 10px;
   font-size: 0.86rem;
   line-height: 1.2;
+}
+
+.compact-links {
+  gap: 4px 8px;
+  font-size: 0.8rem;
 }
 
 .portal-links a,
@@ -226,20 +255,12 @@ h2 {
   grid-column: 2 / -1;
 }
 
-.board-control-line.date-line {
-  grid-template-columns: 72px minmax(0, 1fr);
-}
-
 .date-picker-wrap,
 .ticker-date-tools {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.date-line-wrap {
-  align-items: flex-start;
 }
 
 .date-calendar-wrap {
@@ -249,6 +270,36 @@ h2 {
   background: #f7f9fc;
   padding: 8px 10px;
   border-radius: 3px;
+}
+
+.date-panel {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.date-panel-label {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.date-panel-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.date-panel-meta {
+  align-self: flex-start;
+  padding-top: 2px;
+  font-size: 0.82rem;
 }
 
 .mini-calendar-title-row {
@@ -778,11 +829,11 @@ tbody tr:hover {
 .chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: 1px 6px;
   border-radius: 999px;
   background: var(--chip);
   color: var(--chip-text);
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 700;
   border: 1px solid #d6e2f3;
 }
@@ -960,8 +1011,22 @@ tbody tr:hover {
   cursor: pointer;
 }
 
+.mini-calendar-button.selectable-day-button {
+  color: #1d4f91;
+  font-weight: 700;
+}
+
 .mini-calendar-button:hover {
   background: rgba(29, 79, 145, 0.08);
+}
+
+.mini-calendar-button.selectable-day-button:hover {
+  color: #173f74;
+}
+
+.mini-calendar td.active-day .mini-calendar-button {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .mini-calendar-label {
@@ -996,6 +1061,10 @@ tbody tr:hover {
   .scanner-toolbar,
   .breadth-board,
   .profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .date-panel {
     grid-template-columns: 1fr;
   }
 

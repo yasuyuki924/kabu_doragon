@@ -32,9 +32,6 @@
     const meta = document.getElementById("watchlistMeta");
     const errorBox = document.getElementById("errorBox");
     const dateMeta = document.getElementById("dateMeta");
-    const prevDateButton = document.getElementById("prevDateButton");
-    const nextDateButton = document.getElementById("nextDateButton");
-    const latestDateButton = document.getElementById("latestDateButton");
     const summaryCount = document.getElementById("summaryCount");
     const summaryRisers = document.getElementById("summaryRisers");
     const summaryFallers = document.getElementById("summaryFallers");
@@ -52,9 +49,7 @@
     const tagHeatmap = document.getElementById("tagHeatmap");
     const sortButtons = Array.from(document.querySelectorAll(".sort-button"));
     const marketFilters = document.getElementById("marketFilters");
-    const clearMarketFilterButton = document.getElementById("clearMarketFilterButton");
-    const tagFilters = document.getElementById("tagFilters");
-    const clearTagFilterButton = document.getElementById("clearTagFilterButton");
+    const industryFilters = document.getElementById("tagFilters");
     const addTickerButton = document.getElementById("addTickerButton");
     const resetWatchlistButton = document.getElementById("resetWatchlistButton");
     const editorPanel = document.getElementById("editorPanel");
@@ -75,7 +70,7 @@
       sortKey: "ticker",
       sortDirection: "asc",
       activeMarket: "",
-      activeTag: "",
+      activeIndustry: "",
       calendarMonth: null,
     };
 
@@ -97,16 +92,6 @@
       });
     });
 
-    clearTagFilterButton.addEventListener("click", () => {
-      state.activeTag = "";
-      render();
-    });
-
-    clearMarketFilterButton.addEventListener("click", () => {
-      state.activeMarket = "";
-      render();
-    });
-
     addTickerButton.addEventListener("click", () => openEditor());
     cancelEditorButton.addEventListener("click", () => closeEditor());
 
@@ -115,24 +100,6 @@
       state.watchlist = await loadWatchlist();
       closeEditor();
       render();
-    });
-
-    prevDateButton.addEventListener("click", async () => {
-      const index = state.manifest.availableDates.indexOf(state.selectedDate);
-      if (index > 0) {
-        await loadDateBundle(state.manifest.availableDates[index - 1]);
-      }
-    });
-
-    nextDateButton.addEventListener("click", async () => {
-      const index = state.manifest.availableDates.indexOf(state.selectedDate);
-      if (index >= 0 && index < state.manifest.availableDates.length - 1) {
-        await loadDateBundle(state.manifest.availableDates[index + 1]);
-      }
-    });
-
-    latestDateButton.addEventListener("click", async () => {
-      await loadDateBundle(state.manifest.latestDate);
     });
 
     tickerForm.addEventListener("submit", async (event) => {
@@ -213,10 +180,6 @@
 
     function renderDateControls() {
       const availableDates = state.manifest.availableDates;
-      const index = availableDates.indexOf(state.selectedDate);
-      prevDateButton.disabled = index <= 0;
-      nextDateButton.disabled = index < 0 || index >= availableDates.length - 1;
-      latestDateButton.disabled = state.selectedDate === state.manifest.latestDate;
       dateMeta.textContent = `${state.selectedDate}基準 / ${availableDates.length}営業日保存 / 最新 ${state.manifest.latestDate}`;
     }
 
@@ -224,16 +187,16 @@
       const mergedRecords = mergeOverviewWithWatchlist(state.overview?.records || [], state.watchlist, state.selectedDate);
 
       renderMarketFilters(marketFilters, mergedRecords, state.activeMarket, (market) => {
-        state.activeMarket = state.activeMarket === market ? "" : market;
+        state.activeMarket = market;
         render();
       });
-      renderTagFilters(tagFilters, mergedRecords, state.activeTag, (tag) => {
-        state.activeTag = state.activeTag === tag ? "" : tag;
+      renderIndustryFilters(industryFilters, mergedRecords, state.activeIndustry, (industry) => {
+        state.activeIndustry = industry;
         render();
       });
 
       const filtered = mergedRecords
-        .filter((record) => matchesFilter(record, state.query, state.activeMarket, state.activeTag))
+        .filter((record) => matchesFilter(record, state.query, state.activeMarket, state.activeIndustry))
         .sort((left, right) => compareRecords(left, right, state.sortKey, state.sortDirection));
 
       const risers = filtered.filter((record) => (record.changePercent || 0) > 0).length;
@@ -246,7 +209,7 @@
       summaryRisers.textContent = formatNumber(risers, 0);
       summaryFallers.textContent = formatNumber(fallers, 0);
       summaryFlats.textContent = formatNumber(flats, 0);
-      meta.textContent = `${state.selectedDate} / ${filtered.length}件${state.activeMarket ? ` | 市場: ${state.activeMarket}` : ""}${state.activeTag ? ` | タグ: ${state.activeTag}` : ""}`;
+      meta.textContent = `${state.selectedDate} / ${filtered.length}件${state.activeMarket ? ` | 市場: ${state.activeMarket}` : ""}${state.activeIndustry ? ` | 業種: ${state.activeIndustry}` : ""}`;
       marketPulseMeta.textContent = `${state.selectedDate} 基準${state.query ? ` / 検索: ${state.query}` : ""}`;
       overviewLatestDate.textContent = state.selectedDate;
       overviewDataCoverage.textContent = `${formatNumber(validTrendRecords.length, 0)}銘柄に日次スナップショットあり`;
@@ -283,11 +246,11 @@
               ticker: record.code,
               name: record.name,
               market: record.market,
-              tags: record.tags,
+              industry: record.industry,
             },
             "",
             state.activeMarket,
-            state.activeTag
+            state.activeIndustry
           )
         );
         renderRankingTable(rankingContainers.get(item.key), item.label, item.key, state.selectedDate, records);
@@ -300,10 +263,8 @@
 
       body.innerHTML = filtered
         .map((record) => {
-          const tags = Array.isArray(record.tags) && record.tags.length
-            ? `<div class="chip-list">${record.tags
-                .map((tag) => `<button type="button" class="chip filter-chip${tag === state.activeTag ? " active" : ""}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`)
-                .join("")}</div>`
+          const industry = record.industry
+            ? `<button type="button" class="chip filter-chip${record.industry === state.activeIndustry ? " active" : ""}" data-industry="${escapeHtml(record.industry)}">${escapeHtml(record.industry)}</button>`
             : '<span class="subtle">-</span>';
 
           return `
@@ -316,7 +277,7 @@
               <td class="num ${getSignedValueClass(record.distanceToMa25)}">${formatSignedPercent(record.distanceToMa25)}</td>
               <td class="num">${formatNumber(record.volume, 0)}</td>
               <td>${escapeHtml(record.sector || "-")}</td>
-              <td>${tags}</td>
+              <td>${industry}</td>
               <td>
                 <div class="actions-cell">
                   <button type="button" class="row-button" data-action="edit" data-code="${escapeHtml(record.ticker)}">編集</button>
@@ -355,10 +316,10 @@
         });
       });
 
-      Array.from(body.querySelectorAll("button[data-tag]")).forEach((button) => {
+      Array.from(body.querySelectorAll("button[data-industry]")).forEach((button) => {
         button.addEventListener("click", (event) => {
           event.stopPropagation();
-          state.activeTag = state.activeTag === button.dataset.tag ? "" : button.dataset.tag;
+          state.activeIndustry = state.activeIndustry === button.dataset.industry ? "" : button.dataset.industry;
           render();
         });
       });
@@ -948,7 +909,7 @@
     return merged;
   }
 
-  function matchesFilter(record, query, activeMarket, activeTag) {
+  function matchesFilter(record, query, activeMarket, activeIndustry) {
     const queryMatch =
       !query ||
       [record.ticker, record.code, record.name].some((value) =>
@@ -957,25 +918,27 @@
           .includes(query)
       );
     const marketMatch = !activeMarket || record.market === activeMarket;
-    const tagMatch = !activeTag || (record.tags || []).includes(activeTag);
-    return queryMatch && marketMatch && tagMatch;
+    const industryMatch = !activeIndustry || record.industry === activeIndustry;
+    return queryMatch && marketMatch && industryMatch;
   }
 
-  function renderTagFilters(container, records, activeTag, onClick) {
-    const tags = [...new Set(records.flatMap((record) => record.tags || []))].sort((left, right) =>
-      left.localeCompare(right, "ja", { sensitivity: "base" })
-    );
-    container.innerHTML = tags.length
-      ? tags
+  function renderIndustryFilters(container, records, activeIndustry, onClick) {
+    const excluded = new Set(["tse", "prime", "standard", "growth"]);
+    const industries = [...new Set(records.map((record) => String(record.industry || "").trim()).filter(Boolean))]
+      .filter((industry) => !excluded.has(industry) && !records.some((record) => record.market === industry))
+      .sort((left, right) => left.localeCompare(right, "ja", { sensitivity: "base" }));
+    const options = ["全業種", ...industries];
+    container.innerHTML = options.length
+      ? options
           .map(
-            (tag) =>
-              `<button type="button" class="chip filter-chip${tag === activeTag ? " active" : ""}" data-tag-filter="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`
+            (industry) =>
+              `<button type="button" class="chip filter-chip${(!activeIndustry && industry === "全業種") || industry === activeIndustry ? " active" : ""}" data-industry-filter="${escapeHtml(industry)}">${escapeHtml(industry)}</button>`
           )
           .join("")
-      : '<span class="subtle">タグがありません。</span>';
+      : '<span class="subtle">業種がありません。</span>';
 
-    Array.from(container.querySelectorAll("button[data-tag-filter]")).forEach((button) => {
-      button.addEventListener("click", () => onClick(button.dataset.tagFilter));
+    Array.from(container.querySelectorAll("button[data-industry-filter]")).forEach((button) => {
+      button.addEventListener("click", () => onClick(button.dataset.industryFilter === "全業種" ? "" : button.dataset.industryFilter));
     });
   }
 
@@ -983,17 +946,18 @@
     const markets = [...new Set(records.map((record) => record.market).filter(Boolean))].sort((left, right) =>
       left.localeCompare(right, "ja", { sensitivity: "base" })
     );
-    container.innerHTML = markets.length
-      ? markets
+    const options = ["全市場", ...markets];
+    container.innerHTML = options.length
+      ? options
           .map(
             (market) =>
-              `<button type="button" class="chip filter-chip${market === activeMarket ? " active" : ""}" data-market-filter="${escapeHtml(market)}">${escapeHtml(market)}</button>`
+              `<button type="button" class="chip filter-chip${(!activeMarket && market === "全市場") || market === activeMarket ? " active" : ""}" data-market-filter="${escapeHtml(market)}">${escapeHtml(market)}</button>`
           )
           .join("")
       : '<span class="subtle">市場区分がありません。</span>';
 
     Array.from(container.querySelectorAll("button[data-market-filter]")).forEach((button) => {
-      button.addEventListener("click", () => onClick(button.dataset.marketFilter));
+      button.addEventListener("click", () => onClick(button.dataset.marketFilter === "全市場" ? "" : button.dataset.marketFilter));
     });
   }
 
@@ -1087,8 +1051,9 @@
     if (value == null || Number.isNaN(value)) {
       return "-";
     }
-    return Number(value).toLocaleString("ja-JP", {
-      minimumFractionDigits: digits,
+    const numericValue = Number(value);
+    return numericValue.toLocaleString("ja-JP", {
+      minimumFractionDigits: 0,
       maximumFractionDigits: digits,
     });
   }
@@ -1298,7 +1263,7 @@
                       .join(" ");
                     return `<td class="${className}">${
                       isSelectable
-                        ? `<button type="button" class="mini-calendar-button" data-date="${cellDateKey}">${cell}</button>`
+                        ? `<button type="button" class="mini-calendar-button selectable-day-button" data-date="${cellDateKey}">${cell}</button>`
                         : `<span class="mini-calendar-label">${cell}</span>`
                     }</td>`;
                   })

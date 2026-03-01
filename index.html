@@ -9,40 +9,20 @@
   <body data-page="watchlist">
     <main class="container">
       <section class="portal-top panel">
-        <div class="portal-top-line">
-          <span class="portal-brand">株分析ボード</span>
-          <div class="portal-links">
+        <div class="portal-filter-line">
+          <div class="portal-filter-label">種類</div>
+          <div class="portal-links compact-links">
             <a href="./scanner.html?sort=gainers&limit=50&months=3">値上がり</a>
             <a href="./scanner.html?sort=losers&limit=50&months=3">値下がり</a>
-            <a href="./scanner.html?sort=volume&limit=50&months=3">出来高</a>
-            <a href="#marketPulse">相場概況</a>
-            <a href="#watchlistTable">監視銘柄</a>
-            <a href="./scanner.html?sort=code&limit=50&months=6">チャート</a>
           </div>
         </div>
-        <div class="portal-top-line thin">
-          <div class="portal-links">
-            <a href="./scanner.html?sort=gainers&limit=30&months=6">テクニカル</a>
-            <a href="#marketPulse">RCI</a>
-            <a href="#marketPulse">移動平均</a>
-            <a href="#rankingUp">上放れ</a>
-            <a href="#rankingDown">押し目</a>
-            <a href="#rankingMomentum">急騰候補</a>
-          </div>
+        <div class="portal-filter-line">
+          <div class="portal-filter-label">市場</div>
+          <div id="marketFilters" class="portal-filter-options chip-list compact"></div>
         </div>
-        <div class="board-control-line">
-          <div class="board-control-label">
-            <span>市場</span>
-            <button id="clearMarketFilterButton" class="text-button" type="button">解除</button>
-          </div>
-          <div id="marketFilters" class="chip-list compact"></div>
-        </div>
-        <div class="board-control-line">
-          <div class="board-control-label">
-            <span>タグ</span>
-            <button id="clearTagFilterButton" class="text-button" type="button">解除</button>
-          </div>
-          <div id="tagFilters" class="chip-list compact"></div>
+        <div class="portal-filter-line">
+          <div class="portal-filter-label">業種</div>
+          <div id="tagFilters" class="portal-filter-options chip-list compact"></div>
         </div>
       </section>
 
@@ -63,18 +43,13 @@
           </div>
         </header>
 
-        <div class="board-control-line date-line">
-          <div class="board-control-label">
-            <span>日付</span>
-          </div>
-          <div class="date-picker-wrap date-line-wrap">
-            <button id="prevDateButton" class="text-button date-nav-button" type="button">&lt;前営業日</button>
+        <section class="date-panel">
+          <div class="date-panel-label">日付</div>
+          <div class="date-panel-main">
             <div id="miniCalendar" class="date-calendar-wrap"></div>
-            <button id="nextDateButton" class="text-button date-nav-button" type="button">翌営業日&gt;</button>
-            <button id="latestDateButton" class="text-button date-latest-button" type="button">最新</button>
-            <div id="dateMeta" class="meta"></div>
+            <div id="dateMeta" class="meta date-panel-meta"></div>
           </div>
-        </div>
+        </section>
 
         <div class="board-control-line">
           <div class="board-control-label">
@@ -244,8 +219,8 @@
                     <th class="num"><button class="sort-button" data-sort-key="changePercent">前日比%</button></th>
                     <th class="num"><button class="sort-button" data-sort-key="distanceToMa25">乖離25%</button></th>
                     <th class="num"><button class="sort-button" data-sort-key="latestVolume">出来高</button></th>
+                    <th>セクター</th>
                     <th>業種</th>
-                    <th>タグ</th>
                     <th>操作</th>
                   </tr>
                 </thead>
