@@ -18,6 +18,16 @@
       </header>
 
       <section class="panel scanner-toolbar">
+        <div class="scanner-toolbar-row scanner-date-row">
+          <div class="scanner-toolbar-title">日付</div>
+          <div class="date-picker-wrap scanner-date-tools">
+            <button id="scannerPrevDateButton" class="text-button date-nav-button" type="button">&lt;前営業日</button>
+            <div id="scannerMiniCalendar" class="date-calendar-wrap"></div>
+            <button id="scannerNextDateButton" class="text-button date-nav-button" type="button">翌営業日&gt;</button>
+            <button id="scannerLatestDateButton" class="text-button date-latest-button" type="button">最新</button>
+            <div id="scannerDateMeta" class="meta"></div>
+          </div>
+        </div>
         <label>
           <span>並び順</span>
           <select id="scannerSort">

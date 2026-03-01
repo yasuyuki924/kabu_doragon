@@ -31,10 +31,10 @@
     const body = document.getElementById("watchlistBody");
     const meta = document.getElementById("watchlistMeta");
     const errorBox = document.getElementById("errorBox");
-    const datePicker = document.getElementById("datePicker");
     const dateMeta = document.getElementById("dateMeta");
     const prevDateButton = document.getElementById("prevDateButton");
     const nextDateButton = document.getElementById("nextDateButton");
+    const latestDateButton = document.getElementById("latestDateButton");
     const summaryCount = document.getElementById("summaryCount");
     const summaryRisers = document.getElementById("summaryRisers");
     const summaryFallers = document.getElementById("summaryFallers");
@@ -76,6 +76,7 @@
       sortDirection: "asc",
       activeMarket: "",
       activeTag: "",
+      calendarMonth: null,
     };
 
     searchInput.addEventListener("input", (event) => {
@@ -130,8 +131,8 @@
       }
     });
 
-    datePicker.addEventListener("change", async () => {
-      await loadDateBundle(datePicker.value);
+    latestDateButton.addEventListener("click", async () => {
+      await loadDateBundle(state.manifest.latestDate);
     });
 
     tickerForm.addEventListener("submit", async (event) => {
@@ -204,21 +205,19 @@
       state.rankings = Object.fromEntries(
         rankingPayloads.map((payload, index) => [RANKING_CONFIG[index].key, payload])
       );
+      state.calendarMonth = startOfMonth(parseDate(selectedDate));
       syncIndexUrl(selectedDate);
       renderDateControls();
-      renderMiniCalendar(miniCalendar, parseDate(selectedDate), selectedDate);
       render();
     }
 
     function renderDateControls() {
       const availableDates = state.manifest.availableDates;
       const index = availableDates.indexOf(state.selectedDate);
-      datePicker.value = state.selectedDate;
-      datePicker.min = availableDates[0] || "";
-      datePicker.max = availableDates.at(-1) || "";
       prevDateButton.disabled = index <= 0;
       nextDateButton.disabled = index < 0 || index >= availableDates.length - 1;
-      dateMeta.textContent = `${availableDates.length}営業日保存 / 最新 ${state.manifest.latestDate}`;
+      latestDateButton.disabled = state.selectedDate === state.manifest.latestDate;
+      dateMeta.textContent = `${state.selectedDate}基準 / ${availableDates.length}営業日保存 / 最新 ${state.manifest.latestDate}`;
     }
 
     function render() {
@@ -274,6 +273,7 @@
         value: `${formatNumber(count, 0)}件`,
         className: "",
       }));
+      renderCalendar();
 
       RANKING_CONFIG.forEach((item) => {
         const payload = state.rankings[item.key];
@@ -285,7 +285,7 @@
               market: record.market,
               tags: record.tags,
             },
-            state.query,
+            "",
             state.activeMarket,
             state.activeTag
           )
@@ -362,6 +362,32 @@
           render();
         });
       });
+    }
+
+    function renderCalendar() {
+      const minMonth = startOfMonth(parseDate(state.manifest.availableDates[0]));
+      const maxMonth = startOfMonth(parseDate(state.manifest.availableDates.at(-1)));
+      renderMiniCalendar(
+        miniCalendar,
+        state.calendarMonth || startOfMonth(parseDate(state.selectedDate)),
+        state.selectedDate,
+        state.manifest.availableDates,
+        async (nextDate) => {
+          await loadDateBundle(nextDate);
+        },
+        {
+          minMonth,
+          maxMonth,
+          onPrevMonth: () => {
+            state.calendarMonth = addCalendarMonths(state.calendarMonth, -1);
+            renderCalendar();
+          },
+          onNextMonth: () => {
+            state.calendarMonth = addCalendarMonths(state.calendarMonth, 1);
+            renderCalendar();
+          },
+        }
+      );
     }
 
     function openEditor(record) {
@@ -466,7 +492,11 @@
     });
 
     tickerDatePicker.addEventListener("change", async () => {
-      state.selectedDate = resolveAvailableDate(tickerDatePicker.value, state.payload.ohlcv.map((row) => row.date));
+      state.selectedDate = resolvePickerDate(
+        tickerDatePicker.value,
+        state.payload.ohlcv.map((row) => row.date),
+        state.selectedDate
+      );
       await refreshRankContext();
       renderTicker();
     });
@@ -580,6 +610,11 @@
     const tagSelect = document.getElementById("scannerTag");
     const limitSelect = document.getElementById("scannerLimit");
     const monthsSelect = document.getElementById("scannerMonths");
+    const miniCalendar = document.getElementById("scannerMiniCalendar");
+    const dateMeta = document.getElementById("scannerDateMeta");
+    const prevDateButton = document.getElementById("scannerPrevDateButton");
+    const nextDateButton = document.getElementById("scannerNextDateButton");
+    const latestDateButton = document.getElementById("scannerLatestDateButton");
     const meta = document.getElementById("scannerMeta");
     const errorBox = document.getElementById("scannerError");
     const list = document.getElementById("scannerList");
@@ -592,6 +627,7 @@
       limit: 50,
       months: 3,
       selectedDate: "",
+      calendarMonth: null,
     };
 
     const params = new URLSearchParams(window.location.search);
@@ -613,18 +649,48 @@
       });
     });
 
+    prevDateButton.addEventListener("click", async () => {
+      const index = state.manifest.availableDates.indexOf(state.selectedDate);
+      if (index > 0) {
+        await loadDate(state.manifest.availableDates[index - 1]);
+        await render();
+      }
+    });
+
+    nextDateButton.addEventListener("click", async () => {
+      const index = state.manifest.availableDates.indexOf(state.selectedDate);
+      if (index >= 0 && index < state.manifest.availableDates.length - 1) {
+        await loadDate(state.manifest.availableDates[index + 1]);
+        await render();
+      }
+    });
+
+    latestDateButton.addEventListener("click", async () => {
+      await loadDate(state.manifest.latestDate);
+      await render();
+    });
+
     try {
       state.manifest = await loadManifest();
-      state.selectedDate = resolveAvailableDate(params.get("date") || state.manifest.latestDate, state.manifest.availableDates);
+      await loadDate(params.get("date") || state.manifest.latestDate);
+      await render();
+    } catch (error) {
+      showError(errorBox, error.message);
+    }
+
+    async function loadDate(requestedDate) {
+      state.selectedDate = resolveAvailableDate(requestedDate, state.manifest.availableDates);
       state.overview = await loadOverview(state.selectedDate);
+      state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
       const tags = [...new Set((state.overview.records || []).flatMap((record) => record.tags || []))].sort();
       tagSelect.innerHTML = ['<option value="">すべて</option>']
         .concat(tags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`))
         .join("");
+      if (state.tag && !tags.includes(state.tag)) {
+        state.tag = "";
+      }
       tagSelect.value = state.tag;
-      await render();
-    } catch (error) {
-      showError(errorBox, error.message);
+      renderDateControls();
     }
 
     async function render() {
@@ -634,6 +700,8 @@
         (state.overview.records || []).filter((record) => !state.tag || (record.tags || []).includes(state.tag)),
         state.sort
       ).slice(0, state.limit);
+      syncScannerUrl(state.selectedDate, state.sort, state.tag, state.limit, state.months);
+      renderCalendar();
       meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)} / 期間: ${state.months}ヶ月`;
 
       if (!filtered.length) {
@@ -673,6 +741,42 @@
           showError(errorBox, `一部のチャート読込に失敗: ${error.message}`);
         }
       }
+    }
+
+    function renderDateControls() {
+      const availableDates = state.manifest.availableDates;
+      const index = availableDates.indexOf(state.selectedDate);
+      prevDateButton.disabled = index <= 0;
+      nextDateButton.disabled = index < 0 || index >= availableDates.length - 1;
+      latestDateButton.disabled = state.selectedDate === state.manifest.latestDate;
+      dateMeta.textContent = `${state.selectedDate}基準 / ${availableDates.length}営業日保存 / 最新 ${state.manifest.latestDate}`;
+    }
+
+    function renderCalendar() {
+      const minMonth = startOfMonth(parseDate(state.manifest.availableDates[0]));
+      const maxMonth = startOfMonth(parseDate(state.manifest.availableDates.at(-1)));
+      renderMiniCalendar(
+        miniCalendar,
+        state.calendarMonth || startOfMonth(parseDate(state.selectedDate)),
+        state.selectedDate,
+        state.manifest.availableDates,
+        async (nextDate) => {
+          await loadDate(nextDate);
+          await render();
+        },
+        {
+          minMonth,
+          maxMonth,
+          onPrevMonth: () => {
+            state.calendarMonth = addCalendarMonths(state.calendarMonth, -1);
+            renderCalendar();
+          },
+          onNextMonth: () => {
+            state.calendarMonth = addCalendarMonths(state.calendarMonth, 1);
+            renderCalendar();
+          },
+        }
+      );
     }
   }
 
@@ -949,10 +1053,25 @@
     return new Date(`${value}T00:00:00`);
   }
 
+  function formatDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   function addMonths(date, delta) {
     const next = new Date(date);
     next.setMonth(next.getMonth() + delta);
     return next;
+  }
+
+  function startOfMonth(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+
+  function addCalendarMonths(date, delta) {
+    return startOfMonth(addMonths(date, delta));
   }
 
   function escapeHtml(value) {
@@ -1108,13 +1227,17 @@
       : '<div class="empty-cell">表示データなし</div>';
   }
 
-  function renderMiniCalendar(container, date, selectedDate) {
+  function renderMiniCalendar(container, date, selectedDate, availableDates = [], onSelect = null, options = {}) {
     if (!container) {
       return;
     }
     const year = date.getFullYear();
     const month = date.getMonth();
     const selected = parseDate(selectedDate);
+    const availableDateSet = new Set(availableDates);
+    const minMonth = options.minMonth ? startOfMonth(options.minMonth) : null;
+    const maxMonth = options.maxMonth ? startOfMonth(options.maxMonth) : null;
+    const currentMonth = startOfMonth(date);
     const first = new Date(year, month, 1);
     const last = new Date(year, month + 1, 0);
     const startWeekday = first.getDay();
@@ -1133,7 +1256,14 @@
       rows.push(cells.slice(index, index + 7));
     }
     container.innerHTML = `
-      <div class="meta">${year}年${month + 1}月</div>
+      <div class="mini-calendar-title-row">
+        <div class="mini-calendar-title">今月</div>
+      </div>
+      <div class="mini-calendar-head">
+        <button type="button" class="mini-calendar-nav" data-calendar-nav="prev"${minMonth && currentMonth <= minMonth ? " disabled" : ""}>&lt;</button>
+        <div class="mini-calendar-month">${year}年${month + 1}月</div>
+        <button type="button" class="mini-calendar-nav" data-calendar-nav="next"${maxMonth && currentMonth >= maxMonth ? " disabled" : ""}>&gt;</button>
+      </div>
       <table class="mini-calendar">
         <thead>
           <tr><th>日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th>土</th></tr>
@@ -1147,11 +1277,30 @@
                     if (!cell) {
                       return "<td></td>";
                     }
+                    const cellDate = new Date(year, month, Number(cell));
+                    const cellDateKey = formatDateKey(cellDate);
+                    const weekday = cellDate.getDay();
                     const isSelected =
                       selected.getFullYear() === year &&
                       selected.getMonth() === month &&
                       selected.getDate() === Number(cell);
-                    return `<td${isSelected ? ' class="active-day"' : ""}>${rowIndex * 7 + colIndex >= 0 ? cell : ""}</td>`;
+                    const isHoliday = isJapaneseHoliday(cellDate);
+                    const isSaturday = weekday === 6;
+                    const isSunday = weekday === 0;
+                    const isSelectable = availableDateSet.has(cellDateKey);
+                    const className = [
+                      isSelected ? "active-day" : "",
+                      isHoliday || isSunday ? "holiday" : "",
+                      isSaturday ? "saturday" : "",
+                      !isSelectable ? "disabled-day" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+                    return `<td class="${className}">${
+                      isSelectable
+                        ? `<button type="button" class="mini-calendar-button" data-date="${cellDateKey}">${cell}</button>`
+                        : `<span class="mini-calendar-label">${cell}</span>`
+                    }</td>`;
                   })
                   .join("")}</tr>`
             )
@@ -1159,6 +1308,20 @@
         </tbody>
       </table>
     `;
+
+    if (typeof onSelect === "function") {
+      Array.from(container.querySelectorAll("button[data-date]")).forEach((button) => {
+        button.addEventListener("click", () => onSelect(button.dataset.date));
+      });
+    }
+    const prevMonthButton = container.querySelector("button[data-calendar-nav='prev']");
+    const nextMonthButton = container.querySelector("button[data-calendar-nav='next']");
+    if (prevMonthButton && typeof options.onPrevMonth === "function" && !prevMonthButton.disabled) {
+      prevMonthButton.addEventListener("click", options.onPrevMonth);
+    }
+    if (nextMonthButton && typeof options.onNextMonth === "function" && !nextMonthButton.disabled) {
+      nextMonthButton.addEventListener("click", options.onNextMonth);
+    }
   }
 
   function sortScannerRecords(records, sortKey) {
@@ -1424,6 +1587,79 @@
     return eligible.at(-1) || availableDates[0];
   }
 
+  function resolvePickerDate(requestedDate, availableDates, fallbackDate) {
+    if (availableDates.includes(requestedDate)) {
+      return requestedDate;
+    }
+    return fallbackDate || resolveAvailableDate(requestedDate, availableDates);
+  }
+
+  function isJapaneseHoliday(date) {
+    const weekday = date.getDay();
+    if (weekday === 0) {
+      return true;
+    }
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const year = date.getFullYear();
+    if (isBaseJapaneseHoliday(date)) {
+      return true;
+    }
+    if (year >= 1985 && weekday !== 6) {
+      const previousDay = new Date(year, month - 1, day - 1);
+      const nextDay = new Date(year, month - 1, day + 1);
+      if (isBaseJapaneseHoliday(previousDay) && isBaseJapaneseHoliday(nextDay)) {
+        return true;
+      }
+    }
+    if (weekday === 1) {
+      const previousDay = new Date(year, month - 1, day - 1);
+      return isBaseJapaneseHoliday(previousDay);
+    }
+    return false;
+  }
+
+  function isBaseJapaneseHoliday(date) {
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const weekday = date.getDay();
+    const year = date.getFullYear();
+    return isFixedHoliday(month, day) || isHappyMondayHoliday(month, day, weekday) || isEquinoxHoliday(month, day, year);
+  }
+
+  function isFixedHoliday(month, day) {
+    return new Set(["1-1", "2-11", "2-23", "4-29", "5-3", "5-4", "5-5", "8-11", "11-3", "11-23"]).has(
+      `${month}-${day}`
+    );
+  }
+
+  function isHappyMondayHoliday(month, day, weekday) {
+    return (
+      (month === 1 && weekday === 1 && day >= 8 && day <= 14) ||
+      (month === 7 && weekday === 1 && day >= 15 && day <= 21) ||
+      (month === 9 && weekday === 1 && day >= 15 && day <= 21) ||
+      (month === 10 && weekday === 1 && day >= 8 && day <= 14)
+    );
+  }
+
+  function isEquinoxHoliday(month, day, year) {
+    if (month === 3) {
+      return day === vernalEquinoxDay(year);
+    }
+    if (month === 9) {
+      return day === autumnalEquinoxDay(year);
+    }
+    return false;
+  }
+
+  function vernalEquinoxDay(year) {
+    return Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+  }
+
+  function autumnalEquinoxDay(year) {
+    return Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+  }
+
   function findSelectedIndex(rows, requestedDate) {
     let lastIndex = -1;
     rows.forEach((row, index) => {
@@ -1462,6 +1698,20 @@
       params.delete("from");
     }
     history.replaceState({}, "", `./ticker.html?${params.toString()}`);
+  }
+
+  function syncScannerUrl(date, sort, tag, limit, months) {
+    const params = new URLSearchParams(window.location.search);
+    params.set("date", date);
+    params.set("sort", sort);
+    params.set("limit", String(limit));
+    params.set("months", String(months));
+    if (tag) {
+      params.set("tag", tag);
+    } else {
+      params.delete("tag");
+    }
+    history.replaceState({}, "", `./scanner.html?${params.toString()}`);
   }
 
   function rankingLabel(key) {

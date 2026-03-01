@@ -30,6 +30,20 @@
             <a href="#rankingMomentum">急騰候補</a>
           </div>
         </div>
+        <div class="board-control-line">
+          <div class="board-control-label">
+            <span>市場</span>
+            <button id="clearMarketFilterButton" class="text-button" type="button">解除</button>
+          </div>
+          <div id="marketFilters" class="chip-list compact"></div>
+        </div>
+        <div class="board-control-line">
+          <div class="board-control-label">
+            <span>タグ</span>
+            <button id="clearTagFilterButton" class="text-button" type="button">解除</button>
+          </div>
+          <div id="tagFilters" class="chip-list compact"></div>
+        </div>
       </section>
 
       <section class="panel board-hub">
@@ -53,10 +67,11 @@
           <div class="board-control-label">
             <span>日付</span>
           </div>
-          <div class="date-picker-wrap">
-            <button id="prevDateButton" class="text-button" type="button">前日</button>
-            <input id="datePicker" class="date-picker" type="date" />
-            <button id="nextDateButton" class="text-button" type="button">翌日</button>
+          <div class="date-picker-wrap date-line-wrap">
+            <button id="prevDateButton" class="text-button date-nav-button" type="button">&lt;前営業日</button>
+            <div id="miniCalendar" class="date-calendar-wrap"></div>
+            <button id="nextDateButton" class="text-button date-nav-button" type="button">翌営業日&gt;</button>
+            <button id="latestDateButton" class="text-button date-latest-button" type="button">最新</button>
             <div id="dateMeta" class="meta"></div>
           </div>
         </div>
@@ -87,22 +102,6 @@
               <div class="mini-stat-value" id="summaryFlats">-</div>
             </div>
           </div>
-        </div>
-
-        <div class="board-control-line">
-          <div class="board-control-label">
-            <span>市場</span>
-            <button id="clearMarketFilterButton" class="text-button" type="button">解除</button>
-          </div>
-          <div id="marketFilters" class="chip-list compact"></div>
-        </div>
-
-        <div class="board-control-line">
-          <div class="board-control-label">
-            <span>タグ</span>
-            <button id="clearTagFilterButton" class="text-button" type="button">解除</button>
-          </div>
-          <div id="tagFilters" class="chip-list compact"></div>
         </div>
 
         <section class="ranking-section dense-section">
@@ -261,13 +260,6 @@
         </div>
 
         <aside class="portal-side">
-          <section class="panel side-box">
-            <div class="section-head">
-              <h2>今月</h2>
-            </div>
-            <div id="miniCalendar"></div>
-          </section>
-
           <section class="panel side-box">
             <div class="section-head">
               <h2>よく使うリンク</h2>
