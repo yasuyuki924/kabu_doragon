@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import html
 import io
 import json
 import math
@@ -24,7 +25,11 @@ SUMMARY_JSON = ROOT / "data" / "market_summary.json"
 OHLCV_DIR = ROOT / "data" / "ohlcv"
 YAHOO_QUOTE_URL = "https://finance.yahoo.co.jp/quote/{code}.T"
 JPX_LISTINGS_XLS_URL = "https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xls"
+JPX_DELISTED_URL = "https://www.jpx.co.jp/listing/stocks/delisted/index.html"
 TITLE_PATTERN = re.compile(r"<title>\s*(.*?)\s*</title>", re.IGNORECASE | re.DOTALL)
+TABLE_ROW_PATTERN = re.compile(r"<tr[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
+TABLE_CELL_PATTERN = re.compile(r"<td[^>]*>(.*?)</td>", re.IGNORECASE | re.DOTALL)
+HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
 
 SEGMENT_LABELS = {
     "prime": "プライム",
@@ -80,6 +85,7 @@ def load_nikkei225_components() -> list[dict[str, str]]:
 
 
 def load_tse_components(selected_segments: list[str]) -> list[dict[str, str]]:
+    delisted_codes = load_delisted_codes()
     request = Request(JPX_LISTINGS_XLS_URL, headers={"User-Agent": "Mozilla/5.0"})
     with urlopen(request, timeout=30) as response:
         data = response.read()
@@ -107,6 +113,8 @@ def load_tse_components(selected_segments: list[str]) -> list[dict[str, str]]:
         name = str(row.get("name", "")).strip()
         if not code or not name:
             continue
+        if code in delisted_codes:
+            continue
 
         items.append(
             {
@@ -122,6 +130,46 @@ def load_tse_components(selected_segments: list[str]) -> list[dict[str, str]]:
 
     write_tse_components_csv(items)
     return items
+
+
+def load_delisted_codes() -> set[str]:
+    today = datetime.now().date()
+    request = Request(JPX_DELISTED_URL, headers={"User-Agent": "Mozilla/5.0"})
+
+    try:
+        with urlopen(request, timeout=30) as response:
+            page_html = response.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return set()
+
+    delisted_codes: set[str] = set()
+    for row_html in TABLE_ROW_PATTERN.findall(page_html):
+        cells = [strip_html(cell) for cell in TABLE_CELL_PATTERN.findall(row_html)]
+        if len(cells) < 3:
+            continue
+        delisted_on = parse_jpx_date(cells[0])
+        code = cells[2]
+        if code and delisted_on and delisted_on <= today:
+            delisted_codes.add(code)
+
+    return delisted_codes
+
+
+def parse_jpx_date(value: object) -> datetime.date | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def strip_html(value: str) -> str:
+    return html.unescape(HTML_TAG_PATTERN.sub("", value)).replace("\xa0", " ").strip()
 
 
 def write_tse_components_csv(components: list[dict[str, str]]) -> None:

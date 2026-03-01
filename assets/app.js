@@ -1,12 +1,13 @@
 (function () {
   const WATCHLIST_PATH = "./data/watchlist.json";
   const SUMMARY_PATH = "./data/market_summary.json";
-  const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v3";
+  const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v4";
   const NOTE_STORAGE_PREFIX = "local-stock-dashboard.note.";
   const PERIOD_MONTHS = [1, 2, 3, 4, 5, 6];
   const MA_WINDOWS = [5, 25, 75, 200];
   const VOLUME_MA_WINDOWS = [5, 25];
   const RCI_WINDOWS = [12, 24, 48];
+  const TSE_MARKETS = new Set(["TSE", "プライム", "スタンダード", "グロース"]);
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
@@ -750,6 +751,7 @@
 
   async function loadWatchlist() {
     const baseRecords = sortWatchlistRecords((await fetchJson(WATCHLIST_PATH)).map(normalizeWatchlistRecord));
+    const baseRecordMap = new Map(baseRecords.map((record) => [record.ticker, record]));
     const local = localStorage.getItem(WATCHLIST_STORAGE_KEY);
     if (!local) {
       return baseRecords;
@@ -771,7 +773,28 @@
         }
       }
 
-      return sortWatchlistRecords(localRecords.map(normalizeWatchlistRecord));
+      const normalizedLocalRecords = localRecords.map(normalizeWatchlistRecord);
+      const mergedRecordMap = new Map(baseRecordMap);
+
+      normalizedLocalRecords.forEach((record) => {
+        const baseRecord = baseRecordMap.get(record.ticker);
+        if (baseRecord) {
+          mergedRecordMap.set(record.ticker, {
+            ...baseRecord,
+            name: record.name || baseRecord.name,
+            market: record.market || baseRecord.market,
+            tags: record.tags?.length ? record.tags : baseRecord.tags,
+            links: { ...(baseRecord.links || {}), ...(record.links || {}) },
+          });
+          return;
+        }
+
+        if (!TSE_MARKETS.has(record.market)) {
+          mergedRecordMap.set(record.ticker, record);
+        }
+      });
+
+      return sortWatchlistRecords([...mergedRecordMap.values()]);
     } catch (_error) {
       localStorage.removeItem(WATCHLIST_STORAGE_KEY);
       return baseRecords;
