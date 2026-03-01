@@ -13,6 +13,7 @@
     { key: "watch_candidates", elementId: "rankingWatchBody", label: "監視候補" },
   ];
   const TSE_MARKETS = new Set(["TSE", "プライム", "スタンダード", "グロース"]);
+  const MARKET_TAGS = new Set(["tse", "prime", "standard", "growth"]);
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
@@ -923,9 +924,8 @@
   }
 
   function renderIndustryFilters(container, records, activeIndustry, onClick) {
-    const excluded = new Set(["tse", "prime", "standard", "growth"]);
     const industries = [...new Set(records.map((record) => String(record.industry || "").trim()).filter(Boolean))]
-      .filter((industry) => !excluded.has(industry) && !records.some((record) => record.market === industry))
+      .filter((industry) => !MARKET_TAGS.has(industry) && !records.some((record) => record.market === industry))
       .sort((left, right) => left.localeCompare(right, "ja", { sensitivity: "base" }));
     const options = ["全業種", ...industries];
     container.innerHTML = options.length
@@ -1164,7 +1164,11 @@
     const counts = new Map();
     records.forEach((record) => {
       (record.tags || []).forEach((tag) => {
-        counts.set(tag, (counts.get(tag) || 0) + 1);
+        const normalizedTag = String(tag || "").trim();
+        if (!normalizedTag || MARKET_TAGS.has(normalizedTag)) {
+          return;
+        }
+        counts.set(normalizedTag, (counts.get(normalizedTag) || 0) + 1);
       });
     });
     return [...counts.entries()]
