@@ -32,150 +32,152 @@
         </div>
       </section>
 
-      <header class="page-header">
-        <div>
-          <p class="eyebrow">ローカル株分析ボード</p>
-          <h1>東証全銘柄ランキング / 監視リスト</h1>
-          <p class="subtle">プライム・スタンダード・グロースのローカルCSVを集計して一覧表示する</p>
-          <p class="runtime-note">
-            開き方: <strong>http://127.0.0.1:8010/index.html</strong> または <strong>http://localhost:8010/index.html</strong>
-          </p>
-        </div>
-        <div class="header-actions">
-          <a class="action-button secondary" href="./scanner.html?sort=gainers&limit=50&months=3">50チャート</a>
-          <button id="addTickerButton" class="action-button" type="button">銘柄追加</button>
-          <button id="resetWatchlistButton" class="action-button secondary" type="button">ローカル編集を破棄</button>
-        </div>
-      </header>
+      <section class="panel board-hub">
+        <header class="page-header board-header">
+          <div class="board-header-main">
+            <p class="eyebrow">ローカル株分析ボード</p>
+            <h1>東証全銘柄ランキング / 監視リスト</h1>
+            <div class="board-header-meta">
+              <span class="subtle">プライム・スタンダード・グロースのローカルCSVを集計</span>
+              <span class="runtime-note">開き方: http://127.0.0.1:8010/index.html</span>
+            </div>
+          </div>
+          <div class="header-actions">
+            <a class="action-button secondary" href="./scanner.html?sort=gainers&limit=50&months=3">50チャート</a>
+            <button id="addTickerButton" class="action-button" type="button">銘柄追加</button>
+            <button id="resetWatchlistButton" class="action-button secondary" type="button">ローカル編集を破棄</button>
+          </div>
+        </header>
 
-      <section class="search-board panel">
-        <div class="search-board-main">
-          <label class="search-field">
-            <span>証券コードまたは銘柄名を入力</span>
+        <div class="board-control-line">
+          <div class="board-control-label">
+            <span>検索</span>
+          </div>
+          <label class="search-field compact">
             <input id="searchInput" type="search" placeholder="3133 / 海帆" autocomplete="off" />
           </label>
-          <div class="meta" id="watchlistMeta"></div>
+          <div class="meta board-meta" id="watchlistMeta"></div>
+          <div class="dashboard-strip compact">
+            <div class="mini-stat">
+              <div class="mini-stat-label">監視銘柄数</div>
+              <div class="mini-stat-value" id="summaryCount">-</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">上昇</div>
+              <div class="mini-stat-value rise" id="summaryRisers">-</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">下落</div>
+              <div class="mini-stat-value fall" id="summaryFallers">-</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">変わらず</div>
+              <div class="mini-stat-value" id="summaryFlats">-</div>
+            </div>
+          </div>
         </div>
-        <div class="dashboard-strip">
-          <div class="mini-stat">
-            <div class="mini-stat-label">監視銘柄数</div>
-            <div class="mini-stat-value" id="summaryCount">-</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">上昇</div>
-            <div class="mini-stat-value rise" id="summaryRisers">-</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">下落</div>
-            <div class="mini-stat-value fall" id="summaryFallers">-</div>
-          </div>
-          <div class="mini-stat">
-            <div class="mini-stat-label">変わらず</div>
-            <div class="mini-stat-value" id="summaryFlats">-</div>
-          </div>
-        </div>
-      </section>
 
-      <section id="marketPulse" class="panel stack market-pulse">
-        <div class="section-head">
-          <h2>相場概況</h2>
-          <div class="meta" id="marketPulseMeta"></div>
+        <div class="board-control-line">
+          <div class="board-control-label">
+            <span>市場</span>
+            <button id="clearMarketFilterButton" class="text-button" type="button">解除</button>
+          </div>
+          <div id="marketFilters" class="chip-list compact"></div>
         </div>
-        <div class="overview-grid">
-          <div class="overview-card">
-            <div class="overview-label">最新データ日</div>
-            <div class="overview-value" id="overviewLatestDate">-</div>
-            <div class="overview-note" id="overviewDataCoverage">-</div>
+
+        <div class="board-control-line">
+          <div class="board-control-label">
+            <span>タグ</span>
+            <button id="clearTagFilterButton" class="text-button" type="button">解除</button>
           </div>
-          <div class="overview-card">
-            <div class="overview-label">MA25 上</div>
-            <div class="overview-value" id="overviewAboveMa25">-</div>
-            <div class="overview-note">短期トレンド</div>
-          </div>
-          <div class="overview-card">
-            <div class="overview-label">MA75 上</div>
-            <div class="overview-value" id="overviewAboveMa75">-</div>
-            <div class="overview-note">中期トレンド</div>
-          </div>
-          <div class="overview-card">
-            <div class="overview-label">MA200 上</div>
-            <div class="overview-value" id="overviewAboveMa200">-</div>
-            <div class="overview-note">長期トレンド</div>
-          </div>
-          <div class="overview-card">
-            <div class="overview-label">平均前日比</div>
-            <div class="overview-value" id="overviewAverageChange">-</div>
-            <div class="overview-note">当日騰落の地合い</div>
-          </div>
+          <div id="tagFilters" class="chip-list compact"></div>
         </div>
-        <div class="breadth-board">
-          <section class="breadth-panel">
-            <div class="section-head compact">
-              <h3>業種別の強さ</h3>
-              <div class="meta">平均前日比順</div>
+
+        <section class="ranking-section dense-section">
+          <div class="section-head compact-line">
+            <h2>株式ランキング</h2>
+          </div>
+          <div class="ranking-grid compact">
+            <div class="ranking-box">
+              <div class="ranking-title" id="rankingUp">値上がり率</div>
+              <div id="rankingUpBody"></div>
             </div>
-            <div id="sectorHeatmap" class="breadth-list"></div>
-          </section>
-          <section class="breadth-panel">
-            <div class="section-head compact">
-              <h3>監視タグの偏り</h3>
-              <div class="meta">件数順</div>
+            <div class="ranking-box">
+              <div class="ranking-title" id="rankingDown">値下がり率</div>
+              <div id="rankingDownBody"></div>
             </div>
-            <div id="tagHeatmap" class="breadth-list"></div>
-          </section>
-        </div>
+            <div class="ranking-box">
+              <div class="ranking-title">出来高上位</div>
+              <div id="rankingVolumeBody"></div>
+            </div>
+            <div class="ranking-box">
+              <div class="ranking-title">株価上位</div>
+              <div id="rankingPriceBody"></div>
+            </div>
+            <div class="ranking-box">
+              <div class="ranking-title" id="rankingMomentum">短期強い順</div>
+              <div id="rankingMomentumBody"></div>
+            </div>
+            <div class="ranking-box">
+              <div class="ranking-title">監視タグ順</div>
+              <div id="rankingWatchBody"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="marketPulse" class="dense-section market-pulse">
+          <div class="section-head compact-line">
+            <h2>相場概況</h2>
+            <div class="meta" id="marketPulseMeta"></div>
+          </div>
+          <div class="overview-grid compact">
+            <div class="overview-card">
+              <div class="overview-label">最新データ日</div>
+              <div class="overview-value" id="overviewLatestDate">-</div>
+              <div class="overview-note" id="overviewDataCoverage">-</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-label">MA25 上</div>
+              <div class="overview-value" id="overviewAboveMa25">-</div>
+              <div class="overview-note">短期トレンド</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-label">MA75 上</div>
+              <div class="overview-value" id="overviewAboveMa75">-</div>
+              <div class="overview-note">中期トレンド</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-label">MA200 上</div>
+              <div class="overview-value" id="overviewAboveMa200">-</div>
+              <div class="overview-note">長期トレンド</div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-label">平均前日比</div>
+              <div class="overview-value" id="overviewAverageChange">-</div>
+              <div class="overview-note">当日騰落の地合い</div>
+            </div>
+          </div>
+          <div class="breadth-board compact">
+            <section class="breadth-panel">
+              <div class="section-head compact">
+                <h3>業種別の強さ</h3>
+                <div class="meta">平均前日比順</div>
+              </div>
+              <div id="sectorHeatmap" class="breadth-list"></div>
+            </section>
+            <section class="breadth-panel">
+              <div class="section-head compact">
+                <h3>監視タグの偏り</h3>
+                <div class="meta">件数順</div>
+              </div>
+              <div id="tagHeatmap" class="breadth-list"></div>
+            </section>
+          </div>
+        </section>
       </section>
 
       <section class="portal-layout">
         <div class="portal-main">
-          <section class="panel ranking-section">
-            <div class="section-head">
-              <h2>株式ランキング</h2>
-            </div>
-            <div class="ranking-grid">
-              <div class="ranking-box">
-                <div class="ranking-title" id="rankingUp">値上がり率</div>
-                <div id="rankingUpBody"></div>
-              </div>
-              <div class="ranking-box">
-                <div class="ranking-title" id="rankingDown">値下がり率</div>
-                <div id="rankingDownBody"></div>
-              </div>
-              <div class="ranking-box">
-                <div class="ranking-title">出来高上位</div>
-                <div id="rankingVolumeBody"></div>
-              </div>
-              <div class="ranking-box">
-                <div class="ranking-title">株価上位</div>
-                <div id="rankingPriceBody"></div>
-              </div>
-              <div class="ranking-box">
-                <div class="ranking-title" id="rankingMomentum">短期強い順</div>
-                <div id="rankingMomentumBody"></div>
-              </div>
-              <div class="ranking-box">
-                <div class="ranking-title">監視タグ順</div>
-                <div id="rankingWatchBody"></div>
-              </div>
-            </div>
-          </section>
-
-          <section class="panel stack">
-            <div class="section-head">
-              <h2>市場絞り込み</h2>
-              <button id="clearMarketFilterButton" class="text-button" type="button">解除</button>
-            </div>
-            <div id="marketFilters" class="chip-list"></div>
-          </section>
-
-          <section class="panel stack">
-            <div class="section-head">
-              <h2>タグ絞り込み</h2>
-              <button id="clearTagFilterButton" class="text-button" type="button">解除</button>
-            </div>
-            <div id="tagFilters" class="chip-list"></div>
-          </section>
-
           <section id="editorPanel" class="panel stack" hidden>
             <div class="section-head">
               <h2 id="editorTitle">銘柄編集</h2>
