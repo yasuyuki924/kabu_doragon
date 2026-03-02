@@ -13,6 +13,9 @@ ROOT = Path(__file__).resolve().parent.parent
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the local daily build pipeline")
     parser.add_argument("--skip-fetch", action="store_true")
+    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="jquants")
+    parser.add_argument("--full-refresh", action="store_true")
+    parser.add_argument("--history-years", type=int, default=5)
     parser.add_argument("--days", type=int, default=60)
     parser.add_argument("--codes", help="Comma separated ticker codes")
     parser.add_argument("--limit", type=int, default=0, help="Limit tickers for testing when building ticker JSON")
@@ -29,7 +32,19 @@ def main() -> int:
     args = parse_args()
 
     if not args.skip_fetch:
-        fetch_args = ["scripts/fetch_prices.py", "--universe", "tse", "--segments", "prime,standard,growth"]
+        fetch_args = [
+            "scripts/fetch_prices.py",
+            "--provider",
+            args.provider,
+            "--universe",
+            "tse",
+            "--segments",
+            "prime,standard,growth",
+            "--history-years",
+            str(args.history_years),
+        ]
+        if args.full_refresh:
+            fetch_args.append("--full-refresh")
         run_step(*fetch_args)
 
     ticker_args = ["scripts/build_ticker_data.py"]

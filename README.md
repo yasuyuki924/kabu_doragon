@@ -47,7 +47,8 @@
 - `data/theme_map.json`
   - PDFベースのテーマ定義。テーマ名と関連銘柄コード一覧を保持
 - `scripts/fetch_prices.py`
-  - 既存 `src/fetch_nikkei225.py` を呼び出して OHLCV と watchlist を更新
+  - 既定では `src/jquants_provider.py` を呼び出して OHLCV と watchlist を更新
+  - `--provider yfinance` 指定時のみ旧 `src/fetch_nikkei225.py` を使う
 - `scripts/build_ticker_data.py`
   - `data/ohlcv/*.csv` から銘柄ごとの `data/tickers/*.json` を生成
 - `scripts/build_rankings.py`
@@ -56,6 +57,10 @@
   - 日付ごとの相場概況 JSON と `data/manifest.json` を生成
 - `scripts/run_daily.py`
   - 一連の処理をまとめて実行する入口
+- `src/jquants_provider.py`
+  - J-Quants Light を使って上場銘柄一覧と日次 OHLCV を取得する
+- `data/jquants_sync_state.json`
+  - J-Quants の最終成功同期日を保持する
 
 ## 起動方法
 
@@ -104,26 +109,78 @@ cd "/Users/okamoto/kabu_doragon"
 
 ## データ更新方法
 
+### J-Quants の初期設定
+
+J-Quants Light を標準経路として使います。まず `.env.example` をコピーして `.env` を作成してください。
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+cp .env.example .env
+```
+
+`.env` に設定する項目:
+
+```env
+JQUANTS_PLAN=light
+JQUANTS_API_KEY=
+JQUANTS_API_MAIL_ADDRESS=
+JQUANTS_API_PASSWORD=
+JQUANTS_API_REFRESH_TOKEN=
+```
+
+運用ルール:
+
+- 推奨は `JQUANTS_API_KEY` を入れる方法です
+- `JQUANTS_API_KEY` があればそれを優先します
+- API キーがない場合だけ、`JQUANTS_API_REFRESH_TOKEN` または `MAIL_ADDRESS + PASSWORD` を使います
+- `.env` は git に入れません
+
+J-Quants のプラン差:
+
+- `Light`: 過去 5 年分の日次 OHLCV を最新まで取得可能
+- `Free`: 過去 2 年分、かつ 12 週間遅延
+
+このプロジェクトは最新日次更新が目的なので、`Light` を前提にしています。
+
 ### 価格データの取得
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
 ./.venv/bin/python scripts/fetch_prices.py \
+  --provider jquants \
   --universe tse \
   --segments prime,standard,growth \
-  --period 5y \
-  --batch-size 50
+  --history-years 5
+```
+
+初回 5 年同期をやり直したい場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/fetch_prices.py \
+  --provider jquants \
+  --universe tse \
+  --segments prime,standard,growth \
+  --history-years 5 \
+  --full-refresh
 ```
 
 ### JSON の再生成
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
-./.venv/bin/python scripts/run_daily.py --skip-fetch --days 60
+./.venv/bin/python scripts/run_daily.py --provider jquants --days 60
 ```
 
 `--days 60` は、直近 60 営業日ぶんの `rankings / overview / manifest` を作る最小構成です。  
 保持日数を増やしたい場合は `--days` を大きくしてください。
+
+取得済み CSV から JSON だけ再生成したい場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/run_daily.py --skip-fetch --days 60
+```
 
 ### 少数銘柄でのテスト
 
@@ -134,6 +191,62 @@ cd "/Users/okamoto/kabu_doragon"
   --days 10 \
   --codes 1301,3133,7203
 ```
+
+### 旧 yfinance 経路を使う場合
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/fetch_prices.py \
+  --provider yfinance \
+  --universe tse \
+  --segments prime,standard,growth \
+  --period 5y \
+  --batch-size 50
+```
+
+J-Quants の取得に失敗した場合、自動で `yfinance` には切り替わりません。エラーで停止します。
+
+### 当日分が返ってきたかの確認
+
+`Light` は日中リアルタイム更新ではなく、J-Quants 側に当日の日足が出たあとで反映されます。  
+当日分がすでに repo に入っているかは、次のコマンドで確認できます。
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/check_jquants_latest.py
+```
+
+出力例:
+
+- 反映済み:
+  - `OK: latest trading date 2026-03-02 is already reflected`
+- まだ未反映:
+  - `PENDING: targetDate=2026-03-02 manifest.latestDate=2026-02-27 sync.lastSuccessfulDate=2026-02-27`
+
+### 引け後の30分おき再試行
+
+日中のトップ画面チャートは自動では動きません。  
+ただし、引け後は `16:00` から `20:00` まで 30 分おきに「当日分が出たか」を確認し、出ていれば自動で反映できます。
+
+手動で同じ処理を走らせる場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/zsh scripts/run_jquants_close_retry.sh
+```
+
+このスクリプトの挙動:
+
+- すでに当日分が反映済みなら何もせず終了
+- まだ未反映なら J-Quants 取得と JSON 再生成を実行
+- それでも未反映なら `PENDING` として終了
+- API エラーなどは `ERROR` として終了
+
+補足:
+
+- `PENDING` は失敗ではなく「J-Quants 側にまだ当日分が出ていない」状態です
+- 最新反映後はブラウザを再読込すると [http://127.0.0.1:8010/index.html](http://127.0.0.1:8010/index.html) に当日分が出ます
+- 当日分がまだない回は、次の 30 分枠で再試行されます
 
 ## データ構造
 
@@ -386,3 +499,31 @@ launchctl load ~/Library/LaunchAgents/com.okamoto.kabutan_news_daily.plist
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.okamoto.kabutan_news_daily.plist
 ```
+
+### 引け後の自動更新（launchd）
+
+設定ファイル:
+
+- `launchd/com.okamoto.kabu_doragon_close_retry.plist`
+
+平日 `16:00` から `20:00` まで 30 分おきに、当日分の日足が返ってきたかを確認します。  
+まだ返ってきていなければ `PENDING` として終了し、次の枠で再試行します。  
+返ってきた回で `ohlcv / tickers / rankings / overview / manifest` を更新します。
+
+登録/解除コマンド:
+
+```bash
+mkdir -p ~/Library/LaunchAgents
+cp "launchd/com.okamoto.kabu_doragon_close_retry.plist" ~/Library/LaunchAgents/
+launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_close_retry.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/com.okamoto.kabu_doragon_close_retry.plist
+```
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_close_retry.plist
+```
+
+ログ:
+
+- `logs/jquants_close_retry.out.log`
+- `logs/jquants_close_retry.err.log`
