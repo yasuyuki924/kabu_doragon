@@ -31,17 +31,17 @@
 │   └── watchlist.json
 ├── index.html
 ├── ticker.html
-└── scanner.html
+└── picked.html
 ```
 
 ## ファイルの役割
 
 - `index.html`
-  - 日付選択、ランキング、相場概況、監視リストのトップページ
+  - 日付選択、条件絞り込み、連続チャート一覧のトップページ
 - `ticker.html`
   - `code` と `date` を受けて、その日基準のチャートを表示
-- `scanner.html`
-  - 指定日基準の縦スクロール連続チャート
+- `picked.html`
+  - scanner ベースのトップで選別した銘柄一覧とエクスポート
 - `assets/app.js`
   - `manifest / rankings / overview / tickers` を読んで描画するフロント
 - `scripts/fetch_prices.py`

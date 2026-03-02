@@ -37,6 +37,7 @@ def main() -> int:
             "market": item["market"],
             "sector": item.get("sector", ""),
             "industry": item.get("industry", ""),
+            "themes": item.get("themes", []),
             "tags": item.get("tags", []),
             "links": item.get("links", {}),
             "ohlcv": build_enriched_rows(rows),
@@ -52,4 +53,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

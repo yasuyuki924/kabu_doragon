@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 NIKKEI_COMPONENTS_CSV = ROOT / "data" / "nikkei225_components.csv"
 TSE_COMPONENTS_CSV = ROOT / "data" / "tse_listed_components.csv"
 WATCHLIST_JSON = ROOT / "data" / "watchlist.json"
+THEME_MAP_JSON = ROOT / "data" / "theme_map.json"
 SUMMARY_JSON = ROOT / "data" / "market_summary.json"
 OHLCV_DIR = ROOT / "data" / "ohlcv"
 YAHOO_QUOTE_URL = "https://finance.yahoo.co.jp/quote/{code}.T"
@@ -187,7 +188,42 @@ def clean_classification(value: object) -> str:
     return "" if text in {"", "-", "nan"} else text
 
 
+def load_theme_map() -> dict[str, object]:
+    if not THEME_MAP_JSON.exists():
+        return {"version": 1, "themes": []}
+    with THEME_MAP_JSON.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    if not isinstance(payload, dict):
+        return {"version": 1, "themes": []}
+    if not isinstance(payload.get("themes"), list):
+        payload["themes"] = []
+    return payload
+
+
+def build_theme_lookup(theme_map: dict[str, object]) -> dict[str, list[str]]:
+    items = theme_map.get("themes", [])
+    ordered_items = sorted(
+        (item for item in items if isinstance(item, dict)),
+        key=lambda item: (int(item.get("order") or 0), str(item.get("label") or "")),
+    )
+    lookup: dict[str, list[str]] = {}
+    for item in ordered_items:
+        label = str(item.get("label") or "").strip()
+        codes = item.get("codes") or []
+        if not label or not isinstance(codes, list):
+            continue
+        for code in codes:
+            normalized_code = str(code or "").strip()
+            if not normalized_code:
+                continue
+            lookup.setdefault(normalized_code, [])
+            if label not in lookup[normalized_code]:
+                lookup[normalized_code].append(label)
+    return lookup
+
+
 def make_watchlist(components: list[dict[str, str]], universe: str) -> list[dict[str, object]]:
+    theme_lookup = build_theme_lookup(load_theme_map())
     watchlist = []
     for row in components:
         code = row["code"]
@@ -212,6 +248,7 @@ def make_watchlist(components: list[dict[str, str]], universe: str) -> list[dict
                 "name": name,
                 "market": row["market"],
                 "tags": dedupe_tags(tags),
+                "themes": list(theme_lookup.get(code, [])),
                 "links": links,
                 "sector": row["sector"],
                 "industry": row["industry"],

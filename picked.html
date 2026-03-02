@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ローカル株分析ボード | 選別銘柄一覧</title>
+    <link rel="stylesheet" href="./assets/style.css" />
+  </head>
+  <body data-page="picked">
+    <main class="container">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow"><a href="./index.html">← トップに戻る</a></p>
+          <h1>選別銘柄一覧</h1>
+          <p class="subtle">トップ画面でチェックした銘柄を確認</p>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="picked-meta">
+          <span class="meta">保存件数</span>
+          <strong id="pickedCount">0件</strong>
+        </div>
+        <section id="pickedExportPanel" class="picked-export-panel">
+          <div class="section-head">
+            <h2>ダウンロード</h2>
+          </div>
+          <p id="pickedExportMessage" class="subtle picked-export-note"></p>
+          <div class="picked-export-actions">
+            <button id="pickedExportTradingViewButton" class="action-button" type="button">TradingView用を作成</button>
+            <button id="pickedExportHyperButton" class="action-button secondary" type="button">HYPER SBI 2用CSVを作成</button>
+          </div>
+          <div id="pickedExportList" class="picked-export-list"></div>
+        </section>
+        <div id="pickedError" class="status-box error" hidden></div>
+        <div class="table-wrap picked-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>コード</th>
+                <th>銘柄名</th>
+                <th>市場</th>
+                <th>選別日時</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="pickedTableBody">
+              <tr>
+                <td colspan="5" class="empty-cell">読み込み中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>

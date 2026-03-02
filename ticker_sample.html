@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>株ドラゴン風チャート見本 | ticker_sample</title>
+    <link rel="stylesheet" href="./assets/ticker_sample.css" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  </head>
+  <body class="sample-page">
+    <main class="sample-shell">
+      <div id="sampleLayout" class="sample-two-column">
+        <section id="sampleMainColumn" class="sample-main-column">
+          <header class="sample-header">
+            <div class="sample-header-main">
+              <p class="sample-eyebrow">個別銘柄ページ 試作サンプル</p>
+              <h1 id="sampleTickerTitle" class="sample-title">6501 日立製作所</h1>
+              <div id="sampleTickerMeta" class="sample-meta">プライム / 電気機器 / AI / 基準日 2026-02-27</div>
+            </div>
+            <section class="sample-price-panel" aria-label="当日サマリー">
+              <div class="sample-price-row">
+                <span class="sample-price-label">基準日</span>
+                <span id="sampleBaseDate" class="sample-price-value">2026-02-27</span>
+              </div>
+              <div class="sample-price-row">
+                <span class="sample-price-label">終値</span>
+                <span id="sampleClose" class="sample-price-main">5,226</span>
+              </div>
+              <div class="sample-price-row">
+                <span class="sample-price-label">前日比</span>
+                <span id="sampleChange" class="sample-price-change sample-state-up">+78 (+1.52%)</span>
+              </div>
+            </section>
+          </header>
+
+          <section class="sample-chart-panel">
+            <div class="sample-section-head">
+              <div>
+                <h2 class="sample-section-title">チャート見本</h2>
+                <p id="sampleChartMeta" class="sample-section-note">2026-02-27 基準 / 2025-11-27 - 2026-02-27</p>
+              </div>
+              <div id="sampleStatus" class="sample-status">6501 実データ読込</div>
+            </div>
+            <div id="sampleChart" class="sample-chart" aria-label="ローソク足と出来高チャート"></div>
+          </section>
+        </section>
+
+        <aside id="sampleSideColumn" class="sample-side-column">
+          <section id="sampleControlPanel" class="sample-toolbar" aria-label="チャート操作エリア">
+            <div class="sample-toolbar-group">
+              <div class="sample-toolbar-label">期間</div>
+              <div id="samplePeriodButtons" class="sample-button-group"></div>
+            </div>
+            <div class="sample-toolbar-group">
+              <div class="sample-toolbar-label">足種</div>
+              <div id="sampleFrameButtons" class="sample-button-group"></div>
+            </div>
+            <div class="sample-toolbar-group sample-toolbar-group-grow">
+              <div class="sample-toolbar-label">将来拡張</div>
+              <div class="sample-chip-row">
+                <span class="sample-chip">MA</span>
+                <span class="sample-chip">出来高</span>
+                <span class="sample-chip">RCI</span>
+                <span class="sample-chip">他</span>
+              </div>
+            </div>
+          </section>
+
+          <section id="sampleSummaryStack" class="sample-info-panel sample-side-stack">
+            <div class="sample-section-head">
+              <div>
+                <h2 class="sample-section-title">当日要約</h2>
+                <p class="sample-section-note">基準日と価格の確認用</p>
+              </div>
+            </div>
+            <div id="sampleSummaryCards" class="sample-summary-grid"></div>
+          </section>
+
+          <section id="sampleMetricStack" class="sample-info-panel sample-side-stack">
+            <div class="sample-section-head">
+              <div>
+                <h2 class="sample-section-title">補助情報</h2>
+                <p class="sample-section-note">見た目確認用の試作カード</p>
+              </div>
+            </div>
+            <div id="sampleInfoCards" class="sample-info-grid"></div>
+          </section>
+
+          <section id="sampleFutureStack" class="sample-info-panel sample-side-stack">
+            <div class="sample-section-head">
+              <div>
+                <h2 class="sample-section-title">将来の指標棚</h2>
+                <p class="sample-section-note">50〜100項目を積む前提の高密度見本</p>
+              </div>
+            </div>
+            <div id="sampleFutureItems" class="sample-future-grid"></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <script src="./assets/ticker_sample.js"></script>
+  </body>
+</html>

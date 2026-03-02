@@ -1,30 +1,58 @@
 (function () {
   const MANIFEST_PATH = "./data/manifest.json";
   const WATCHLIST_PATH = "./data/watchlist.json";
-  const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v5";
+  const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v6";
+  const SCANNER_PICKS_STORAGE_KEY = "local-stock-dashboard.scanner-picks.v1";
   const NOTE_STORAGE_PREFIX = "local-stock-dashboard.note.";
   const PERIOD_MONTHS = [1, 2, 3, 4, 5, 6];
   const RANKING_CONFIG = [
-    { key: "gainers", elementId: "rankingUpBody", label: "値上がり率" },
-    { key: "losers", elementId: "rankingDownBody", label: "値下がり率" },
-    { key: "volume_spike", elementId: "rankingVolumeBody", label: "出来高増加" },
-    { key: "new_high", elementId: "rankingPriceBody", label: "新高値" },
-    { key: "deviation25", elementId: "rankingMomentumBody", label: "25日線乖離" },
-    { key: "watch_candidates", elementId: "rankingWatchBody", label: "監視候補" },
+    { key: "gainers", label: "値上がり率" },
+    { key: "losers", label: "値下がり率" },
+    { key: "volume_spike", label: "出来高増加" },
+    { key: "new_high", label: "新高値" },
+    { key: "deviation25", label: "25日線乖離" },
+    { key: "deviation75", label: "75日線乖離" },
+    { key: "deviation200", label: "200日線乖離" },
+    { key: "watch_candidates", label: "監視候補" },
   ];
   const TSE_MARKETS = new Set(["TSE", "プライム", "スタンダード", "グロース"]);
   const MARKET_TAGS = new Set(["tse", "prime", "standard", "growth"]);
+  const TYPE_FILTERS = [
+    { key: "", label: "全銘柄" },
+    { key: "gainers", label: "値上がり率" },
+    { key: "losers", label: "値下がり率" },
+    { key: "new_high", label: "新高値" },
+    { key: "deviation25", label: "25日線乖離" },
+    { key: "deviation75", label: "75日線乖離" },
+    { key: "deviation200", label: "200日線乖離" },
+  ];
+  const INDEX_SCANNER_CONDITIONS = [
+    { key: "", label: "なし" },
+    { key: "rise", label: "上昇銘柄のみ" },
+    { key: "fall", label: "下落銘柄のみ" },
+    { key: "new_high", label: "新高値のみ" },
+    { key: "above_ma25", label: "MA25上のみ" },
+    { key: "above_ma75", label: "MA75上のみ" },
+    { key: "above_ma200", label: "MA200上のみ" },
+    { key: "volume_2x", label: "出来高倍率2倍以上" },
+    { key: "watch_candidate", label: "監視候補のみ" },
+  ];
+  const INDEX_SCANNER_LIMITS = [50, 100, 200];
+  const INDEX_SCANNER_MONTHS = [1, 3, 6, 12];
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
     if (page === "watchlist") {
       initWatchlistPage();
     }
+    if (page === "index-scanner") {
+      initIndexScannerPage();
+    }
     if (page === "ticker") {
       initTickerPage();
     }
-    if (page === "scanner") {
-      initScannerPage();
+    if (page === "picked") {
+      initPickedPage();
     }
   });
 
@@ -49,17 +77,18 @@
     const sectorHeatmap = document.getElementById("sectorHeatmap");
     const tagHeatmap = document.getElementById("tagHeatmap");
     const sortButtons = Array.from(document.querySelectorAll(".sort-button"));
+    const typeFilters = document.getElementById("typeFilters");
     const marketFilters = document.getElementById("marketFilters");
     const industryFilters = document.getElementById("tagFilters");
+    const themeFilters = document.getElementById("themeFilters");
     const addTickerButton = document.getElementById("addTickerButton");
     const resetWatchlistButton = document.getElementById("resetWatchlistButton");
     const editorPanel = document.getElementById("editorPanel");
     const editorTitle = document.getElementById("editorTitle");
     const cancelEditorButton = document.getElementById("cancelEditorButton");
     const tickerForm = document.getElementById("tickerForm");
-    const rankingContainers = new Map(
-      RANKING_CONFIG.map((item) => [item.key, document.getElementById(item.elementId)])
-    );
+    const rankingPrimaryTitle = document.getElementById("rankingPrimaryTitle");
+    const rankingPrimaryBody = document.getElementById("rankingPrimaryBody");
 
     const state = {
       manifest: null,
@@ -70,8 +99,11 @@
       query: "",
       sortKey: "ticker",
       sortDirection: "asc",
+      sortMode: "manual",
+      activeType: "",
       activeMarket: "",
       activeIndustry: "",
+      activeTheme: "",
       calendarMonth: null,
     };
 
@@ -89,6 +121,7 @@
           state.sortKey = nextKey;
           state.sortDirection = "asc";
         }
+        state.sortMode = "manual";
         render();
       });
     });
@@ -113,6 +146,7 @@
         name: formData.get("name"),
         market: formData.get("market"),
         tags: splitTags(formData.get("tags")),
+        themes: existingRecord?.themes || [],
         sector: existingRecord?.sector || "",
         industry: existingRecord?.industry || "",
         links: {
@@ -153,6 +187,11 @@
       state.watchlist = await loadWatchlist();
       state.manifest = await loadManifest();
       const params = new URLSearchParams(window.location.search);
+      state.activeType = normalizeTypeFilter(params.get("type"));
+      state.sortMode = state.activeType ? "type" : "manual";
+      state.activeMarket = String(params.get("market") || "").trim();
+      state.activeTheme = String(params.get("theme") || "").trim();
+      state.activeIndustry = state.activeTheme ? "" : String(params.get("industry") || "").trim();
       const initialDate = resolveAvailableDate(params.get("date") || state.manifest.latestDate, state.manifest.availableDates);
       await loadDateBundle(initialDate);
     } catch (error) {
@@ -174,7 +213,6 @@
         rankingPayloads.map((payload, index) => [RANKING_CONFIG[index].key, payload])
       );
       state.calendarMonth = startOfMonth(parseDate(selectedDate));
-      syncIndexUrl(selectedDate);
       renderDateControls();
       render();
     }
@@ -186,19 +224,37 @@
 
     function render() {
       const mergedRecords = mergeOverviewWithWatchlist(state.overview?.records || [], state.watchlist, state.selectedDate);
+      const facetRecords = mergedRecords.filter((record) =>
+        matchesFilter(record, "", state.activeMarket, "", "", state.activeType)
+      );
 
+      renderTypeFilters(typeFilters, state.activeType, (type) => {
+        state.activeType = type;
+        state.sortMode = type ? "type" : "manual";
+        render();
+      });
       renderMarketFilters(marketFilters, mergedRecords, state.activeMarket, (market) => {
         state.activeMarket = market;
         render();
       });
-      renderIndustryFilters(industryFilters, mergedRecords, state.activeIndustry, (industry) => {
+      renderIndustryFilters(industryFilters, facetRecords, state.activeIndustry, (industry) => {
         state.activeIndustry = industry;
+        if (industry) {
+          state.activeTheme = "";
+        }
         render();
-      });
+      }, Boolean(state.activeTheme));
+      renderThemeFilters(themeFilters, facetRecords, state.activeTheme, (theme) => {
+        state.activeTheme = theme;
+        if (theme) {
+          state.activeIndustry = "";
+        }
+        render();
+      }, Boolean(state.activeIndustry));
 
       const filtered = mergedRecords
-        .filter((record) => matchesFilter(record, state.query, state.activeMarket, state.activeIndustry))
-        .sort((left, right) => compareRecords(left, right, state.sortKey, state.sortDirection));
+        .filter((record) => matchesFilter(record, state.query, state.activeMarket, state.activeIndustry, state.activeTheme, state.activeType))
+        .sort((left, right) => compareRecordSet(left, right, state));
 
       const risers = filtered.filter((record) => (record.changePercent || 0) > 0).length;
       const fallers = filtered.filter((record) => (record.changePercent || 0) < 0).length;
@@ -210,8 +266,8 @@
       summaryRisers.textContent = formatNumber(risers, 0);
       summaryFallers.textContent = formatNumber(fallers, 0);
       summaryFlats.textContent = formatNumber(flats, 0);
-      meta.textContent = `${state.selectedDate} / ${filtered.length}件${state.activeMarket ? ` | 市場: ${state.activeMarket}` : ""}${state.activeIndustry ? ` | 業種: ${state.activeIndustry}` : ""}`;
-      marketPulseMeta.textContent = `${state.selectedDate} 基準${state.query ? ` / 検索: ${state.query}` : ""}`;
+      meta.textContent = `${state.selectedDate} / ${filtered.length}件${state.activeType ? ` | 種類: ${typeFilterLabel(state.activeType)}` : ""}${state.activeMarket ? ` | 市場: ${state.activeMarket}` : ""}${state.activeIndustry ? ` | 業種: ${state.activeIndustry}` : ""}${state.activeTheme ? ` | テーマ: ${state.activeTheme}` : ""}`;
+      marketPulseMeta.textContent = `${state.selectedDate} 基準${state.activeType ? ` / 種類: ${typeFilterLabel(state.activeType)}` : ""}${state.query ? ` / 検索: ${state.query}` : ""}`;
       overviewLatestDate.textContent = state.selectedDate;
       overviewDataCoverage.textContent = `${formatNumber(validTrendRecords.length, 0)}銘柄に日次スナップショットあり`;
       overviewAboveMa25.textContent = formatRatioCount(
@@ -238,24 +294,33 @@
         className: "",
       }));
       renderCalendar();
+      syncIndexUrlState(state);
 
-      RANKING_CONFIG.forEach((item) => {
-        const payload = state.rankings[item.key];
-        const records = (payload?.items || []).filter((record) =>
-          matchesFilter(
-            {
-              ticker: record.code,
-              name: record.name,
-              market: record.market,
-              industry: record.industry,
-            },
-            "",
-            state.activeMarket,
-            state.activeIndustry
-          )
-        );
-        renderRankingTable(rankingContainers.get(item.key), item.label, item.key, state.selectedDate, records);
-      });
+      const primaryRankingKey = resolvePrimaryRankingKey(state.activeType);
+      const primaryPayload = state.rankings[primaryRankingKey];
+      const primaryRecords = (primaryPayload?.items || []).filter((record) =>
+        matchesFilter(
+          {
+            ticker: record.code,
+            name: record.name,
+            market: record.market,
+            industry: record.industry,
+            themes: record.themes || [],
+            changePercent: record.changePercent,
+            newHigh52w: record.newHigh52w,
+            distanceToMa25: record.distanceToMa25,
+            distanceToMa75: record.distanceToMa75,
+            distanceToMa200: record.distanceToMa200,
+          },
+          "",
+          state.activeMarket,
+          state.activeIndustry,
+          state.activeTheme,
+          state.activeType
+        )
+      );
+      rankingPrimaryTitle.textContent = resolvePrimaryRankingLabel(state.activeType);
+      renderRankingTable(rankingPrimaryBody, resolvePrimaryRankingLabel(state.activeType), primaryRankingKey, state.selectedDate, primaryRecords);
 
       if (!filtered.length) {
         body.innerHTML = '<tr><td colspan="10" class="empty-cell">該当する銘柄がありません。</td></tr>';
@@ -321,6 +386,9 @@
         button.addEventListener("click", (event) => {
           event.stopPropagation();
           state.activeIndustry = state.activeIndustry === button.dataset.industry ? "" : button.dataset.industry;
+          if (state.activeIndustry) {
+            state.activeTheme = "";
+          }
           render();
         });
       });
@@ -572,11 +640,10 @@
     const tagSelect = document.getElementById("scannerTag");
     const limitSelect = document.getElementById("scannerLimit");
     const monthsSelect = document.getElementById("scannerMonths");
+    const pickedLink = document.getElementById("scannerPickedLink");
+    const resetPicksButton = document.getElementById("scannerResetPicksButton");
     const miniCalendar = document.getElementById("scannerMiniCalendar");
     const dateMeta = document.getElementById("scannerDateMeta");
-    const prevDateButton = document.getElementById("scannerPrevDateButton");
-    const nextDateButton = document.getElementById("scannerNextDateButton");
-    const latestDateButton = document.getElementById("scannerLatestDateButton");
     const meta = document.getElementById("scannerMeta");
     const errorBox = document.getElementById("scannerError");
     const list = document.getElementById("scannerList");
@@ -590,6 +657,7 @@
       months: 3,
       selectedDate: "",
       calendarMonth: null,
+      picks: {},
     };
 
     const params = new URLSearchParams(window.location.search);
@@ -597,9 +665,13 @@
     state.tag = params.get("tag") || "";
     state.limit = Number(params.get("limit") || state.limit);
     state.months = Number(params.get("months") || state.months);
+    state.picks = loadScannerPicks();
     sortSelect.value = state.sort;
     limitSelect.value = String(state.limit);
     monthsSelect.value = String(state.months);
+    if (pickedLink) {
+      pickedLink.href = "./picked.html";
+    }
 
     [sortSelect, tagSelect, limitSelect, monthsSelect].forEach((control) => {
       control.addEventListener("change", async () => {
@@ -611,26 +683,12 @@
       });
     });
 
-    prevDateButton.addEventListener("click", async () => {
-      const index = state.manifest.availableDates.indexOf(state.selectedDate);
-      if (index > 0) {
-        await loadDate(state.manifest.availableDates[index - 1]);
+    if (resetPicksButton) {
+      resetPicksButton.addEventListener("click", async () => {
+        resetScannerPicks(state);
         await render();
-      }
-    });
-
-    nextDateButton.addEventListener("click", async () => {
-      const index = state.manifest.availableDates.indexOf(state.selectedDate);
-      if (index >= 0 && index < state.manifest.availableDates.length - 1) {
-        await loadDate(state.manifest.availableDates[index + 1]);
-        await render();
-      }
-    });
-
-    latestDateButton.addEventListener("click", async () => {
-      await loadDate(state.manifest.latestDate);
-      await render();
-    });
+      });
+    }
 
     try {
       state.manifest = await loadManifest();
@@ -672,33 +730,33 @@
       }
 
       list.innerHTML = filtered
-        .map(
-          (record, index) => `
-            <article class="scanner-card">
-              <div class="scanner-card-head">
-                <div class="scanner-card-title">
-                  <span>${index + 1}.</span>
-                  <a href="${buildTickerUrl(record.code, state.selectedDate, state.sort === "code" ? "" : mapScannerSortToRanking(state.sort))}">
-                    ${escapeHtml(record.code)} ${escapeHtml(record.name)}
-                  </a>
-                  <span class="${getChangeClass(record.changePercent)}">${formatSignedPercent(record.changePercent)}</span>
-                </div>
-                <div class="scanner-card-stats">
-                  <span>終値 ${formatNumber(record.close)}</span>
-                  <span>出来高倍率 ${formatRatio(record.volumeRatio25)}</span>
-                  <span>${escapeHtml(record.market)}</span>
-                </div>
-              </div>
-              <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
-            </article>
-          `
-        )
+        .map((record, index) => renderScannerItem(record, index, state))
         .join("");
+
+      filtered.forEach((record) => {
+        const checkbox = list.querySelector(`input[data-pick-code="${record.code}"]`);
+        if (!checkbox) {
+          return;
+        }
+        checkbox.addEventListener("change", () => {
+          toggleScannerPick(record, checkbox.checked, state);
+        });
+      });
 
       for (const record of filtered) {
         try {
           const payload = await loadTickerPayload(record.code);
-          renderMiniChart(`scanChart-${record.code}`, payload.ohlcv, state.selectedDate, state.months);
+          renderScannerCompactChart(
+            `scanChart-${record.code}`,
+            record.code,
+            payload.ohlcv,
+            state.selectedDate,
+            state.months
+          );
+          const linksElement = document.getElementById(`scanLinks-${record.code}`);
+          if (linksElement) {
+            linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+          }
         } catch (error) {
           showError(errorBox, `一部のチャート読込に失敗: ${error.message}`);
         }
@@ -707,10 +765,6 @@
 
     function renderDateControls() {
       const availableDates = state.manifest.availableDates;
-      const index = availableDates.indexOf(state.selectedDate);
-      prevDateButton.disabled = index <= 0;
-      nextDateButton.disabled = index < 0 || index >= availableDates.length - 1;
-      latestDateButton.disabled = state.selectedDate === state.manifest.latestDate;
       dateMeta.textContent = `${state.selectedDate}基準 / ${availableDates.length}営業日保存 / 最新 ${state.manifest.latestDate}`;
     }
 
@@ -739,6 +793,262 @@
           },
         }
       );
+    }
+  }
+
+  async function initIndexScannerPage() {
+    const sortSelect = document.getElementById("indexSort");
+    const tagSelect = document.getElementById("indexTag");
+    const conditionSelect = document.getElementById("indexCondition");
+    const limitSelect = document.getElementById("indexLimit");
+    const monthsSelect = document.getElementById("indexMonths");
+    const pickedLink = document.getElementById("indexPickedLink");
+    const resetPicksButton = document.getElementById("indexResetPicksButton");
+    const miniCalendar = document.getElementById("indexMiniCalendar");
+    const dateMeta = document.getElementById("indexDateMeta");
+    const meta = document.getElementById("indexMeta");
+    const errorBox = document.getElementById("indexError");
+    const list = document.getElementById("indexList");
+
+    const state = {
+      manifest: null,
+      overview: null,
+      sort: "gainers",
+      tag: "",
+      condition: "",
+      limit: 100,
+      months: 3,
+      selectedDate: "",
+      calendarMonth: null,
+      picks: {},
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    state.sort = params.get("sort") || state.sort;
+    state.tag = params.get("tag") || "";
+    state.condition = params.get("condition") || "";
+    state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
+    state.months = INDEX_SCANNER_MONTHS.includes(Number(params.get("months"))) ? Number(params.get("months")) : state.months;
+    state.picks = loadScannerPicks();
+    sortSelect.value = state.sort;
+    conditionSelect.value = INDEX_SCANNER_CONDITIONS.some((item) => item.key === state.condition) ? state.condition : "";
+    limitSelect.value = String(state.limit);
+    monthsSelect.value = String(state.months);
+    if (pickedLink) {
+      pickedLink.href = "./picked.html";
+    }
+
+    [sortSelect, tagSelect, conditionSelect, limitSelect, monthsSelect].forEach((control) => {
+      control.addEventListener("change", async () => {
+        state.sort = sortSelect.value;
+        state.tag = tagSelect.value;
+        state.condition = conditionSelect.value;
+        state.limit = Number(limitSelect.value);
+        state.months = Number(monthsSelect.value);
+        await render();
+      });
+    });
+
+    if (resetPicksButton) {
+      resetPicksButton.addEventListener("click", async () => {
+        resetScannerPicks(state);
+        await render();
+      });
+    }
+
+    try {
+      state.manifest = await loadManifest();
+      await loadDate(params.get("date") || state.manifest.latestDate);
+      await render();
+    } catch (error) {
+      showError(errorBox, error.message);
+    }
+
+    async function loadDate(requestedDate) {
+      state.selectedDate = resolveAvailableDate(requestedDate, state.manifest.availableDates);
+      state.overview = await loadOverview(state.selectedDate);
+      state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
+      renderTagOptions();
+      renderDateControls();
+    }
+
+    function renderTagOptions() {
+      const conditionRecords = filterByCondition(state.overview.records || [], state.condition);
+      const industries = [...new Set(
+        conditionRecords
+          .map((record) => String(record.industry || "").trim())
+          .filter(
+            (industry) =>
+              industry &&
+              !TSE_MARKETS.has(industry) &&
+              !MARKET_TAGS.has(industry.toLowerCase())
+          )
+      )].sort();
+      tagSelect.innerHTML = ['<option value="">すべて</option>']
+        .concat(industries.map((industry) => `<option value="${escapeHtml(industry)}">${escapeHtml(industry)}</option>`))
+        .join("");
+      if (state.tag && !industries.includes(state.tag)) {
+        state.tag = "";
+      }
+      tagSelect.value = state.tag;
+    }
+
+    async function render() {
+      errorBox.hidden = true;
+      list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+      renderTagOptions();
+      const conditionRecords = filterByCondition(state.overview.records || [], state.condition);
+      const filtered = sortScannerRecords(
+        conditionRecords.filter((record) => !state.tag || record.industry === state.tag),
+        state.sort
+      ).slice(0, state.limit);
+      syncIndexScannerUrl(state.selectedDate, state.sort, state.tag, state.condition, state.limit, state.months);
+      renderCalendar();
+      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)} / 条件: ${conditionLabel(state.condition)} / 期間: ${state.months}ヶ月`;
+
+      if (!filtered.length) {
+        list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
+        return;
+      }
+
+      list.innerHTML = filtered
+        .map((record, index) => renderScannerItem(record, index, state))
+        .join("");
+
+      filtered.forEach((record) => {
+        const checkbox = list.querySelector(`input[data-pick-code="${record.code}"]`);
+        if (!checkbox) {
+          return;
+        }
+        checkbox.addEventListener("change", () => {
+          toggleScannerPick(record, checkbox.checked, state);
+        });
+      });
+
+      for (const record of filtered) {
+        try {
+          const payload = await loadTickerPayload(record.code);
+          renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.months);
+          const linksElement = document.getElementById(`scanLinks-${record.code}`);
+          if (linksElement) {
+            linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+          }
+        } catch (error) {
+          showError(errorBox, `一部のチャート読込に失敗: ${error.message}`);
+        }
+      }
+    }
+
+    function renderDateControls() {
+      dateMeta.textContent = `${state.selectedDate}基準 / ${state.manifest.availableDates.length}営業日保存 / 最新 ${state.manifest.latestDate}`;
+    }
+
+    function renderCalendar() {
+      const minMonth = startOfMonth(parseDate(state.manifest.availableDates[0]));
+      const maxMonth = startOfMonth(parseDate(state.manifest.availableDates.at(-1)));
+      renderMiniCalendar(
+        miniCalendar,
+        state.calendarMonth || startOfMonth(parseDate(state.selectedDate)),
+        state.selectedDate,
+        state.manifest.availableDates,
+        async (nextDate) => {
+          await loadDate(nextDate);
+          await render();
+        },
+        {
+          minMonth,
+          maxMonth,
+          onPrevMonth: () => {
+            state.calendarMonth = addCalendarMonths(state.calendarMonth, -1);
+            renderCalendar();
+          },
+          onNextMonth: () => {
+            state.calendarMonth = addCalendarMonths(state.calendarMonth, 1);
+            renderCalendar();
+          },
+        }
+      );
+    }
+  }
+
+  function initPickedPage() {
+    const count = document.getElementById("pickedCount");
+    const exportMessage = document.getElementById("pickedExportMessage");
+    const exportTradingViewButton = document.getElementById("pickedExportTradingViewButton");
+    const exportHyperButton = document.getElementById("pickedExportHyperButton");
+    const exportList = document.getElementById("pickedExportList");
+    const errorBox = document.getElementById("pickedError");
+    const body = document.getElementById("pickedTableBody");
+    const state = {
+      exportEntries: [],
+    };
+
+    exportTradingViewButton?.addEventListener("click", () => {
+      const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
+      replaceExportEntries(state, [buildTradingViewExportEntry(picks)], exportList);
+      exportMessage.textContent = "出力候補は毎回最新だけ表示します。過去に保存したダウンロードファイルは自動削除されません。";
+    });
+
+    exportHyperButton?.addEventListener("click", () => {
+      const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
+      replaceExportEntries(state, buildHyperExportEntries(picks), exportList);
+      exportMessage.textContent = "出力候補は毎回最新だけ表示します。過去に保存したダウンロードファイルは自動削除されません。";
+    });
+
+    try {
+      render();
+    } catch (error) {
+      showError(errorBox, error.message);
+    }
+
+    function render() {
+      const picks = sortedScannerPicks(loadScannerPicks());
+      count.textContent = `${formatNumber(picks.length, 0)}件`;
+      errorBox.hidden = true;
+      const hasPicks = picks.length > 0;
+      if (exportTradingViewButton) {
+        exportTradingViewButton.disabled = !hasPicks;
+      }
+      if (exportHyperButton) {
+        exportHyperButton.disabled = !hasPicks;
+      }
+      if (!picks.length) {
+        body.innerHTML = '<tr><td colspan="5" class="empty-cell">選別銘柄はありません。トップ画面でチェックしてください。</td></tr>';
+        revokeExportEntries(state.exportEntries);
+        state.exportEntries = [];
+        renderExportEntries(exportList, []);
+        exportMessage.textContent = "選別銘柄がないため出力できません。";
+        return;
+      }
+
+      body.innerHTML = picks
+        .map(
+          (pick) => `
+            <tr>
+              <td>${escapeHtml(pick.code)}</td>
+              <td>${escapeHtml(pick.name)}</td>
+              <td>${escapeHtml(pick.market)}</td>
+              <td>${escapeHtml(formatPickedDateTime(pick.selectedAt))}</td>
+              <td><button type="button" class="row-button picked-remove-button" data-remove-pick="${escapeHtml(pick.code)}">解除</button></td>
+            </tr>
+          `
+        )
+        .join("");
+
+      Array.from(body.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
+        button.addEventListener("click", () => {
+          const next = loadScannerPicks();
+          delete next[button.dataset.removePick];
+          saveScannerPicks(next);
+          exportMessage.textContent = "選別内容が変わりました。必要なら再作成してください。";
+          render();
+        });
+      });
+
+      if (!state.exportEntries.length) {
+        exportMessage.textContent = "選別済み銘柄から TradingView 用TXTと HYPER SBI 2 用CSVを生成します。";
+        exportList.innerHTML = "";
+      }
     }
   }
 
@@ -795,6 +1105,7 @@
             name: record.name || baseRecord.name,
             market: record.market || baseRecord.market,
             tags: record.tags?.length ? record.tags : baseRecord.tags,
+            themes: record.themes?.length ? record.themes : baseRecord.themes,
             links: { ...(baseRecord.links || {}), ...(record.links || {}) },
           });
           return;
@@ -820,6 +1131,180 @@
     );
   }
 
+  function loadScannerPicks() {
+    const raw = localStorage.getItem(SCANNER_PICKS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch (_error) {
+      localStorage.removeItem(SCANNER_PICKS_STORAGE_KEY);
+      return {};
+    }
+  }
+
+  function saveScannerPicks(picks) {
+    localStorage.setItem(SCANNER_PICKS_STORAGE_KEY, JSON.stringify(picks));
+  }
+
+  function buildScannerPickPayload(record) {
+    return {
+      code: String(record.code || record.ticker || "").trim(),
+      name: String(record.name || "").trim(),
+      market: String(record.market || "").trim(),
+      selectedAt: new Date().toISOString(),
+    };
+  }
+
+  function toggleScannerPick(record, checked, state) {
+    const code = String(record.code || record.ticker || "").trim();
+    if (!code) {
+      return;
+    }
+    if (checked) {
+      state.picks[code] = buildScannerPickPayload(record);
+    } else {
+      delete state.picks[code];
+    }
+    saveScannerPicks(state.picks);
+  }
+
+  function resetScannerPicks(state) {
+    state.picks = {};
+    localStorage.removeItem(SCANNER_PICKS_STORAGE_KEY);
+  }
+
+  function sortedScannerPicks(picks) {
+    return Object.values(picks).sort((left, right) => String(right.selectedAt || "").localeCompare(String(left.selectedAt || "")));
+  }
+
+  function formatPickedDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value || "-");
+    }
+    const pad = (number) => String(number).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function dedupeScannerPicks(picks) {
+    const byCode = new Map();
+    picks.forEach((pick) => {
+      const code = String(pick.code || "").trim();
+      if (!code) {
+        return;
+      }
+      const current = byCode.get(code);
+      if (!current || String(pick.selectedAt || "") > String(current.selectedAt || "")) {
+        byCode.set(code, pick);
+      }
+    });
+    return [...byCode.values()].sort((left, right) => {
+      const dateCompare = String(right.selectedAt || "").localeCompare(String(left.selectedAt || ""));
+      return dateCompare || String(left.code || "").localeCompare(String(right.code || ""), "ja", { numeric: true, sensitivity: "base" });
+    });
+  }
+
+  function chunkScannerPicks(items, size = 50) {
+    const chunks = [];
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size));
+    }
+    return chunks;
+  }
+
+  function toTradingViewSymbols(items) {
+    return items
+      .map((item) => String(item.code || "").trim())
+      .filter(Boolean)
+      .map((code) => `TSE:${code}`);
+  }
+
+  function toTradingViewText(items) {
+    return toTradingViewSymbols(items).join(",");
+  }
+
+  function toHyperSbi2Csv(items) {
+    return ["code"]
+      .concat(
+        items
+          .map((item) => String(item.code || "").trim())
+          .filter(Boolean)
+      )
+      .join("\n")
+      .concat("\n");
+  }
+
+  function createDownloadBlob(text, mime = "text/plain;charset=utf-8") {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    return {
+      url,
+      revoke: () => URL.revokeObjectURL(url),
+    };
+  }
+
+  function buildTradingViewExportEntry(items) {
+    const blob = createDownloadBlob(toTradingViewText(items));
+    return {
+      key: "tradingview",
+      label: "TradingView",
+      fileName: "tradingview_watchlist.txt",
+      count: items.length,
+      href: blob.url,
+      revoke: blob.revoke,
+    };
+  }
+
+  function buildHyperExportEntries(items) {
+    return chunkScannerPicks(items, 50).map((chunk, index) => {
+      const blob = createDownloadBlob(toHyperSbi2Csv(chunk), "text/csv;charset=utf-8");
+      return {
+        key: `hyper-${index + 1}`,
+        label: "HYPER SBI 2",
+        fileName: `hyper_sbi2_codes_${String(index + 1).padStart(2, "0")}.csv`,
+        count: chunk.length,
+        href: blob.url,
+        revoke: blob.revoke,
+      };
+    });
+  }
+
+  function revokeExportEntries(entries) {
+    entries.forEach((entry) => entry?.revoke?.());
+  }
+
+  function renderExportEntries(container, entries) {
+    if (!container) {
+      return;
+    }
+    if (!entries.length) {
+      container.innerHTML = "";
+      return;
+    }
+    container.innerHTML = entries
+      .map(
+        (entry) => `
+          <div class="picked-export-item">
+            <div>
+              <div class="picked-export-name">${escapeHtml(entry.fileName)}</div>
+              <div class="picked-export-meta">${escapeHtml(entry.label)} / ${formatNumber(entry.count, 0)}件</div>
+            </div>
+            <a class="picked-export-download" href="${entry.href}" download="${escapeHtml(entry.fileName)}">ダウンロード</a>
+          </div>
+        `
+      )
+      .join("");
+  }
+
+  function replaceExportEntries(state, nextEntries, container) {
+    revokeExportEntries(state.exportEntries);
+    state.exportEntries = nextEntries;
+    renderExportEntries(container, nextEntries);
+  }
+
   function normalizeWatchlistRecord(record) {
     const links = Object.entries(record?.links || {}).reduce((accumulator, [key, value]) => {
       const normalizedKey = String(key || "").trim();
@@ -835,6 +1320,7 @@
       name: String(record.name || "").trim(),
       market: String(record.market || "").trim(),
       tags: splitTags(record.tags),
+      themes: splitTags(record.themes),
       sector: String(record.sector || "").trim(),
       industry: String(record.industry || "").trim(),
       links,
@@ -867,6 +1353,7 @@
         market: watch?.market || record.market || "",
         sector: watch?.sector || record.sector || "",
         industry: watch?.industry || record.industry || "",
+        themes: watch?.themes || record.themes || [],
         tags: watch?.tags || record.tags || [],
         links: { ...(record.links || {}), ...(watch?.links || {}) },
         latestDate: date,
@@ -910,7 +1397,7 @@
     return merged;
   }
 
-  function matchesFilter(record, query, activeMarket, activeIndustry) {
+  function matchesFilter(record, query, activeMarket, activeIndustry, activeTheme = "", activeType = "") {
     const queryMatch =
       !query ||
       [record.ticker, record.code, record.name].some((value) =>
@@ -920,10 +1407,34 @@
       );
     const marketMatch = !activeMarket || record.market === activeMarket;
     const industryMatch = !activeIndustry || record.industry === activeIndustry;
-    return queryMatch && marketMatch && industryMatch;
+    const themeMatch = !activeTheme || (record.themes || []).includes(activeTheme);
+    const numericChange = Number(record.changePercent || 0);
+    const typeMatch =
+      !activeType ||
+      (activeType === "gainers" && numericChange > 0) ||
+      (activeType === "losers" && numericChange < 0) ||
+      (activeType === "new_high" && record.newHigh52w === true) ||
+      (activeType === "deviation25" && record.distanceToMa25 != null) ||
+      (activeType === "deviation75" && record.distanceToMa75 != null) ||
+      (activeType === "deviation200" && record.distanceToMa200 != null);
+    return queryMatch && marketMatch && industryMatch && themeMatch && typeMatch;
   }
 
-  function renderIndustryFilters(container, records, activeIndustry, onClick) {
+  function renderTypeFilters(container, activeType, onClick) {
+    if (!container) {
+      return;
+    }
+    container.innerHTML = TYPE_FILTERS.map(
+      ({ key, label }) =>
+        `<button type="button" class="chip filter-chip${key === activeType ? " active" : ""}" data-type-filter="${escapeHtml(key)}">${escapeHtml(label)}</button>`
+    ).join("");
+
+    Array.from(container.querySelectorAll("button[data-type-filter]")).forEach((button) => {
+      button.addEventListener("click", () => onClick(button.dataset.typeFilter || ""));
+    });
+  }
+
+  function renderIndustryFilters(container, records, activeIndustry, onClick, disabled = false) {
     const industries = [...new Set(records.map((record) => String(record.industry || "").trim()).filter(Boolean))]
       .filter((industry) => !MARKET_TAGS.has(industry) && !records.some((record) => record.market === industry))
       .sort((left, right) => left.localeCompare(right, "ja", { sensitivity: "base" }));
@@ -932,13 +1443,44 @@
       ? options
           .map(
             (industry) =>
-              `<button type="button" class="chip filter-chip${(!activeIndustry && industry === "全業種") || industry === activeIndustry ? " active" : ""}" data-industry-filter="${escapeHtml(industry)}">${escapeHtml(industry)}</button>`
+              `<button type="button" class="chip filter-chip${(!activeIndustry && industry === "全業種") || industry === activeIndustry ? " active" : ""}${disabled && industry !== "全業種" ? " disabled" : ""}" data-industry-filter="${escapeHtml(industry)}"${disabled && industry !== "全業種" ? " disabled" : ""}>${escapeHtml(industry)}</button>`
           )
           .join("")
       : '<span class="subtle">業種がありません。</span>';
 
     Array.from(container.querySelectorAll("button[data-industry-filter]")).forEach((button) => {
       button.addEventListener("click", () => onClick(button.dataset.industryFilter === "全業種" ? "" : button.dataset.industryFilter));
+    });
+  }
+
+  function renderThemeFilters(container, records, activeTheme, onClick, disabled = false) {
+    if (!container) {
+      return;
+    }
+    const seen = new Set();
+    const themes = [];
+    records.forEach((record) => {
+      (record.themes || []).forEach((theme) => {
+        const label = String(theme || "").trim();
+        if (!label || seen.has(label)) {
+          return;
+        }
+        seen.add(label);
+        themes.push(label);
+      });
+    });
+    const options = ["全テーマ", ...themes];
+    container.innerHTML = options.length
+      ? options
+          .map(
+            (theme) =>
+              `<button type="button" class="chip filter-chip${(!activeTheme && theme === "全テーマ") || theme === activeTheme ? " active" : ""}${disabled && theme !== "全テーマ" ? " disabled" : ""}" data-theme-filter="${escapeHtml(theme)}"${disabled && theme !== "全テーマ" ? " disabled" : ""}>${escapeHtml(theme)}</button>`
+          )
+          .join("")
+      : '<span class="subtle">テーマがありません。</span>';
+
+    Array.from(container.querySelectorAll("button[data-theme-filter]")).forEach((button) => {
+      button.addEventListener("click", () => onClick(button.dataset.themeFilter === "全テーマ" ? "" : button.dataset.themeFilter));
     });
   }
 
@@ -977,6 +1519,44 @@
         ? compareNullableNumbers(leftValue, rightValue)
         : String(leftValue || "").localeCompare(String(rightValue || ""), "ja", { numeric: true, sensitivity: "base" });
     return direction === "asc" ? base : -base;
+  }
+
+  function compareRecordSet(left, right, state) {
+    if (state.activeType && state.sortMode === "type") {
+      return compareByType(left, right, state.activeType);
+    }
+    return compareRecords(left, right, state.sortKey, state.sortDirection);
+  }
+
+  function compareByType(left, right, activeType) {
+    if (activeType === "new_high") {
+      const leftFlag = left.newHigh52w ? 1 : 0;
+      const rightFlag = right.newHigh52w ? 1 : 0;
+      return (
+        compareNullableNumbers(rightFlag, leftFlag) ||
+        compareNullableNumbers(right.changePercent, left.changePercent) ||
+        compareNullableNumbers(right.distanceToMa25, left.distanceToMa25) ||
+        String(left.ticker || left.code || "").localeCompare(String(right.ticker || right.code || ""), "ja", {
+          numeric: true,
+          sensitivity: "base",
+        })
+      );
+    }
+    const spec = deriveTypeSort(activeType);
+    if (!spec) {
+      return 0;
+    }
+    return compareRecords(left, right, spec.key, spec.direction);
+  }
+
+  function deriveTypeSort(activeType) {
+    return {
+      gainers: { key: "changePercent", direction: "desc" },
+      losers: { key: "changePercent", direction: "asc" },
+      deviation25: { key: "distanceToMa25", direction: "desc" },
+      deviation75: { key: "distanceToMa75", direction: "desc" },
+      deviation200: { key: "distanceToMa200", direction: "desc" },
+    }[activeType] || null;
   }
 
   function compareNullableNumbers(leftValue, rightValue) {
@@ -1131,12 +1711,28 @@
                 <td>${record.rank}</td>
                 <td><a href="${detailUrl}">${escapeHtml(record.code)} ${escapeHtml(record.name)}</a></td>
                 <td class="${getChangeClass(record.changePercent)}">${formatSignedPercent(record.changePercent)}</td>
-                <td>${label === "新高値" ? formatNumber(record.close) : label === "出来高増加" ? formatRatio(record.volumeRatio25) : label === "25日線乖離" ? formatSignedPercent(record.distanceToMa25) : label === "監視候補" ? formatNumber(record.close) : formatNumber(record.close)}</td>
+                <td>${formatRankingValue(label, record)}</td>
               </tr>
             `;
           })
           .join("")}</tbody></table>`
       : '<div class="empty-cell">表示データなし</div>';
+  }
+
+  function formatRankingValue(label, record) {
+    if (label === "出来高増加") {
+      return formatRatio(record.volumeRatio25);
+    }
+    if (label === "25日線乖離") {
+      return formatSignedPercent(record.distanceToMa25);
+    }
+    if (label === "75日線乖離") {
+      return formatSignedPercent(record.distanceToMa75);
+    }
+    if (label === "200日線乖離") {
+      return formatSignedPercent(record.distanceToMa200);
+    }
+    return formatNumber(record.close);
   }
 
   function summarizeGroups(records, groupKey, valueKey) {
@@ -1304,6 +1900,27 @@
     if (sortKey === "volume") {
       return items.sort((a, b) => compareNullableNumbers(b.volumeRatio25, a.volumeRatio25));
     }
+    if (sortKey === "new_high") {
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(b.newHigh52w ? 1 : 0, a.newHigh52w ? 1 : 0) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.distanceToMa25, a.distanceToMa25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
+    if (sortKey === "deviation25") {
+      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa25, a.distanceToMa25));
+    }
+    if (sortKey === "deviation75") {
+      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa75, a.distanceToMa75));
+    }
+    if (sortKey === "deviation200") {
+      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa200, a.distanceToMa200));
+    }
+    if (sortKey === "watch_candidates") {
+      return items.sort((a, b) => compareNullableNumbers(b.watchCandidateScore, a.watchCandidateScore));
+    }
     return items.sort((a, b) => String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" }));
   }
 
@@ -1313,7 +1930,49 @@
       losers: "値下がり率順",
       volume: "出来高増加順",
       code: "コード順",
+      new_high: "新高値順",
+      deviation25: "25日線乖離順",
+      deviation75: "75日線乖離順",
+      deviation200: "200日線乖離順",
+      watch_candidates: "監視候補順",
     }[sortKey] || sortKey;
+  }
+
+  function filterByCondition(records, condition) {
+    if (!condition) {
+      return [...records];
+    }
+    return records.filter((record) => {
+      if (condition === "rise") {
+        return Number(record.changePercent || 0) > 0;
+      }
+      if (condition === "fall") {
+        return Number(record.changePercent || 0) < 0;
+      }
+      if (condition === "new_high") {
+        return record.newHigh52w === true;
+      }
+      if (condition === "above_ma25") {
+        return Number(record.distanceToMa25) > 0;
+      }
+      if (condition === "above_ma75") {
+        return Number(record.distanceToMa75) > 0;
+      }
+      if (condition === "above_ma200") {
+        return Number(record.distanceToMa200) > 0;
+      }
+      if (condition === "volume_2x") {
+        return Number(record.volumeRatio25) >= 2;
+      }
+      if (condition === "watch_candidate") {
+        return record.watchCandidateScore != null;
+      }
+      return true;
+    });
+  }
+
+  function conditionLabel(value) {
+    return INDEX_SCANNER_CONDITIONS.find((item) => item.key === value)?.label || "なし";
   }
 
   function renderMiniChart(elementId, rows, selectedDate, months) {
@@ -1381,10 +2040,318 @@
           .filter((item) => item.value != null)
       );
     });
-    chart.timeScale().fitContent();
+    const timeScale = chart.timeScale();
+    timeScale.fitContent();
+    const visibleRange = timeScale.getVisibleLogicalRange();
+    if (visibleRange) {
+      timeScale.setVisibleLogicalRange({
+        from: visibleRange.from,
+        to: visibleRange.to + 3,
+      });
+    }
+  }
+
+  function renderScannerItem(record, index, state) {
+    const rank = index + 1;
+    const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
+    const picked = Boolean(state.picks[record.code]);
+    return `
+      <article class="scanner-item">
+        <div class="scanner-rank-table">
+          <table>
+            <thead>
+              <tr>
+                <th class="num scanner-col-rank">順位</th>
+                <th class="scanner-col-code">コード</th>
+                <th class="scanner-col-name">名称</th>
+                <th class="num scanner-col-close">取引値</th>
+                <th class="num scanner-col-change">前日比</th>
+                <th class="num scanner-col-volume">出来高</th>
+                <th class="num scanner-col-high">高値</th>
+                <th class="num scanner-col-low">安値</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">${formatNumber(rank, 0)}</td>
+                <td>${escapeHtml(record.code)}</td>
+                <td class="scanner-name-cell">
+                  <a
+                    class="${scannerNameClass(record.name)}"
+                    href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}"
+                    title="${escapeHtml(record.name)}"
+                  >
+                    ${escapeHtml(record.name)}
+                  </a>
+                </td>
+                <td class="scanner-trade-cell">
+                  <div class="scanner-trade-split">
+                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
+                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
+                  </div>
+                </td>
+                <td id="scanChange-${escapeHtml(record.code)}" class="num ${getChangeClass(record.changePercent)}">
+                  ${formatSignedNumber(record.change)} ${formatSignedPercent(record.changePercent)}
+                </td>
+                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
+                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
+                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="scanner-item-chart-wrap">
+          <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
+        </div>
+        <div class="scanner-item-links">
+          <div id="scanLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
+            <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">個別ページ</a>
+          </div>
+          <label class="scanner-pick-toggle">
+            <input type="checkbox" data-pick-code="${escapeHtml(record.code)}"${picked ? " checked" : ""} />
+            <span>選別</span>
+          </label>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderScannerItemLinks(payload, record, state) {
+    const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
+    const items = [
+      {
+        label: "個別ページ",
+        href: buildTickerUrl(record.code, state.selectedDate, rankingKey),
+        local: true,
+      },
+    ];
+    const links = payload.links || {};
+    if (links.quote) {
+      items.push({ label: "Yahoo", href: links.quote });
+    }
+    if (links.ir) {
+      items.push({ label: "IR", href: links.ir });
+    }
+    if (links.official) {
+      items.push({ label: "公式サイト", href: links.official });
+    }
+    if (links.wikipedia) {
+      items.push({ label: "Wikipedia", href: links.wikipedia });
+    }
+    return items
+      .filter((item) => item.href)
+      .map((item) =>
+        item.local
+          ? `<a href="${item.href}">${escapeHtml(item.label)}</a>`
+          : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
+      )
+      .join('<span class="scanner-link-separator">|</span>');
+  }
+
+  function scannerNameClass(name) {
+    const length = String(name || "").length;
+    if (length >= 21) {
+      return "scanner-name-link scanner-name-link--tight";
+    }
+    if (length >= 13) {
+      return "scanner-name-link scanner-name-link--compact";
+    }
+    return "scanner-name-link scanner-name-link--normal";
+  }
+
+  function formatScannerTradeDate(value) {
+    if (!value) {
+      return "-";
+    }
+    const date = parseDate(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+    return `${date.getMonth() + 1}/${date.getDate()}(${weekdays[date.getDay()]})`;
+  }
+
+  function resolveRowByTime(rows, timeValue) {
+    if (!timeValue) {
+      return null;
+    }
+    return rows.find((row) => row.date === timeValue) || null;
+  }
+
+  function setScannerTableValues(code, row) {
+    if (!row) {
+      return;
+    }
+    const tradeDate = document.getElementById(`scanTradeDate-${code}`);
+    const tradePrice = document.getElementById(`scanTradePrice-${code}`);
+    const change = document.getElementById(`scanChange-${code}`);
+    const volume = document.getElementById(`scanVolume-${code}`);
+    const high = document.getElementById(`scanHigh-${code}`);
+    const low = document.getElementById(`scanLow-${code}`);
+    if (tradeDate) {
+      tradeDate.textContent = formatScannerTradeDate(row.date);
+    }
+    if (tradePrice) {
+      tradePrice.textContent = formatNumber(row.close);
+    }
+    if (change) {
+      change.textContent = `${formatSignedNumber(row.change)} ${formatSignedPercent(row.changePercent)}`;
+      change.className = `num ${getChangeClass(row.changePercent)}`.trim();
+    }
+    if (volume) {
+      volume.textContent = formatNumber(row.volume, 0);
+    }
+    if (high) {
+      high.textContent = formatNumber(row.high);
+    }
+    if (low) {
+      low.textContent = formatNumber(row.low);
+    }
+  }
+
+  function formatScannerTickMark(time, tickMarkType) {
+    const yearType = window.LightweightCharts?.TickMarkType?.Year ?? "Year";
+    const monthType = window.LightweightCharts?.TickMarkType?.Month ?? "Month";
+    const date = typeof time === "string" ? parseDate(time) : new Date(time.year, time.month - 1, time.day);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    if (tickMarkType === yearType || tickMarkType === "Year") {
+      return String(date.getFullYear()).slice(-2);
+    }
+    if (tickMarkType === monthType || tickMarkType === "Month") {
+      return String(date.getMonth() + 1);
+    }
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  }
+
+  function renderScannerCompactChart(elementId, code, rows, selectedDate, months) {
+    const element = document.getElementById(elementId);
+    if (!element || !window.LightweightCharts) {
+      return;
+    }
+    element.innerHTML = "";
+    const selectedIndex = findSelectedIndex(rows, selectedDate);
+    if (selectedIndex < 0) {
+      return;
+    }
+    const anchorDate = parseDate(rows[selectedIndex].date);
+    const cutoff = addMonths(anchorDate, -months);
+    const visibleRows = rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 8);
+    if (!visibleRows.length) {
+      return;
+    }
+    const baseRow = rows[selectedIndex];
+    setScannerTableValues(code, baseRow);
+    const chart = window.LightweightCharts.createChart(element, {
+      height: 173,
+      layout: { background: { color: "#ffffff" }, textColor: "#111111", fontSize: 8 },
+      rightPriceScale: {
+        borderColor: "#c8d4e3",
+        scaleMargins: { top: 0.05, bottom: 0.22 },
+      },
+      timeScale: {
+        borderColor: "#c8d4e3",
+        rightOffset: 0,
+        barSpacing: 7,
+        minBarSpacing: 5,
+        fixLeftEdge: true,
+        fixRightEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: (time, tickMarkType) => formatScannerTickMark(time, tickMarkType),
+      },
+      grid: { vertLines: { color: "#edf2f7" }, horzLines: { color: "#edf2f7" } },
+      crosshair: {
+        vertLine: { visible: false, labelVisible: false },
+        horzLine: { visible: false, labelVisible: false },
+      },
+      handleScroll: false,
+      handleScale: false,
+    });
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: "#ef4a60",
+      downColor: "#2d6fb2",
+      borderVisible: true,
+      borderUpColor: "#ef4a60",
+      borderDownColor: "#2d6fb2",
+      wickUpColor: "#ef4a60",
+      wickDownColor: "#2d6fb2",
+    });
+    candleSeries.setData(
+      visibleRows.map((row) => ({
+        time: row.date,
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        close: row.close,
+      }))
+    );
+    candleSeries.setMarkers([
+      {
+        time: rows[selectedIndex].date,
+        position: "aboveBar",
+        color: "#6b7280",
+        shape: "circle",
+        text: rows[selectedIndex].date.slice(5),
+      },
+    ]);
+    const volumeColor = "rgba(110, 110, 110, 0.42)";
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: "volume" },
+      priceScaleId: "",
+      color: volumeColor,
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.84, bottom: 0 },
+      borderVisible: false,
+    });
+    volumeSeries.setData(
+      visibleRows.map((row) => ({
+        time: row.date,
+        value: row.volume,
+        color: volumeColor,
+      }))
+    );
+    [5, 25, 75].forEach((windowSize, index) => {
+      const series = chart.addLineSeries({
+        color: ["#d9485f", "#2b6cb0", "#2f855a"][index],
+        lineWidth: 1,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+      series.setData(
+        visibleRows
+          .map((row) => ({
+            time: row.date,
+            value: row[`ma${windowSize}`],
+          }))
+          .filter((item) => item.value != null)
+      );
+    });
+    chart.subscribeClick((param) => {
+      if (!param || !param.time) {
+        return;
+      }
+      const clickedRow = resolveRowByTime(rows, param.time);
+      if (clickedRow) {
+        setScannerTableValues(code, clickedRow);
+      }
+    });
+    const timeScale = chart.timeScale();
+    const visibleCount = visibleRows.length;
+    timeScale.setVisibleLogicalRange({
+      from: -0.5,
+      to: visibleCount - 1 + 3,
+    });
   }
 
   function renderTickerChart(element, rows, selectedIndex, months, chartMeta) {
+    if (!element || !window.LightweightCharts) {
+      return;
+    }
+    element.innerHTML = "";
     const anchorDate = parseDate(rows[selectedIndex].date);
     const cutoff = addMonths(anchorDate, -months);
     const visibleRows = rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 10);
@@ -1393,148 +2360,103 @@
     }
 
     chartMeta.textContent = `${rows[selectedIndex].date} 基準 / ${visibleRows[0].date} - ${visibleRows[visibleRows.length - 1].date}`;
-    const dates = visibleRows.map((row) => row.date);
-    const traces = [
+    const chart = window.LightweightCharts.createChart(element, {
+      height: 720,
+      layout: { background: { color: "#ffffff" }, textColor: "#111111", fontSize: 11 },
+      rightPriceScale: {
+        borderColor: "#c8d4e3",
+        scaleMargins: { top: 0.05, bottom: 0.22 },
+      },
+      timeScale: {
+        borderColor: "#c8d4e3",
+        rightOffset: 0,
+        barSpacing: 9,
+        minBarSpacing: 6,
+        fixLeftEdge: true,
+        fixRightEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: (time, tickMarkType) => formatScannerTickMark(time, tickMarkType),
+      },
+      grid: { vertLines: { color: "#edf2f7" }, horzLines: { color: "#edf2f7" } },
+      handleScroll: false,
+      handleScale: false,
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: "#ef4a60",
+      downColor: "#2d6fb2",
+      borderVisible: true,
+      borderUpColor: "#ef4a60",
+      borderDownColor: "#2d6fb2",
+      wickUpColor: "#ef4a60",
+      wickDownColor: "#2d6fb2",
+    });
+    candleSeries.setData(
+      visibleRows.map((row) => ({
+        time: row.date,
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        close: row.close,
+      }))
+    );
+    candleSeries.setMarkers([
       {
-        type: "candlestick",
-        x: dates,
-        open: visibleRows.map((row) => row.open),
-        high: visibleRows.map((row) => row.high),
-        low: visibleRows.map((row) => row.low),
-        close: visibleRows.map((row) => row.close),
-        name: "ローソク足",
-        xaxis: "x",
-        yaxis: "y",
-        increasing: { line: { color: "#e11d48" }, fillcolor: "#fecdd3" },
-        decreasing: { line: { color: "#0369a1" }, fillcolor: "#dbeafe" },
+        time: rows[selectedIndex].date,
+        position: "aboveBar",
+        color: "#6b7280",
+        shape: "circle",
+        text: rows[selectedIndex].date.slice(5),
       },
-      {
-        type: "bar",
-        x: dates,
-        y: visibleRows.map((row) => row.volume),
-        name: "出来高",
-        xaxis: "x",
-        yaxis: "y2",
-        marker: {
-          color: visibleRows.map((row) => (row.close >= row.open ? "rgba(225, 29, 72, 0.35)" : "rgba(3, 105, 161, 0.35)")),
-        },
-      },
-    ];
+    ]);
 
-    [5, 25, 75, 200].forEach((windowSize, index) => {
-      traces.push({
-        type: "scatter",
-        mode: "lines",
-        x: dates,
-        y: visibleRows.map((row) => row[`ma${windowSize}`]),
-        name: `MA${windowSize}`,
-        xaxis: "x",
-        yaxis: "y",
-        line: {
-          width: 1.8,
-          color: ["#16a34a", "#f59e0b", "#7c3aed", "#111827"][index],
-        },
+    const volumeColor = "rgba(110, 110, 110, 0.42)";
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: "volume" },
+      priceScaleId: "",
+      color: volumeColor,
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.84, bottom: 0 },
+      borderVisible: false,
+    });
+    volumeSeries.setData(
+      visibleRows.map((row) => ({
+        time: row.date,
+        value: row.volume,
+        color: volumeColor,
+      }))
+    );
+
+    [
+      [5, "#d9485f"],
+      [25, "#2b6cb0"],
+      [75, "#2f855a"],
+      [200, "#1f2937"],
+    ].forEach(([windowSize, color]) => {
+      const series = chart.addLineSeries({
+        color,
+        lineWidth: Number(windowSize) === 200 ? 1 : 1.5,
+        lastValueVisible: false,
+        priceLineVisible: false,
       });
+      series.setData(
+        visibleRows
+          .map((row) => ({
+            time: row.date,
+            value: row[`ma${windowSize}`],
+          }))
+          .filter((item) => item.value != null)
+      );
     });
 
-    [5, 25].forEach((windowSize, index) => {
-      traces.push({
-        type: "scatter",
-        mode: "lines",
-        x: dates,
-        y: visibleRows.map((row) => row[`volumeMa${windowSize}`]),
-        name: `出来高MA${windowSize}`,
-        xaxis: "x",
-        yaxis: "y2",
-        line: {
-          width: 1.6,
-          color: ["#b45309", "#475569"][index],
-        },
-      });
-    });
-
-    [12, 24, 48].forEach((windowSize, index) => {
-      traces.push({
-        type: "scatter",
-        mode: "lines",
-        x: dates,
-        y: visibleRows.map((row) => row[`rci${windowSize}`]),
-        name: `RCI${windowSize}`,
-        xaxis: "x2",
-        yaxis: "y3",
-        line: {
-          width: 1.6,
-          color: ["#ef4444", "#0f766e", "#1d4ed8"][index],
-        },
-      });
-    });
-
-    const markerDate = rows[selectedIndex].date;
-    const layout = {
-      margin: { t: 20, r: 20, b: 32, l: 52 },
-      paper_bgcolor: "#ffffff",
-      plot_bgcolor: "#ffffff",
-      showlegend: true,
-      legend: { orientation: "h", y: 1.08, x: 0 },
-      xaxis: {
-        domain: [0, 1],
-        anchor: "y",
-        rangeslider: { visible: false },
-        showgrid: true,
-        gridcolor: "#edf2f7",
-      },
-      yaxis: {
-        domain: [0.42, 1],
-        title: { text: "Price" },
-        showgrid: true,
-        gridcolor: "#edf2f7",
-      },
-      yaxis2: {
-        domain: [0.27, 0.4],
-        title: { text: "Volume" },
-        showgrid: true,
-        gridcolor: "#edf2f7",
-      },
-      xaxis2: {
-        domain: [0, 1],
-        anchor: "y3",
-        matches: "x",
-        showgrid: true,
-        gridcolor: "#edf2f7",
-      },
-      yaxis3: {
-        domain: [0, 0.21],
-        title: { text: "RCI" },
-        range: [-100, 100],
-        zeroline: true,
-        zerolinecolor: "#94a3b8",
-        showgrid: true,
-        gridcolor: "#edf2f7",
-      },
-      shapes: [
-        { type: "line", xref: "paper", x0: 0, x1: 1, yref: "y3", y0: 80, y1: 80, line: { color: "#cbd5e1", dash: "dot" } },
-        { type: "line", xref: "paper", x0: 0, x1: 1, yref: "y3", y0: -80, y1: -80, line: { color: "#cbd5e1", dash: "dot" } },
-        { type: "line", xref: "x", x0: markerDate, x1: markerDate, yref: "paper", y0: 0, y1: 1, line: { color: "#111827", width: 1, dash: "dot" } },
-      ],
-      annotations: [
-        {
-          x: markerDate,
-          y: 1.03,
-          xref: "x",
-          yref: "paper",
-          text: `基準日 ${markerDate}`,
-          showarrow: false,
-          font: { size: 11, color: "#111827" },
-          bgcolor: "#f8fafc",
-          bordercolor: "#cfd7e3",
-          borderwidth: 1,
-        },
-      ],
-    };
-
-    Plotly.newPlot(element, traces, layout, {
-      responsive: true,
-      displayModeBar: false,
+    const timeScale = chart.timeScale();
+    const visibleCount = visibleRows.length;
+    timeScale.setVisibleLogicalRange({
+      from: -0.5,
+      to: visibleCount - 1 + 3,
     });
   }
 
@@ -1651,10 +2573,46 @@
     return `./ticker.html?${params.toString()}`;
   }
 
-  function syncIndexUrl(date) {
+  function syncIndexUrlState(state) {
     const params = new URLSearchParams(window.location.search);
-    params.set("date", date);
+    params.set("date", state.selectedDate);
+    if (state.activeType) {
+      params.set("type", state.activeType);
+    } else {
+      params.delete("type");
+    }
+    if (state.activeMarket) {
+      params.set("market", state.activeMarket);
+    } else {
+      params.delete("market");
+    }
+    if (state.activeTheme) {
+      params.set("theme", state.activeTheme);
+      params.delete("industry");
+    } else if (state.activeIndustry) {
+      params.set("industry", state.activeIndustry);
+      params.delete("theme");
+    } else {
+      params.delete("industry");
+      params.delete("theme");
+    }
     history.replaceState({}, "", `./index.html?${params.toString()}`);
+  }
+
+  function normalizeTypeFilter(value) {
+    return TYPE_FILTERS.some((item) => item.key === value) ? value : "";
+  }
+
+  function typeFilterLabel(value) {
+    return TYPE_FILTERS.find((item) => item.key === value)?.label || "全銘柄";
+  }
+
+  function resolvePrimaryRankingKey(activeType) {
+    return activeType || "gainers";
+  }
+
+  function resolvePrimaryRankingLabel(activeType) {
+    return activeType ? typeFilterLabel(activeType) : "値上がり率";
   }
 
   function syncTickerUrl(code, date, rankingKey) {
@@ -1680,7 +2638,26 @@
     } else {
       params.delete("tag");
     }
-    history.replaceState({}, "", `./scanner.html?${params.toString()}`);
+    history.replaceState({}, "", `./index.html?${params.toString()}`);
+  }
+
+  function syncIndexScannerUrl(date, sort, tag, condition, limit, months) {
+    const params = new URLSearchParams(window.location.search);
+    params.set("date", date);
+    params.set("sort", sort);
+    params.set("limit", String(limit));
+    params.set("months", String(months));
+    if (tag) {
+      params.set("tag", tag);
+    } else {
+      params.delete("tag");
+    }
+    if (condition) {
+      params.set("condition", condition);
+    } else {
+      params.delete("condition");
+    }
+    history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
   function rankingLabel(key) {
@@ -1692,6 +2669,11 @@
       gainers: "gainers",
       losers: "losers",
       volume: "volume_spike",
+      new_high: "new_high",
+      deviation25: "deviation25",
+      deviation75: "deviation75",
+      deviation200: "deviation200",
+      watch_candidates: "watch_candidates",
       code: "",
     }[sortKey] || "";
   }

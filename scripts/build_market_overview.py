@@ -13,6 +13,7 @@ from common import (
     select_dates,
     summarize_sector_strength,
     summarize_tag_counts,
+    summarize_theme_counts,
     write_json,
 )
 
@@ -41,6 +42,7 @@ def main() -> int:
             "market": payload["market"],
             "sector": payload.get("sector", ""),
             "industry": payload.get("industry", ""),
+            "themes": payload.get("themes", []),
             "tags": payload.get("tags", []),
             "links": payload.get("links", {}),
         }
@@ -74,6 +76,7 @@ def main() -> int:
             "averageChangePercent": round(average_change, 4) if average_change is not None else None,
             "volumeSpikeCount": volume_spike_count,
             "sectorBreadth": summarize_sector_strength(records)[:12],
+            "themeBreadth": summarize_theme_counts(records)[:12],
             "tagBreadth": summarize_tag_counts(records)[:12],
             "records": records,
         }
@@ -87,4 +90,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

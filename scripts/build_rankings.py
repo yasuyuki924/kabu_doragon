@@ -38,6 +38,7 @@ def normalize_item(rank: int, record: dict[str, object]) -> dict[str, object]:
         "market": record["market"],
         "sector": record["sector"],
         "industry": record["industry"],
+        "themes": record.get("themes", []),
         "tags": record.get("tags", []),
         "close": record.get("close"),
         "change": record.get("change"),
@@ -81,6 +82,7 @@ def main() -> int:
             "market": payload["market"],
             "sector": payload.get("sector", ""),
             "industry": payload.get("industry", ""),
+            "themes": payload.get("themes", []),
             "tags": payload.get("tags", []),
             "links": payload.get("links", {}),
         }
@@ -106,6 +108,8 @@ def main() -> int:
         )
         new_high = new_high[: args.limit]
         deviation25 = pick_top(records, "distanceToMa25", True, args.limit)
+        deviation75 = pick_top(records, "distanceToMa75", True, args.limit)
+        deviation200 = pick_top(records, "distanceToMa200", True, args.limit)
         watch_candidates = sorted(records, key=score_watch_candidate, reverse=True)[: args.limit]
 
         output_dir = RANKINGS_DIR / date_value
@@ -114,6 +118,8 @@ def main() -> int:
         write_json(output_dir / "volume_spike.json", build_ranking_payload(date_value, "出来高増加", volume_spike))
         write_json(output_dir / "new_high.json", build_ranking_payload(date_value, "新高値", new_high))
         write_json(output_dir / "deviation25.json", build_ranking_payload(date_value, "25日線乖離", deviation25))
+        write_json(output_dir / "deviation75.json", build_ranking_payload(date_value, "75日線乖離", deviation75))
+        write_json(output_dir / "deviation200.json", build_ranking_payload(date_value, "200日線乖離", deviation200))
         write_json(
             output_dir / "watch_candidates.json",
             build_ranking_payload(date_value, "監視候補", watch_candidates),
@@ -125,4 +131,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

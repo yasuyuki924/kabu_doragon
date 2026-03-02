@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 WATCHLIST_JSON = DATA_DIR / "watchlist.json"
+THEME_MAP_JSON = DATA_DIR / "theme_map.json"
 OHLCV_DIR = DATA_DIR / "ohlcv"
 TICKERS_DIR = DATA_DIR / "tickers"
 RANKINGS_DIR = DATA_DIR / "rankings"
@@ -19,9 +20,55 @@ VOLUME_MA_WINDOWS = (5, 25)
 RCI_WINDOWS = (12, 24, 48)
 
 
+def load_theme_map() -> dict[str, object]:
+    if not THEME_MAP_JSON.exists():
+        return {"version": 1, "updatedAt": today_jst(), "themes": []}
+    with THEME_MAP_JSON.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    if not isinstance(payload, dict):
+        return {"version": 1, "updatedAt": today_jst(), "themes": []}
+    themes = payload.get("themes")
+    if not isinstance(themes, list):
+        payload["themes"] = []
+    return payload
+
+
+def build_theme_lookup(theme_map: dict[str, object]) -> dict[str, list[str]]:
+    items = theme_map.get("themes", [])
+    if not isinstance(items, list):
+        return {}
+
+    ordered_items = sorted(
+        (item for item in items if isinstance(item, dict)),
+        key=lambda item: (int(item.get("order") or 0), str(item.get("label") or "")),
+    )
+    lookup: dict[str, list[str]] = {}
+    for item in ordered_items:
+        label = str(item.get("label") or "").strip()
+        codes = item.get("codes") or []
+        if not label or not isinstance(codes, list):
+            continue
+        for code in codes:
+            normalized_code = str(code or "").strip()
+            if not normalized_code:
+                continue
+            lookup.setdefault(normalized_code, [])
+            if label not in lookup[normalized_code]:
+                lookup[normalized_code].append(label)
+    return lookup
+
+
+def attach_themes(record: dict[str, object], lookup: dict[str, list[str]]) -> dict[str, object]:
+    code = str(record.get("ticker") or record.get("code") or "").strip()
+    themes = list(lookup.get(code, []))
+    return {**record, "themes": themes}
+
+
 def load_watchlist() -> list[dict[str, object]]:
+    theme_lookup = build_theme_lookup(load_theme_map())
     with WATCHLIST_JSON.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
+        records = json.load(fh)
+    return [attach_themes(record, theme_lookup) for record in records]
 
 
 def load_ohlcv_rows(code: str) -> list[dict[str, float | int | str]]:
@@ -251,6 +298,20 @@ def summarize_tag_counts(records: list[dict[str, object]]) -> list[dict[str, obj
     ]
 
 
+def summarize_theme_counts(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    counts: dict[str, int] = {}
+    for record in records:
+        for theme in record.get("themes") or []:
+            label = str(theme or "").strip()
+            if not label:
+                continue
+            counts[label] = counts.get(label, 0) + 1
+    return [
+        {"label": label, "count": count}
+        for label, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -271,6 +332,8 @@ def build_manifest_payload(available_dates: list[str]) -> dict[str, object]:
             "volume_spike",
             "new_high",
             "deviation25",
+            "deviation75",
+            "deviation200",
             "watch_candidates",
         ],
     }
@@ -285,4 +348,3 @@ def parse_codes(value: str | None) -> list[str] | None:
 
 def today_jst() -> str:
     return datetime.now().strftime("%Y-%m-%d")
-
