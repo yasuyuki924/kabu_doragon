@@ -29,6 +29,8 @@
   ];
   const INDEX_SCANNER_LIMITS = [50, 100, 200];
   const INDEX_SCANNER_MONTHS = [1, 3, 6, 12];
+  const INDEX_SCANNER_BARS = [21, 63, 126, 252];
+  const INDEX_SCANNER_TIMEFRAMES = ["daily", "weekly", "monthly"];
   const INDEX_SCANNER_TURNOVER_OPTIONS = [0, 50000000, 100000000, 500000000, 1000000000];
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -713,7 +715,7 @@
       ).slice(0, state.limit);
       syncScannerUrl(state.selectedDate, state.sort, state.tag, state.limit, state.months);
       renderCalendar();
-      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)} / 期間: ${state.months}ヶ月`;
+      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)} / 期間: ${indexScannerPeriodLabel(state.months)}`;
 
       if (!filtered.length) {
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
@@ -793,7 +795,8 @@
     const themeSelect = document.getElementById("indexTheme");
     const turnoverSelect = document.getElementById("indexTurnover");
     const limitSelect = document.getElementById("indexLimit");
-    const monthsSelect = document.getElementById("indexMonths");
+    const barsSelect = document.getElementById("indexBars");
+    const timeframeSelect = document.getElementById("indexTimeframe");
     const pickedLink = document.getElementById("indexPickedLink");
     const resetPicksButton = document.getElementById("indexResetPicksButton");
     const miniCalendar = document.getElementById("indexMiniCalendar");
@@ -810,7 +813,8 @@
       theme: "",
       turnover: 0,
       limit: 100,
-      months: 3,
+      bars: 63,
+      timeframe: "daily",
       selectedDate: "",
       calendarMonth: null,
       picks: {},
@@ -825,25 +829,28 @@
       ? Number(params.get("turnover"))
       : 0;
     state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
-    state.months = INDEX_SCANNER_MONTHS.includes(Number(params.get("months"))) ? Number(params.get("months")) : state.months;
+    state.bars = INDEX_SCANNER_BARS.includes(Number(params.get("bars"))) ? Number(params.get("bars")) : state.bars;
+    state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
     state.picks = loadScannerPicks();
     sortSelect.value = state.sort;
     themeSelect.value = state.theme;
     turnoverSelect.value = String(state.turnover);
     limitSelect.value = String(state.limit);
-    monthsSelect.value = String(state.months);
+    barsSelect.value = String(state.bars);
+    timeframeSelect.value = state.timeframe;
     if (pickedLink) {
       pickedLink.href = "./picked.html";
     }
 
-    [sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, monthsSelect].forEach((control) => {
+    [sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, barsSelect, timeframeSelect].forEach((control) => {
       control.addEventListener("change", async () => {
         state.sort = sortSelect.value;
         state.tag = tagSelect.value;
         state.theme = themeSelect.value;
         state.turnover = Number(turnoverSelect.value);
         state.limit = Number(limitSelect.value);
-        state.months = Number(monthsSelect.value);
+        state.bars = Number(barsSelect.value);
+        state.timeframe = timeframeSelect.value;
         await render();
       });
     });
@@ -930,9 +937,18 @@
         ),
         state.sort
       ).slice(0, state.limit);
-      syncIndexScannerUrl(state.selectedDate, state.sort, state.tag, state.theme, state.turnover, state.limit, state.months);
+      syncIndexScannerUrl(
+        state.selectedDate,
+        state.sort,
+        state.tag,
+        state.theme,
+        state.turnover,
+        state.limit,
+        state.bars,
+        state.timeframe
+      );
       renderCalendar();
-      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)}${state.tag ? ` / 業種: ${state.tag}` : ""}${state.theme ? ` / テーマ: ${state.theme}` : ""} / 5日平均売買代金: ${turnoverLabel(state.turnover)} / 期間: ${state.months}ヶ月`;
+      meta.textContent = `基準日: ${state.selectedDate}`;
 
       if (!filtered.length) {
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
@@ -956,7 +972,10 @@
       for (const record of filtered) {
         try {
           const payload = await loadTickerPayload(record.code);
-          renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.months);
+          renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.bars, {
+            timeframe: state.timeframe,
+            useBarCount: true,
+          });
           const linksElement = document.getElementById(`scanLinks-${record.code}`);
           if (linksElement) {
             linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
@@ -1993,6 +2012,31 @@
     }[Number(value)] || "0";
   }
 
+  function indexScannerPeriodLabel(months) {
+    return `${indexScannerBarCountFromMonths(months)}（${months}ヶ月）`;
+  }
+
+  function indexScannerBarCountFromMonths(months) {
+    return {
+      1: 21,
+      3: 63,
+      6: 126,
+      12: 252,
+    }[Number(months)] || 63;
+  }
+
+  function indexScannerBarLabel(bars) {
+    return `${bars}本`;
+  }
+
+  function indexScannerTimeframeLabel(timeframe) {
+    return {
+      daily: "日足",
+      weekly: "週足",
+      monthly: "月足",
+    }[timeframe] || "日足";
+  }
+
   function renderMiniChart(elementId, rows, selectedDate, months) {
     const element = document.getElementById(elementId);
     if (!element || !window.LightweightCharts) {
@@ -2243,23 +2287,26 @@
     return `${date.getMonth() + 1}/${date.getDate()}`;
   }
 
-  function renderScannerCompactChart(elementId, code, rows, selectedDate, months) {
+  function renderScannerCompactChart(elementId, code, rows, selectedDate, rangeValue, options = {}) {
     const element = document.getElementById(elementId);
     if (!element || !window.LightweightCharts) {
       return;
     }
     element.innerHTML = "";
-    const selectedIndex = findSelectedIndex(rows, selectedDate);
+    const timeframe = options.timeframe || "daily";
+    const useBarCount = Boolean(options.useBarCount);
+    const chartRows = buildScannerChartRows(rows, timeframe);
+    const selectedIndex = findSelectedChartIndex(chartRows, selectedDate, timeframe);
     if (selectedIndex < 0) {
       return;
     }
-    const anchorDate = parseDate(rows[selectedIndex].date);
-    const cutoff = addMonths(anchorDate, -months);
-    const visibleRows = rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 8);
+    const visibleRows = useBarCount
+      ? selectRowsByBarWindow(chartRows, selectedIndex, rangeValue)
+      : selectRowsByMonths(chartRows, selectedDate, rangeValue);
     if (!visibleRows.length) {
       return;
     }
-    const baseRow = rows[selectedIndex];
+    const baseRow = chartRows[selectedIndex];
     setScannerTableValues(code, baseRow);
     const chart = window.LightweightCharts.createChart(element, {
       height: 173,
@@ -2308,11 +2355,11 @@
     );
     candleSeries.setMarkers([
       {
-        time: rows[selectedIndex].date,
+        time: baseRow.date,
         position: "aboveBar",
         color: "#6b7280",
         shape: "circle",
-        text: rows[selectedIndex].date.slice(5),
+        text: selectedDate.slice(5),
       },
     ]);
     const volumeColor = "rgba(110, 110, 110, 0.42)";
@@ -2332,9 +2379,14 @@
         color: volumeColor,
       }))
     );
-    [5, 25, 75].forEach((windowSize, index) => {
+    [
+      [5, "#d9485f"],
+      [25, "#2b6cb0"],
+      [75, "#2f855a"],
+      [200, "#f59e0b"],
+    ].forEach(([windowSize, color]) => {
       const series = chart.addLineSeries({
-        color: ["#d9485f", "#2b6cb0", "#2f855a"][index],
+        color,
         lineWidth: 1,
         lastValueVisible: false,
         priceLineVisible: false,
@@ -2352,7 +2404,7 @@
       if (!param || !param.time) {
         return;
       }
-      const clickedRow = resolveRowByTime(rows, param.time);
+      const clickedRow = resolveRowByTime(chartRows, param.time);
       if (clickedRow) {
         setScannerTableValues(code, clickedRow);
       }
@@ -2659,12 +2711,14 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, months) {
+  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, bars, timeframe) {
     const params = new URLSearchParams(window.location.search);
     params.set("date", date);
     params.set("sort", sort);
     params.set("limit", String(limit));
-    params.set("months", String(months));
+    params.set("bars", String(bars));
+    params.set("timeframe", timeframe);
+    params.delete("months");
     if (tag) {
       params.set("tag", tag);
     } else {
@@ -2678,6 +2732,141 @@
     params.set("turnover", String(turnover));
     params.delete("condition");
     history.replaceState({}, "", `./index.html?${params.toString()}`);
+  }
+
+  function selectRowsByMonths(rows, selectedDate, months) {
+    const selectedIndex = findSelectedIndex(rows, selectedDate);
+    if (selectedIndex < 0) {
+      return [];
+    }
+    const anchorDate = parseDate(rows[selectedIndex].date);
+    const cutoff = addMonths(anchorDate, -months);
+    return rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 8);
+  }
+
+  function buildScannerChartRows(rows, timeframe) {
+    if (timeframe === "weekly") {
+      return enrichAggregatedRows(aggregateRowsByPeriod(rows, weekBucketKey));
+    }
+    if (timeframe === "monthly") {
+      return enrichAggregatedRows(aggregateRowsByPeriod(rows, monthBucketKey));
+    }
+    return rows;
+  }
+
+  function aggregateRowsByPeriod(rows, bucketKeyFn) {
+    const buckets = [];
+    rows.forEach((row) => {
+      const key = bucketKeyFn(row.date);
+      const current = buckets[buckets.length - 1];
+      if (!current || current.key !== key) {
+        buckets.push({
+          key,
+          rows: [row],
+        });
+        return;
+      }
+      current.rows.push(row);
+    });
+    return buckets.map(({ rows: bucketRows }) => {
+      const first = bucketRows[0];
+      const last = bucketRows[bucketRows.length - 1];
+      return {
+        periodStartDate: first.date,
+        date: last.date,
+        open: first.open,
+        high: bucketRows.reduce((max, row) => Math.max(max, Number(row.high || row.close || 0)), Number(first.high || first.close || 0)),
+        low: bucketRows.reduce((min, row) => Math.min(min, Number(row.low || row.close || 0)), Number(first.low || first.close || 0)),
+        close: last.close,
+        volume: bucketRows.reduce((total, row) => total + Number(row.volume || 0), 0),
+      };
+    });
+  }
+
+  function enrichAggregatedRows(rows) {
+    const maWindows = [5, 25, 75, 200];
+    const maValues = Object.fromEntries(maWindows.map((windowSize) => [windowSize, computeMovingAverage(rows, windowSize)]));
+    return rows.map((row, index) => {
+      const previousClose = index > 0 ? rows[index - 1].close : null;
+      const change = previousClose == null ? null : roundNumber(row.close - previousClose, 4);
+      const changePercent = previousClose ? roundNumber((change / previousClose) * 100, 4) : null;
+      return {
+        ...row,
+        change,
+        changePercent,
+        ma5: maValues[5][index],
+        ma25: maValues[25][index],
+        ma75: maValues[75][index],
+        ma200: maValues[200][index],
+      };
+    });
+  }
+
+  function computeMovingAverage(rows, windowSize) {
+    const results = [];
+    let total = 0;
+    rows.forEach((row, index) => {
+      total += Number(row.close || 0);
+      if (index >= windowSize) {
+        total -= Number(rows[index - windowSize].close || 0);
+      }
+      if (index + 1 < windowSize) {
+        results.push(null);
+        return;
+      }
+      results.push(roundNumber(total / windowSize, 4));
+    });
+    return results;
+  }
+
+  function roundNumber(value, digits = 4) {
+    if (value == null || Number.isNaN(value)) {
+      return null;
+    }
+    return Number(value.toFixed(digits));
+  }
+
+  function weekBucketKey(dateValue) {
+    const date = parseDate(dateValue);
+    const offset = (date.getDay() + 6) % 7;
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - offset);
+    return formatDateKey(monday);
+  }
+
+  function monthBucketKey(dateValue) {
+    const date = parseDate(dateValue);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function findSelectedChartIndex(rows, selectedDate, timeframe) {
+    if (!rows.length) {
+      return -1;
+    }
+    if (timeframe === "daily") {
+      return findSelectedIndex(rows, selectedDate);
+    }
+    const containingIndex = rows.findIndex((row) => {
+      const startDate = row.periodStartDate || row.date;
+      return startDate <= selectedDate && selectedDate <= row.date;
+    });
+    if (containingIndex >= 0) {
+      return containingIndex;
+    }
+    return findSelectedIndex(rows, selectedDate);
+  }
+
+  function selectRowsByBarWindow(rows, selectedIndex, barCount) {
+    if (!rows.length) {
+      return [];
+    }
+    let endIndex = rows.length - 1;
+    let startIndex = Math.max(0, endIndex - barCount + 1);
+    if (selectedIndex < startIndex) {
+      startIndex = selectedIndex;
+      endIndex = Math.min(rows.length - 1, startIndex + barCount - 1);
+    }
+    return rows.slice(startIndex, endIndex + 1);
   }
 
   function rankingLabel(key) {
