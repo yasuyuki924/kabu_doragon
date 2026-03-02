@@ -213,8 +213,10 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
     highs = [float(row["high"]) for row in rows]
     lows = [float(row["low"]) for row in rows]
 
+    turnovers = [float(row["close"]) * float(row["volume"]) for row in rows]
     ma_map = {window: moving_average(closes, window) for window in MA_WINDOWS}
     volume_ma_map = {window: moving_average(volumes, window) for window in VOLUME_MA_WINDOWS}
+    turnover_ma_map = {window: moving_average(turnovers, window) for window in VOLUME_MA_WINDOWS}
     rci_map = {window: calculate_rci_series(closes, window) for window in RCI_WINDOWS}
 
     enriched: list[dict[str, float | int | str | bool | None]] = []
@@ -238,6 +240,8 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         ma200 = ma_map[200][index]
         volume_ma5 = volume_ma_map[5][index]
         volume_ma25 = volume_ma_map[25][index]
+        turnover = turnovers[index]
+        turnover_ma5 = turnover_ma_map[5][index]
 
         enriched.append(
             {
@@ -247,6 +251,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
                 "low": float(row["low"]),
                 "close": close,
                 "volume": volume,
+                "turnover": round(turnover, 4),
                 "change": round(change, 4) if change is not None else None,
                 "changePercent": round(change_percent, 4) if change_percent is not None else None,
                 "ma5": ma5,
@@ -255,6 +260,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
                 "ma200": ma200,
                 "volumeMa5": volume_ma5,
                 "volumeMa25": volume_ma25,
+                "turnoverMa5": round(turnover_ma5, 4) if turnover_ma5 is not None else None,
                 "distanceToMa25": round(distance_from_baseline(close, ma25), 4) if ma25 else None,
                 "distanceToMa75": round(distance_from_baseline(close, ma75), 4) if ma75 else None,
                 "distanceToMa200": round(distance_from_baseline(close, ma200), 4) if ma200 else None,

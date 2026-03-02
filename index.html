@@ -30,7 +30,7 @@
           </div>
         </div>
         <label>
-          <span>並び順</span>
+          <span>条件</span>
           <select id="indexSort">
             <option value="gainers">値上がり率順</option>
             <option value="losers">値下がり率順</option>
@@ -56,17 +56,13 @@
           </select>
         </label>
         <label>
-          <span>条件</span>
-          <select id="indexCondition">
-            <option value="">なし</option>
-            <option value="rise">上昇銘柄のみ</option>
-            <option value="fall">下落銘柄のみ</option>
-            <option value="new_high">新高値のみ</option>
-            <option value="above_ma25">MA25上のみ</option>
-            <option value="above_ma75">MA75上のみ</option>
-            <option value="above_ma200">MA200上のみ</option>
-            <option value="volume_2x">出来高倍率2倍以上</option>
-            <option value="watch_candidate">監視候補のみ</option>
+          <span>5日平均売買代金</span>
+          <select id="indexTurnover">
+            <option value="0">0</option>
+            <option value="50000000">5000万</option>
+            <option value="100000000">1億</option>
+            <option value="500000000">5億</option>
+            <option value="1000000000">10億</option>
           </select>
         </label>
         <label>

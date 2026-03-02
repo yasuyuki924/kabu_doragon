@@ -27,19 +27,9 @@
     { key: "deviation75", label: "75日線乖離" },
     { key: "deviation200", label: "200日線乖離" },
   ];
-  const INDEX_SCANNER_CONDITIONS = [
-    { key: "", label: "なし" },
-    { key: "rise", label: "上昇銘柄のみ" },
-    { key: "fall", label: "下落銘柄のみ" },
-    { key: "new_high", label: "新高値のみ" },
-    { key: "above_ma25", label: "MA25上のみ" },
-    { key: "above_ma75", label: "MA75上のみ" },
-    { key: "above_ma200", label: "MA200上のみ" },
-    { key: "volume_2x", label: "出来高倍率2倍以上" },
-    { key: "watch_candidate", label: "監視候補のみ" },
-  ];
   const INDEX_SCANNER_LIMITS = [50, 100, 200];
   const INDEX_SCANNER_MONTHS = [1, 3, 6, 12];
+  const INDEX_SCANNER_TURNOVER_OPTIONS = [0, 50000000, 100000000, 500000000, 1000000000];
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
@@ -801,7 +791,7 @@
     const sortSelect = document.getElementById("indexSort");
     const tagSelect = document.getElementById("indexTag");
     const themeSelect = document.getElementById("indexTheme");
-    const conditionSelect = document.getElementById("indexCondition");
+    const turnoverSelect = document.getElementById("indexTurnover");
     const limitSelect = document.getElementById("indexLimit");
     const monthsSelect = document.getElementById("indexMonths");
     const pickedLink = document.getElementById("indexPickedLink");
@@ -818,7 +808,7 @@
       sort: "gainers",
       tag: "",
       theme: "",
-      condition: "",
+      turnover: 0,
       limit: 100,
       months: 3,
       selectedDate: "",
@@ -831,25 +821,27 @@
     state.sort = params.get("sort") || state.sort;
     state.tag = params.get("tag") || "";
     state.theme = params.get("theme") || "";
-    state.condition = params.get("condition") || "";
+    state.turnover = INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
+      ? Number(params.get("turnover"))
+      : 0;
     state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
     state.months = INDEX_SCANNER_MONTHS.includes(Number(params.get("months"))) ? Number(params.get("months")) : state.months;
     state.picks = loadScannerPicks();
     sortSelect.value = state.sort;
     themeSelect.value = state.theme;
-    conditionSelect.value = INDEX_SCANNER_CONDITIONS.some((item) => item.key === state.condition) ? state.condition : "";
+    turnoverSelect.value = String(state.turnover);
     limitSelect.value = String(state.limit);
     monthsSelect.value = String(state.months);
     if (pickedLink) {
       pickedLink.href = "./picked.html";
     }
 
-    [sortSelect, tagSelect, themeSelect, conditionSelect, limitSelect, monthsSelect].forEach((control) => {
+    [sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, monthsSelect].forEach((control) => {
       control.addEventListener("change", async () => {
         state.sort = sortSelect.value;
         state.tag = tagSelect.value;
         state.theme = themeSelect.value;
-        state.condition = conditionSelect.value;
+        state.turnover = Number(turnoverSelect.value);
         state.limit = Number(limitSelect.value);
         state.months = Number(monthsSelect.value);
         await render();
@@ -881,9 +873,9 @@
     }
 
     function renderTagOptions() {
-      const conditionRecords = filterByCondition(state.overview.records || [], state.condition);
+      const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
       const industries = [...new Set(
-        conditionRecords
+        turnoverRecords
           .map((record) => String(record.industry || "").trim())
           .filter(
             (industry) =>
@@ -902,9 +894,9 @@
     }
 
     function renderThemeOptions() {
-      const conditionRecords = filterByCondition(state.overview.records || [], state.condition);
+      const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
       const availableThemes = new Set();
-      conditionRecords.forEach((record) => {
+      turnoverRecords.forEach((record) => {
         (record.themes || []).forEach((theme) => {
           const label = String(theme || "").trim();
           if (label) {
@@ -931,16 +923,16 @@
       list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
       renderTagOptions();
       renderThemeOptions();
-      const conditionRecords = filterByCondition(state.overview.records || [], state.condition);
+      const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
       const filtered = sortScannerRecords(
-        conditionRecords.filter(
+        turnoverRecords.filter(
           (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
         ),
         state.sort
       ).slice(0, state.limit);
-      syncIndexScannerUrl(state.selectedDate, state.sort, state.tag, state.theme, state.condition, state.limit, state.months);
+      syncIndexScannerUrl(state.selectedDate, state.sort, state.tag, state.theme, state.turnover, state.limit, state.months);
       renderCalendar();
-      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)}${state.tag ? ` / 業種: ${state.tag}` : ""}${state.theme ? ` / テーマ: ${state.theme}` : ""} / 条件: ${conditionLabel(state.condition)} / 期間: ${state.months}ヶ月`;
+      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)}${state.tag ? ` / 業種: ${state.tag}` : ""}${state.theme ? ` / テーマ: ${state.theme}` : ""} / 5日平均売買代金: ${turnoverLabel(state.turnover)} / 期間: ${state.months}ヶ月`;
 
       if (!filtered.length) {
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
@@ -1982,41 +1974,23 @@
     }[sortKey] || sortKey;
   }
 
-  function filterByCondition(records, condition) {
-    if (!condition) {
+  function filterByTurnover(records, turnoverThreshold) {
+    if (!turnoverThreshold) {
       return [...records];
     }
     return records.filter((record) => {
-      if (condition === "rise") {
-        return Number(record.changePercent || 0) > 0;
-      }
-      if (condition === "fall") {
-        return Number(record.changePercent || 0) < 0;
-      }
-      if (condition === "new_high") {
-        return record.newHigh52w === true;
-      }
-      if (condition === "above_ma25") {
-        return Number(record.distanceToMa25) > 0;
-      }
-      if (condition === "above_ma75") {
-        return Number(record.distanceToMa75) > 0;
-      }
-      if (condition === "above_ma200") {
-        return Number(record.distanceToMa200) > 0;
-      }
-      if (condition === "volume_2x") {
-        return Number(record.volumeRatio25) >= 2;
-      }
-      if (condition === "watch_candidate") {
-        return record.watchCandidateScore != null;
-      }
-      return true;
+      return Number(record.turnoverMa5 || 0) >= turnoverThreshold;
     });
   }
 
-  function conditionLabel(value) {
-    return INDEX_SCANNER_CONDITIONS.find((item) => item.key === value)?.label || "なし";
+  function turnoverLabel(value) {
+    return {
+      0: "0",
+      50000000: "5000万",
+      100000000: "1億",
+      500000000: "5億",
+      1000000000: "10億",
+    }[Number(value)] || "0";
   }
 
   function renderMiniChart(elementId, rows, selectedDate, months) {
@@ -2685,7 +2659,7 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function syncIndexScannerUrl(date, sort, tag, theme, condition, limit, months) {
+  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, months) {
     const params = new URLSearchParams(window.location.search);
     params.set("date", date);
     params.set("sort", sort);
@@ -2696,16 +2670,13 @@
     } else {
       params.delete("tag");
     }
-    if (condition) {
-      params.set("condition", condition);
-    } else {
-      params.delete("condition");
-    }
     if (theme) {
       params.set("theme", theme);
     } else {
       params.delete("theme");
     }
+    params.set("turnover", String(turnover));
+    params.delete("condition");
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
