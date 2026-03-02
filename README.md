@@ -44,6 +44,8 @@
   - scanner ベースのトップで選別した銘柄一覧とエクスポート
 - `assets/app.js`
   - `manifest / rankings / overview / tickers` を読んで描画するフロント
+- `data/theme_map.json`
+  - PDFベースのテーマ定義。テーマ名と関連銘柄コード一覧を保持
 - `scripts/fetch_prices.py`
   - 既存 `src/fetch_nikkei225.py` を呼び出して OHLCV と watchlist を更新
 - `scripts/build_ticker_data.py`
@@ -57,6 +59,13 @@
 
 ## 起動方法
 
+最も簡単な方法:
+
+- Finder で [`/Users/okamoto/kabu_doragon/open_kabu_doragon.command`](/Users/okamoto/kabu_doragon/open_kabu_doragon.command) をダブルクリック
+- 自動でローカルサーバーを起動し、[http://127.0.0.1:8010/index.html](http://127.0.0.1:8010/index.html) を既定ブラウザで開きます
+
+手動で起動する場合:
+
 ```bash
 cd "/Users/okamoto/kabu_doragon"
 python3 -m http.server 8010
@@ -68,7 +77,30 @@ python3 -m http.server 8010
 http://127.0.0.1:8010/index.html
 ```
 
-`file://` 直開きでは `fetch()` が失敗するので、HTTP サーバー経由で開いてください。
+`/Users/okamoto/kabu_doragon/index.html` を Finder から直接開く `file://` 方式は非対応です。`fetch()` が失敗して、カレンダーやチャートが表示されません。
+必ず [http://127.0.0.1:8010/index.html](http://127.0.0.1:8010/index.html) を開いてください。
+
+### テーマフィルターについて
+
+- `index.html` のテーマプルダウン先頭は常に `すべて` です
+- テーマ定義の正本は PDF ですが、アプリが読む実データは [`/Users/okamoto/kabu_doragon/data/theme_map.json`](/Users/okamoto/kabu_doragon/data/theme_map.json) です
+- テーマデータには `すべて` を入れません。`すべて` は UI 固定項目です
+- テーマの追加・修正は画面 UI ではなく `data/theme_map.json` を正本として管理します
+- `theme_map.json` の正式形式は `themes[].name` と `themes[].codes[]` です
+- `codes[]` に入れる証券コードは、既存の `watchlist.json` に存在する銘柄に限定します
+- Codex へは自然文で依頼して構いません。例:
+  - `テーマ「量子コンピュータ関連」を追加して`
+  - `テーマ「蓄電池」に 6501 を追加して`
+  - `テーマ「防衛」から 6208 を削除して`
+  - `この PDF をもとにテーマを追加して`
+- Codex は `theme_map.json` 更新後に検証と再生成まで行う前提です
+- テーマを追加・修正したら、少なくとも以下を実行して `tickers / rankings / overview / manifest` を再生成してください
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/validate_theme_map.py
+./.venv/bin/python scripts/run_daily.py --skip-fetch --days 60
+```
 
 ## データ更新方法
 

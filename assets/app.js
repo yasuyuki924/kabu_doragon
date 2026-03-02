@@ -1,5 +1,6 @@
 (function () {
   const MANIFEST_PATH = "./data/manifest.json";
+  const THEME_MAP_PATH = "./data/theme_map.json";
   const WATCHLIST_PATH = "./data/watchlist.json";
   const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v6";
   const SCANNER_PICKS_STORAGE_KEY = "local-stock-dashboard.scanner-picks.v1";
@@ -799,6 +800,7 @@
   async function initIndexScannerPage() {
     const sortSelect = document.getElementById("indexSort");
     const tagSelect = document.getElementById("indexTag");
+    const themeSelect = document.getElementById("indexTheme");
     const conditionSelect = document.getElementById("indexCondition");
     const limitSelect = document.getElementById("indexLimit");
     const monthsSelect = document.getElementById("indexMonths");
@@ -815,22 +817,26 @@
       overview: null,
       sort: "gainers",
       tag: "",
+      theme: "",
       condition: "",
       limit: 100,
       months: 3,
       selectedDate: "",
       calendarMonth: null,
       picks: {},
+      themeOrder: [],
     };
 
     const params = new URLSearchParams(window.location.search);
     state.sort = params.get("sort") || state.sort;
     state.tag = params.get("tag") || "";
+    state.theme = params.get("theme") || "";
     state.condition = params.get("condition") || "";
     state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
     state.months = INDEX_SCANNER_MONTHS.includes(Number(params.get("months"))) ? Number(params.get("months")) : state.months;
     state.picks = loadScannerPicks();
     sortSelect.value = state.sort;
+    themeSelect.value = state.theme;
     conditionSelect.value = INDEX_SCANNER_CONDITIONS.some((item) => item.key === state.condition) ? state.condition : "";
     limitSelect.value = String(state.limit);
     monthsSelect.value = String(state.months);
@@ -838,10 +844,11 @@
       pickedLink.href = "./picked.html";
     }
 
-    [sortSelect, tagSelect, conditionSelect, limitSelect, monthsSelect].forEach((control) => {
+    [sortSelect, tagSelect, themeSelect, conditionSelect, limitSelect, monthsSelect].forEach((control) => {
       control.addEventListener("change", async () => {
         state.sort = sortSelect.value;
         state.tag = tagSelect.value;
+        state.theme = themeSelect.value;
         state.condition = conditionSelect.value;
         state.limit = Number(limitSelect.value);
         state.months = Number(monthsSelect.value);
@@ -858,6 +865,7 @@
 
     try {
       state.manifest = await loadManifest();
+      state.themeOrder = await loadThemeOrder();
       await loadDate(params.get("date") || state.manifest.latestDate);
       await render();
     } catch (error) {
@@ -893,18 +901,46 @@
       tagSelect.value = state.tag;
     }
 
+    function renderThemeOptions() {
+      const conditionRecords = filterByCondition(state.overview.records || [], state.condition);
+      const availableThemes = new Set();
+      conditionRecords.forEach((record) => {
+        (record.themes || []).forEach((theme) => {
+          const label = String(theme || "").trim();
+          if (label) {
+            availableThemes.add(label);
+          }
+        });
+      });
+      const orderedThemes = state.themeOrder.filter((theme) => availableThemes.has(theme));
+      const extraThemes = [...availableThemes].filter((theme) => !state.themeOrder.includes(theme)).sort((left, right) =>
+        left.localeCompare(right, "ja", { sensitivity: "base" })
+      );
+      const themeOptions = ["", ...orderedThemes, ...extraThemes];
+      themeSelect.innerHTML = themeOptions
+        .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "すべて")}</option>`)
+        .join("");
+      if (state.theme && !availableThemes.has(state.theme)) {
+        state.theme = "";
+      }
+      themeSelect.value = state.theme;
+    }
+
     async function render() {
       errorBox.hidden = true;
       list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
       renderTagOptions();
+      renderThemeOptions();
       const conditionRecords = filterByCondition(state.overview.records || [], state.condition);
       const filtered = sortScannerRecords(
-        conditionRecords.filter((record) => !state.tag || record.industry === state.tag),
+        conditionRecords.filter(
+          (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
+        ),
         state.sort
       ).slice(0, state.limit);
-      syncIndexScannerUrl(state.selectedDate, state.sort, state.tag, state.condition, state.limit, state.months);
+      syncIndexScannerUrl(state.selectedDate, state.sort, state.tag, state.theme, state.condition, state.limit, state.months);
       renderCalendar();
-      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)} / 条件: ${conditionLabel(state.condition)} / 期間: ${state.months}ヶ月`;
+      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)}${state.tag ? ` / 業種: ${state.tag}` : ""}${state.theme ? ` / テーマ: ${state.theme}` : ""} / 条件: ${conditionLabel(state.condition)} / 期間: ${state.months}ヶ月`;
 
       if (!filtered.length) {
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
@@ -1058,6 +1094,14 @@
       throw new Error("manifest.json の形式が不正です。");
     }
     return payload;
+  }
+
+  async function loadThemeOrder() {
+    const payload = await fetchJson(THEME_MAP_PATH);
+    const items = Array.isArray(payload?.themes) ? payload.themes : [];
+    return items
+      .map((item) => String(item?.name || item?.label || "").trim())
+      .filter(Boolean);
   }
 
   async function loadOverview(date) {
@@ -2641,7 +2685,7 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function syncIndexScannerUrl(date, sort, tag, condition, limit, months) {
+  function syncIndexScannerUrl(date, sort, tag, theme, condition, limit, months) {
     const params = new URLSearchParams(window.location.search);
     params.set("date", date);
     params.set("sort", sort);
@@ -2656,6 +2700,11 @@
       params.set("condition", condition);
     } else {
       params.delete("condition");
+    }
+    if (theme) {
+      params.set("theme", theme);
+    } else {
+      params.delete("theme");
     }
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }

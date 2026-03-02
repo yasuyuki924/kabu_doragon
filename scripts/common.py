@@ -38,16 +38,17 @@ def build_theme_lookup(theme_map: dict[str, object]) -> dict[str, list[str]]:
     if not isinstance(items, list):
         return {}
 
-    ordered_items = sorted(
-        (item for item in items if isinstance(item, dict)),
-        key=lambda item: (int(item.get("order") or 0), str(item.get("label") or "")),
-    )
+    ordered_items = [item for item in items if isinstance(item, dict)]
     lookup: dict[str, list[str]] = {}
+    seen_theme_names: set[str] = set()
     for item in ordered_items:
-        label = str(item.get("label") or "").strip()
+        label = str(item.get("name") or item.get("label") or "").strip()
         codes = item.get("codes") or []
         if not label or not isinstance(codes, list):
             continue
+        if label in seen_theme_names:
+            raise ValueError(f"theme_map.json に重複テーマ名があります: {label}")
+        seen_theme_names.add(label)
         for code in codes:
             normalized_code = str(code or "").strip()
             if not normalized_code:
