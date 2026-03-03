@@ -583,6 +583,8 @@ launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_close_retry.pli
 - `logs/jquants_close_retry.out.log`
 - `logs/jquants_close_retry.err.log`
 
+`launchd` は対話シェルと PATH が異なるため、この更新スクリプトは `python` ではなく `./.venv/bin/python` を明示して動かす前提です。
+
 ### 正午の前場更新（launchd）
 
 設定ファイル:
@@ -611,6 +613,8 @@ launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_am_update.plist
 
 - `logs/jquants_am_update.out.log`
 - `logs/jquants_am_update.err.log`
+
+前場更新スクリプトも `launchd` の PATH に依存しないよう、`./.venv/bin/python` を明示して実行する前提です。
 
 有効化の確認:
 

@@ -2,15 +2,21 @@
 set -euo pipefail
 
 ROOT="/Users/okamoto/kabu_doragon"
+PYTHON_BIN="${ROOT}/.venv/bin/python"
 PENDING_EXIT_CODE=10
 UPDATE_STATE_JSON="${ROOT}/data/update_state.json"
 
 mkdir -p "${ROOT}/logs"
 cd "${ROOT}"
 
+if [ ! -x "${PYTHON_BIN}" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: missing python at ${PYTHON_BIN}" >&2
+  exit 127
+fi
+
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] check start"
 
-if ./.venv/bin/python scripts/check_jquants_latest.py; then
+if "${PYTHON_BIN}" scripts/check_jquants_latest.py; then
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] OK: already reflected, skipping fetch"
   exit 0
 else
@@ -21,23 +27,23 @@ else
   fi
 fi
 
-total_start=$(python - <<'PY'
+total_start=$("${PYTHON_BIN}" - <<'PY'
 from time import perf_counter
 print(perf_counter())
 PY
 )
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] PENDING: running J-Quants fetch"
-fetch_start=$(python - <<'PY'
+fetch_start=$("${PYTHON_BIN}" - <<'PY'
 from time import perf_counter
 print(perf_counter())
 PY
 )
-./.venv/bin/python scripts/fetch_prices.py \
+"${PYTHON_BIN}" scripts/fetch_prices.py \
   --provider jquants \
   --universe tse \
   --segments prime,standard,growth
-fetch_elapsed=$(python - <<PY
+fetch_elapsed=$("${PYTHON_BIN}" - <<PY
 from time import perf_counter
 start = float("${fetch_start}")
 print(f"{perf_counter() - start:.1f}")
@@ -45,20 +51,20 @@ PY
 )
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] rebuilding derived JSON"
-build_start=$(python - <<'PY'
+build_start=$("${PYTHON_BIN}" - <<'PY'
 from time import perf_counter
 print(perf_counter())
 PY
 )
-./.venv/bin/python scripts/run_daily.py --skip-fetch
-build_elapsed=$(python - <<PY
+"${PYTHON_BIN}" scripts/run_daily.py --skip-fetch
+build_elapsed=$("${PYTHON_BIN}" - <<PY
 from time import perf_counter
 start = float("${build_start}")
 print(f"{perf_counter() - start:.1f}")
 PY
 )
 
-update_summary=$(python - <<PY
+update_summary=$("${PYTHON_BIN}" - <<PY
 import json
 from pathlib import Path
 path = Path("${UPDATE_STATE_JSON}")
@@ -67,8 +73,8 @@ print(f"updatedCodes={len(payload.get('updatedCodes') or [])} updatedDates={len(
 PY
 )
 
-if ./.venv/bin/python scripts/check_jquants_latest.py; then
-  ./.venv/bin/python - <<'PY'
+if "${PYTHON_BIN}" scripts/check_jquants_latest.py; then
+  "${PYTHON_BIN}" - <<'PY'
 from datetime import datetime
 from pathlib import Path
 import json
@@ -84,7 +90,7 @@ payload = {
 }
 (root / "current_snapshot_state.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 PY
-  total_elapsed=$(python - <<PY
+  total_elapsed=$("${PYTHON_BIN}" - <<PY
 from time import perf_counter
 start = float("${total_start}")
 print(f"{perf_counter() - start:.1f}")
@@ -95,7 +101,7 @@ PY
 else
   check_status=$?
   if [ "${check_status}" -eq "${PENDING_EXIT_CODE}" ]; then
-    total_elapsed=$(python - <<PY
+    total_elapsed=$("${PYTHON_BIN}" - <<PY
 from time import perf_counter
 start = float("${total_start}")
 print(f"{perf_counter() - start:.1f}")
