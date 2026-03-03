@@ -259,7 +259,7 @@
       summaryRisers.textContent = formatNumber(risers, 0);
       summaryFallers.textContent = formatNumber(fallers, 0);
       summaryFlats.textContent = formatNumber(flats, 0);
-      meta.textContent = `${state.selectedDate} / ${filtered.length}件${state.activeType ? ` | 種類: ${typeFilterLabel(state.activeType)}` : ""}${state.activeMarket ? ` | 市場: ${state.activeMarket}` : ""}${state.activeIndustry ? ` | 業種: ${state.activeIndustry}` : ""}${state.activeTheme ? ` | テーマ: ${state.activeTheme}` : ""}`;
+      meta.textContent = `${formatSnapshotBaseDate(state.selectedDate, state.manifest.currentSnapshot)} / ${filtered.length}件${state.activeType ? ` | 種類: ${typeFilterLabel(state.activeType)}` : ""}${state.activeMarket ? ` | 市場: ${state.activeMarket}` : ""}${state.activeIndustry ? ` | 業種: ${state.activeIndustry}` : ""}${state.activeTheme ? ` | テーマ: ${state.activeTheme}` : ""}`;
       marketPulseMeta.textContent = `${state.selectedDate} 基準${state.activeType ? ` / 種類: ${typeFilterLabel(state.activeType)}` : ""}${state.query ? ` / 検索: ${state.query}` : ""}`;
       overviewLatestDate.textContent = state.selectedDate;
       overviewDataCoverage.textContent = `${formatNumber(validTrendRecords.length, 0)}銘柄に日次スナップショットあり`;
@@ -568,7 +568,12 @@
       tickerTitle.textContent = `${code} ${state.payload.name}`.trim();
       tickerMeta.textContent = [
         state.payload.market || "市場未設定",
-        `${state.selectedDate} 基準`,
+        formatSnapshotBaseDate(
+          state.selectedDate,
+          state.payload.snapshotDate === state.selectedDate
+            ? { date: state.payload.snapshotDate, type: state.payload.snapshotType }
+            : null
+        ),
         state.payload.tags?.length ? `タグ: ${state.payload.tags.join(", ")}` : null,
       ]
         .filter(Boolean)
@@ -577,8 +582,10 @@
       summaryDate.textContent = state.selectedDate;
       summaryRank.textContent = state.rankingItem ? `${state.rankingItem.rank}位` : "-";
       summaryClose.textContent = formatNumber(row.close);
-      summaryChange.textContent = `${formatSignedNumber(row.change)} (${formatSignedPercent(row.changePercent)})`;
-      summaryChange.className = `summary-value ${getChangeClass(row.changePercent)}`;
+      summaryChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
+        withParens: true,
+      })}`;
+      summaryChange.className = "summary-value";
       summaryOpen.textContent = formatNumber(row.open);
       summaryRange.textContent = `${formatNumber(row.high)} / ${formatNumber(row.low)}`;
       summaryVolume.textContent = formatNumber(row.volume, 0);
@@ -715,7 +722,7 @@
       ).slice(0, state.limit);
       syncScannerUrl(state.selectedDate, state.sort, state.tag, state.limit, state.months);
       renderCalendar();
-      meta.textContent = `${state.selectedDate} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)} / 期間: ${indexScannerPeriodLabel(state.months)}`;
+      meta.textContent = `${formatSnapshotBaseDate(state.selectedDate, state.manifest.currentSnapshot)} / ${filtered.length}銘柄 / 並び順: ${scannerSortLabel(state.sort)} / 期間: ${indexScannerPeriodLabel(state.months)}`;
 
       if (!filtered.length) {
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
@@ -948,7 +955,7 @@
         state.timeframe
       );
       renderCalendar();
-      meta.textContent = `基準日: ${state.selectedDate}`;
+      meta.textContent = formatSnapshotBaseDate(state.selectedDate, state.manifest.currentSnapshot);
 
       if (!filtered.length) {
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
@@ -1113,6 +1120,26 @@
     return items
       .map((item) => String(item?.name || item?.label || "").trim())
       .filter(Boolean);
+  }
+
+  function snapshotTypeLabel(snapshotType) {
+    if (snapshotType === "am") {
+      return "前場";
+    }
+    if (snapshotType === "daily") {
+      return "日通し";
+    }
+    return "";
+  }
+
+  function formatSnapshotBaseDate(selectedDate, snapshot) {
+    const date = String(selectedDate || "").trim();
+    if (!date) {
+      return "";
+    }
+    const snapshotDate = String(snapshot?.date || "").trim();
+    const label = snapshotDate === date ? snapshotTypeLabel(String(snapshot?.type || "").trim()) : "";
+    return `基準日: ${date}${label ? ` / ${label}` : ""}`;
   }
 
   async function loadOverview(date) {
@@ -1723,6 +1750,16 @@
     return `${Number(value).toFixed(2)}%`;
   }
 
+  function formatSignedPercentHtml(value, options = {}) {
+    const className = getChangeClass(value);
+    const text = formatSignedPercent(value);
+    const wrapped = options.withParens ? `(${text})` : text;
+    if (!className) {
+      return escapeHtml(wrapped);
+    }
+    return `<span class="${className}">${escapeHtml(wrapped)}</span>`;
+  }
+
   function formatRatioCount(count, total) {
     if (!total) {
       return "-";
@@ -2138,13 +2175,15 @@
                 <td class="num">${formatNumber(rank, 0)}</td>
                 <td>${escapeHtml(record.code)}</td>
                 <td class="scanner-name-cell">
-                  <a
-                    class="${scannerNameClass(record.name)}"
-                    href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}"
-                    title="${escapeHtml(record.name)}"
-                  >
-                    ${escapeHtml(record.name)}
-                  </a>
+                  <div class="scanner-name-cell-inner">
+                    <a
+                      class="${scannerNameClass(record.name)}"
+                      href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}"
+                      title="${escapeHtml(record.name)}"
+                    >
+                      ${escapeHtml(record.name)}
+                    </a>
+                  </div>
                 </td>
                 <td class="scanner-trade-cell">
                   <div class="scanner-trade-split">
@@ -2152,8 +2191,8 @@
                     <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
                   </div>
                 </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num ${getChangeClass(record.changePercent)}">
-                  ${formatSignedNumber(record.change)} ${formatSignedPercent(record.changePercent)}
+                <td id="scanChange-${escapeHtml(record.code)}" class="num">
+                  ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
                 </td>
                 <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
                 <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
@@ -2257,8 +2296,8 @@
       tradePrice.textContent = formatNumber(row.close);
     }
     if (change) {
-      change.textContent = `${formatSignedNumber(row.change)} ${formatSignedPercent(row.changePercent)}`;
-      change.className = `num ${getChangeClass(row.changePercent)}`.trim();
+      change.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent)}`;
+      change.className = "num";
     }
     if (volume) {
       volume.textContent = formatNumber(row.volume, 0);

@@ -21,6 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pause", type=float, default=0.6)
     parser.add_argument("--full-refresh", action="store_true")
     parser.add_argument("--skip-price-download", action="store_true")
+    parser.add_argument("--am-snapshot", action="store_true")
     return parser.parse_args()
 
 
@@ -39,6 +40,8 @@ def main() -> int:
         ]
         if args.full_refresh:
             cmd.append("--full-refresh")
+        if args.am_snapshot:
+            cmd.append("--am-snapshot")
     else:
         cmd = [
             sys.executable,

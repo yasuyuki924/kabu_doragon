@@ -825,6 +825,12 @@ h2 {
 .scanner-rank-table td {
   background: #ffffff;
   color: #111111;
+  text-align: center;
+}
+
+.scanner-rank-table td.num,
+.scanner-rank-table th.num {
+  text-align: center;
 }
 
 .scanner-rank-table td a {
@@ -835,22 +841,27 @@ h2 {
 .scanner-name-cell {
   overflow: hidden;
   vertical-align: middle;
+  padding: 0;
   text-align: center;
 }
 
+.scanner-name-cell-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(2.3em + 4px);
+  height: 100%;
+  width: 100%;
+  padding: 2px 3px;
+}
+
 .scanner-name-link {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: block;
   word-break: break-word;
   overflow-wrap: anywhere;
+  white-space: normal;
   line-height: 1.15;
-  min-height: 2.3em;
   width: 100%;
-  justify-content: center;
-  align-items: center;
   text-align: center;
   color: #244d9a;
   text-decoration: underline;
@@ -914,8 +925,9 @@ h2 {
 
 .scanner-trade-split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   align-items: center;
+  justify-items: center;
   gap: 4px;
   padding: 2px 3px;
 }
@@ -928,7 +940,7 @@ h2 {
 }
 
 .scanner-trade-price {
-  text-align: right;
+  text-align: center;
   color: #111111;
   font-weight: 400;
   white-space: nowrap;

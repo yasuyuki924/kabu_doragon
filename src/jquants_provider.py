@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from time import perf_counter
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -19,11 +20,17 @@ from requests.exceptions import HTTPError, RetryError
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 OHLCV_DIR = DATA_DIR / "ohlcv"
+INTRADAY_DIR = DATA_DIR / "intraday"
+AM_SNAPSHOT_JSON = INTRADAY_DIR / "am_snapshot.json"
+CURRENT_SNAPSHOT_STATE_JSON = DATA_DIR / "current_snapshot_state.json"
+UPDATE_STATE_JSON = DATA_DIR / "update_state.json"
 WATCHLIST_JSON = DATA_DIR / "watchlist.json"
 THEME_MAP_JSON = DATA_DIR / "theme_map.json"
 SUMMARY_JSON = DATA_DIR / "market_summary.json"
 SYNC_STATE_JSON = DATA_DIR / "jquants_sync_state.json"
 NIKKEI_COMPONENTS_CSV = DATA_DIR / "nikkei225_components.csv"
+RANKINGS_DIR = DATA_DIR / "rankings"
+OVERVIEW_DIR = DATA_DIR / "overview"
 
 SEGMENT_LABELS = {
     "prime": "プライム",
@@ -45,6 +52,10 @@ class ProviderPaths:
     sync_state_json: Path
     nikkei_components_csv: Path
     manifest_json: Path
+    intraday_dir: Path
+    am_snapshot_json: Path
+    current_snapshot_state_json: Path
+    update_state_json: Path
 
 
 @dataclass(frozen=True)
@@ -67,6 +78,10 @@ def default_paths() -> ProviderPaths:
         sync_state_json=SYNC_STATE_JSON,
         nikkei_components_csv=NIKKEI_COMPONENTS_CSV,
         manifest_json=DATA_DIR / "manifest.json",
+        intraday_dir=INTRADAY_DIR,
+        am_snapshot_json=AM_SNAPSHOT_JSON,
+        current_snapshot_state_json=CURRENT_SNAPSHOT_STATE_JSON,
+        update_state_json=UPDATE_STATE_JSON,
     )
 
 
@@ -80,6 +95,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-tickers", type=int, default=0, help="Limit tickers for testing")
     parser.add_argument("--codes", help="Comma separated repo-format codes for testing")
     parser.add_argument("--chunk-days", type=int, default=180, help="Bulk sync range chunk size")
+    parser.add_argument("--am-snapshot", action="store_true", help="Fetch current AM snapshot instead of daily bars")
     return parser.parse_args()
 
 
@@ -416,6 +432,22 @@ def flush_pending_rows(
     pending_rows_by_code.clear()
 
 
+def write_update_state(
+    path: Path,
+    *,
+    snapshot_type: str,
+    updated_dates: set[str] | list[str],
+    updated_codes: set[str] | list[str],
+) -> None:
+    payload = {
+        "lastRunAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "snapshotType": snapshot_type,
+        "updatedDates": sorted({str(item).strip() for item in updated_dates if str(item).strip()}),
+        "updatedCodes": sorted({str(item).strip() for item in updated_codes if str(item).strip()}),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def load_sync_state(path: Path) -> dict[str, object]:
     if not path.exists():
         return {
@@ -439,6 +471,75 @@ def load_manifest(path: Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as fh:
         payload = json.load(fh)
     return payload if isinstance(payload, dict) else {}
+
+
+def load_json_dict(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    return payload if isinstance(payload, dict) else {}
+
+
+def load_latest_overview_records(paths: ProviderPaths) -> list[dict[str, object]]:
+    latest_date = current_repo_latest_date(paths)
+    if not latest_date:
+        return []
+    payload = load_json_dict(OVERVIEW_DIR / latest_date / "market_pulse.json")
+    records = payload.get("records")
+    return records if isinstance(records, list) else []
+
+
+def extend_unique_codes(target: list[str], seen: set[str], codes: list[str], *, limit: int) -> None:
+    for code in codes:
+        normalized = normalize_repo_code(code)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        target.append(normalized)
+        if len(target) >= limit:
+            return
+
+
+def load_am_target_codes(paths: ProviderPaths, *, limit: int = 300) -> list[str]:
+    latest_date = current_repo_latest_date(paths)
+    if not latest_date:
+        return []
+
+    ranking_files = ["gainers", "volume_spike", "new_high", "watch_candidates"]
+    selected: list[str] = []
+    seen: set[str] = set()
+
+    for ranking_key in ranking_files:
+        payload = load_json_dict(RANKINGS_DIR / latest_date / f"{ranking_key}.json")
+        items = payload.get("items")
+        if not isinstance(items, list):
+            continue
+        extend_unique_codes(
+            selected,
+            seen,
+            [str(item.get("code") or "") for item in items[:100] if isinstance(item, dict)],
+            limit=limit,
+        )
+        if len(selected) >= limit:
+            return selected
+
+    records = load_latest_overview_records(paths)
+    if not records:
+        return selected
+
+    records_sorted = sorted(
+        [record for record in records if isinstance(record, dict)],
+        key=lambda item: float(item.get("turnoverMa5") or item.get("turnover") or 0),
+        reverse=True,
+    )
+    extend_unique_codes(
+        selected,
+        seen,
+        [str(item.get("code") or "") for item in records_sorted],
+        limit=limit,
+    )
+    return selected
 
 
 def current_repo_latest_date(paths: ProviderPaths) -> str | None:
@@ -580,6 +681,66 @@ def fetch_bars_frame(
     )
 
 
+def fetch_am_bars_frame(client: object, api_version: str, *, code: str) -> pd.DataFrame:
+    if api_version != "v2":
+        raise ValueError("AM snapshot fetch is only supported with J-Quants v2.")
+    return client.get_eq_bars_daily_am(code=normalize_api_code(code))
+
+
+def write_current_snapshot_state(
+    path: Path,
+    *,
+    snapshot_date: str | None,
+    snapshot_type: str,
+    active: bool,
+) -> None:
+    payload = {
+        "date": snapshot_date,
+        "snapshotType": snapshot_type,
+        "active": active,
+        "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def write_am_snapshot(
+    path: Path,
+    *,
+    snapshot_date: str,
+    rows_by_code: dict[str, list[dict[str, float | int | str]]],
+    requested_count: int,
+    succeeded_count: int,
+) -> None:
+    records: list[dict[str, float | int | str]] = []
+    for code in sorted(rows_by_code):
+        rows = rows_by_code[code]
+        if not rows:
+            continue
+        row = rows[-1]
+        records.append(
+            {
+                "code": code,
+                "open": row["open"],
+                "high": row["high"],
+                "low": row["low"],
+                "close": row["close"],
+                "volume": row["volume"],
+            }
+        )
+    payload = {
+        "date": snapshot_date,
+        "snapshotType": "am",
+        "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "coverage": {
+            "requested": requested_count,
+            "succeeded": succeeded_count,
+        },
+        "records": records,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def sync_prices(
     client: object,
     api_version: str,
@@ -588,8 +749,10 @@ def sync_prices(
     start_date: date,
     end_date: date,
     chunk_days: int,
-) -> str | None:
+) -> tuple[str | None, set[str], set[str]]:
     latest_date: str | None = None
+    updated_codes: set[str] = set()
+    updated_dates: set[str] = set()
     code_set = set(codes)
     if api_version == "v2":
         trading_dates = fetch_trading_dates(client, api_version, start_date, end_date)
@@ -623,11 +786,13 @@ def sync_prices(
             for code, new_rows in rows_by_code.items():
                 pending_rows_by_code.setdefault(code, []).extend(new_rows)
                 latest_date = new_rows[-1]["date"]
+                updated_codes.add(code)
+                updated_dates.update(str(row["date"]) for row in new_rows)
             print(f"  updated {len(rows_by_code)} tickers")
             if index % flush_interval == 0:
                 flush_pending_rows(paths, pending_rows_by_code)
         flush_pending_rows(paths, pending_rows_by_code)
-        return latest_date
+        return latest_date, updated_dates, updated_codes
 
     pending_rows_by_code: dict[str, list[dict[str, float | int | str]]] = {}
     for chunk_start, chunk_end in chunk_date_ranges(start_date, end_date, chunk_days):
@@ -643,9 +808,79 @@ def sync_prices(
         for code, new_rows in rows_by_code.items():
             pending_rows_by_code.setdefault(code, []).extend(new_rows)
             latest_date = new_rows[-1]["date"]
+            updated_codes.add(code)
+            updated_dates.update(str(row["date"]) for row in new_rows)
         print(f"  updated {len(rows_by_code)} tickers")
     flush_pending_rows(paths, pending_rows_by_code)
-    return latest_date
+    return latest_date, updated_dates, updated_codes
+
+
+def sync_am_snapshot(
+    client: object,
+    api_version: str,
+    paths: ProviderPaths,
+    codes: list[str],
+    target_date: str,
+) -> tuple[str, set[str], bool]:
+    if api_version != "v2":
+        raise ValueError("AM snapshot fetch requires J-Quants v2.")
+
+    rows_by_code: dict[str, list[dict[str, float | int | str]]] = {}
+    total = len(codes)
+    success_count = 0
+    start_time = perf_counter()
+    for index, code in enumerate(codes, start=1):
+        frame = None
+        delay_seconds = 3
+        for attempt in range(5):
+            try:
+                frame = fetch_am_bars_frame(client, api_version, code=code)
+                break
+            except (RetryError, HTTPError) as exc:
+                message = str(exc)
+                if "429" not in message or attempt == 4:
+                    raise
+                print(f"  AM snapshot rate limited on {code}, retrying in {delay_seconds}s")
+                time.sleep(delay_seconds)
+                delay_seconds = min(delay_seconds * 2, 30)
+        if frame is None or frame.empty:
+            continue
+        rows = frame_to_ohlcv_rows(frame, api_version).get(code, [])
+        matched_rows = [row for row in rows if str(row["date"]) == target_date]
+        if not matched_rows:
+            continue
+        rows_by_code[code] = matched_rows
+        success_count += 1
+        if index % 200 == 0 or index == total:
+            print(f"fetched AM snapshot {index}/{total} (success={success_count})")
+
+    write_am_snapshot(
+        paths.am_snapshot_json,
+        snapshot_date=target_date,
+        rows_by_code=rows_by_code,
+        requested_count=total,
+        succeeded_count=success_count,
+    )
+
+    active = total > 0 and (success_count / total) >= 0.95
+    elapsed = round(perf_counter() - start_time, 1)
+    if active:
+        write_current_snapshot_state(
+            paths.current_snapshot_state_json,
+            snapshot_date=target_date,
+            snapshot_type="am",
+            active=True,
+        )
+        print(
+            f"OK: AM snapshot reflected date={target_date} requested={total} "
+            f"succeeded={success_count} failed={total - success_count} elapsed={elapsed}s"
+        )
+    else:
+        print(
+            f"PENDING: AM snapshot insufficient date={target_date} requested={total} "
+            f"succeeded={success_count} failed={total - success_count} elapsed={elapsed}s"
+        )
+    return target_date, set(rows_by_code), active
 
 
 def calculate_summary_metrics(rows: list[dict[str, float | int | str]]) -> dict[str, float | str | None]:
@@ -805,8 +1040,25 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
     )
 
     latest_date = None
-    if not args.skip_price_download:
-        latest_date = sync_prices(
+    updated_dates: set[str] = set()
+    updated_codes: set[str] = set()
+    if args.am_snapshot:
+        target_date = resolve_latest_trading_date(client, api_version)
+        am_codes = selected_codes or load_am_target_codes(paths, limit=300)
+        if args.max_tickers > 0:
+            am_codes = am_codes[: args.max_tickers]
+        if not am_codes:
+            raise ValueError("No AM snapshot target codes were resolved.")
+        latest_date, updated_codes, _am_active = sync_am_snapshot(
+            client,
+            api_version,
+            paths,
+            am_codes,
+            target_date,
+        )
+        updated_dates = {latest_date} if latest_date else set()
+    elif not args.skip_price_download:
+        latest_date, updated_dates, updated_codes = sync_prices(
             client,
             api_version,
             paths,
@@ -817,13 +1069,21 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
         )
 
     write_summary(paths, watchlist, args.universe)
-    write_sync_state(
-        paths.sync_state_json,
-        plan=config.plan,
-        universe=args.universe,
-        segments=selected_segments,
-        last_successful_date=latest_date or state.get("lastSuccessfulDate"),
-    )
+    if args.am_snapshot or not args.skip_price_download:
+        write_update_state(
+            paths.update_state_json,
+            snapshot_type="am" if args.am_snapshot else "daily",
+            updated_dates=updated_dates,
+            updated_codes=updated_codes,
+        )
+    if not args.am_snapshot:
+        write_sync_state(
+            paths.sync_state_json,
+            plan=config.plan,
+            universe=args.universe,
+            segments=selected_segments,
+            last_successful_date=latest_date or state.get("lastSuccessfulDate"),
+        )
     print(f"done ({len(watchlist)} tickers)")
     return 0
 

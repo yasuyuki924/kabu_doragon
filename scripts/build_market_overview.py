@@ -8,7 +8,9 @@ from common import (
     OVERVIEW_DIR,
     build_manifest_payload,
     discover_available_dates,
+    load_daily_records,
     iter_ticker_payloads,
+    load_update_state,
     parse_codes,
     select_dates,
     summarize_sector_strength,
@@ -23,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--days", type=int, default=60, help="Recent trading dates to build")
     parser.add_argument("--end-date", help="Build until this date")
     parser.add_argument("--codes", help="Comma separated ticker codes")
+    parser.add_argument("--dates", help="Comma separated trading dates to build")
     return parser.parse_args()
 
 
@@ -30,27 +33,41 @@ def main() -> int:
     args = parse_args()
     codes = parse_codes(args.codes)
     all_dates = discover_available_dates()
-    selected_dates = select_dates(all_dates, args.days, args.end_date)
+    explicit_dates = parse_codes(args.dates)
+    if args.dates == "__UPDATE_STATE__":
+        explicit_dates = [str(item) for item in load_update_state().get("updatedDates") or []]
+    selected_dates = [date_value for date_value in (explicit_dates or []) if date_value in set(all_dates)]
+    if not selected_dates:
+        selected_dates = select_dates(all_dates, args.days, args.end_date)
     selected_date_set = set(selected_dates)
-    payloads = iter_ticker_payloads(codes)
-
     per_date: dict[str, list[dict[str, object]]] = {date_value: [] for date_value in selected_dates}
-    for payload in payloads:
-        meta = {
-            "code": payload["code"],
-            "name": payload["name"],
-            "market": payload["market"],
-            "sector": payload.get("sector", ""),
-            "industry": payload.get("industry", ""),
-            "themes": payload.get("themes", []),
-            "tags": payload.get("tags", []),
-            "links": payload.get("links", {}),
-        }
-        for row in payload.get("ohlcv", []):
-            date_value = str(row["date"])
-            if date_value not in selected_date_set:
-                continue
-            per_date[date_value].append({**meta, **row})
+    missing_dates: list[str] = []
+    for date_value in selected_dates:
+        cached = load_daily_records(date_value, codes)
+        if cached is None:
+            missing_dates.append(date_value)
+            continue
+        per_date[date_value] = cached
+
+    if missing_dates:
+        payloads = iter_ticker_payloads(codes)
+        missing_date_set = set(missing_dates)
+        for payload in payloads:
+            meta = {
+                "code": payload["code"],
+                "name": payload["name"],
+                "market": payload["market"],
+                "sector": payload.get("sector", ""),
+                "industry": payload.get("industry", ""),
+                "themes": payload.get("themes", []),
+                "tags": payload.get("tags", []),
+                "links": payload.get("links", {}),
+            }
+            for row in payload.get("ohlcv", []):
+                date_value = str(row["date"])
+                if date_value not in missing_date_set or date_value not in selected_date_set:
+                    continue
+                per_date[date_value].append({**meta, **row})
 
     for date_value in selected_dates:
         records = sorted(per_date[date_value], key=lambda item: str(item["code"]))
@@ -83,7 +100,7 @@ def main() -> int:
         write_json(OVERVIEW_DIR / date_value / "market_pulse.json", payload)
         print(f"built overview: {date_value} ({len(records)} records)")
 
-    write_json(MANIFEST_JSON, build_manifest_payload(selected_dates))
+    write_json(MANIFEST_JSON, build_manifest_payload(all_dates))
     print(f"wrote manifest: {MANIFEST_JSON}")
     return 0
 

@@ -81,9 +81,10 @@
     document.getElementById("sampleClose").textContent = formatNumber(row.close);
 
     const changeEl = document.getElementById("sampleChange");
-    changeEl.textContent = `${formatSignedNumber(row.change)} (${formatSignedPercent(row.changePercent)})`;
+    changeEl.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
+      withParens: true,
+    })}`;
     changeEl.classList.remove("sample-state-up", "sample-state-down");
-    changeEl.classList.add(getSignedClass(row.changePercent));
 
     document.title = `${payload.code} ${payload.name} | ticker_sample`;
     document.getElementById("sampleStatus").textContent = `${payload.code} 実データ読込`;
@@ -105,9 +106,12 @@
       },
       {
         label: "前日比",
-        value: `${formatSignedNumber(row.change)} (${formatSignedPercent(row.changePercent)})`,
+        value: `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
+          withParens: true,
+        })}`,
         note: "前日終値比",
-        className: getSignedClass(row.changePercent),
+        className: "",
+        isHtml: true,
       },
       {
         label: "出来高倍率",
@@ -122,7 +126,7 @@
         (card) => `
           <article class="sample-info-card">
             <div class="sample-info-label">${escapeHtml(card.label)}</div>
-            <div class="sample-info-value ${escapeHtml(card.className)}">${escapeHtml(card.value)}</div>
+            <div class="sample-info-value ${escapeHtml(card.className)}">${card.isHtml ? card.value : escapeHtml(card.value)}</div>
             <div class="sample-info-note">${escapeHtml(card.note)}</div>
           </article>
         `
@@ -555,6 +559,16 @@
     const number = Number(value);
     const sign = number > 0 ? "+" : number < 0 ? "" : "";
     return `${sign}${number.toFixed(2)}%`;
+  }
+
+  function formatSignedPercentHtml(value, options = {}) {
+    const className = getSignedClass(value);
+    const text = formatSignedPercent(value);
+    const wrapped = options.withParens ? `(${text})` : text;
+    if (!className) {
+      return escapeHtml(wrapped);
+    }
+    return `<span class="${className}">${escapeHtml(wrapped)}</span>`;
   }
 
   function formatRatio(value) {

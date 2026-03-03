@@ -10,10 +10,16 @@ DATA_DIR = ROOT / "data"
 WATCHLIST_JSON = DATA_DIR / "watchlist.json"
 THEME_MAP_JSON = DATA_DIR / "theme_map.json"
 OHLCV_DIR = DATA_DIR / "ohlcv"
+INTRADAY_DIR = DATA_DIR / "intraday"
+AM_SNAPSHOT_JSON = INTRADAY_DIR / "am_snapshot.json"
+CURRENT_SNAPSHOT_STATE_JSON = DATA_DIR / "current_snapshot_state.json"
 TICKERS_DIR = DATA_DIR / "tickers"
+DAILY_RECORDS_DIR = DATA_DIR / "daily_records"
 RANKINGS_DIR = DATA_DIR / "rankings"
 OVERVIEW_DIR = DATA_DIR / "overview"
 MANIFEST_JSON = DATA_DIR / "manifest.json"
+JQUANTS_SYNC_STATE_JSON = DATA_DIR / "jquants_sync_state.json"
+UPDATE_STATE_JSON = DATA_DIR / "update_state.json"
 
 MA_WINDOWS = (5, 25, 75, 200)
 VOLUME_MA_WINDOWS = (5, 25)
@@ -72,6 +78,23 @@ def load_watchlist() -> list[dict[str, object]]:
     return [attach_themes(record, theme_lookup) for record in records]
 
 
+def load_json_dict(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    return payload if isinstance(payload, dict) else {}
+
+
+def load_update_state() -> dict[str, object]:
+    payload = load_json_dict(UPDATE_STATE_JSON)
+    updated_dates = payload.get("updatedDates")
+    updated_codes = payload.get("updatedCodes")
+    payload["updatedDates"] = [str(item).strip() for item in updated_dates] if isinstance(updated_dates, list) else []
+    payload["updatedCodes"] = [str(item).strip() for item in updated_codes] if isinstance(updated_codes, list) else []
+    return payload
+
+
 def load_ohlcv_rows(code: str) -> list[dict[str, float | int | str]]:
     path = OHLCV_DIR / f"{code}.csv"
     if not path.exists():
@@ -116,12 +139,93 @@ def iter_ticker_payloads(codes: list[str] | None = None) -> list[dict[str, objec
     return payloads
 
 
+def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[str, object]:
+    return {
+        "code": meta["code"],
+        "name": meta["name"],
+        "market": meta["market"],
+        "sector": meta.get("sector", ""),
+        "industry": meta.get("industry", ""),
+        "themes": meta.get("themes", []),
+        "tags": meta.get("tags", []),
+        "links": meta.get("links", {}),
+        "date": row["date"],
+        "open": row.get("open"),
+        "high": row.get("high"),
+        "low": row.get("low"),
+        "close": row.get("close"),
+        "volume": row.get("volume"),
+        "turnover": row.get("turnover"),
+        "change": row.get("change"),
+        "changePercent": row.get("changePercent"),
+        "ma5": row.get("ma5"),
+        "ma25": row.get("ma25"),
+        "ma75": row.get("ma75"),
+        "ma200": row.get("ma200"),
+        "volumeMa5": row.get("volumeMa5"),
+        "volumeMa25": row.get("volumeMa25"),
+        "turnoverMa5": row.get("turnoverMa5"),
+        "distanceToMa25": row.get("distanceToMa25"),
+        "distanceToMa75": row.get("distanceToMa75"),
+        "distanceToMa200": row.get("distanceToMa200"),
+        "volumeRatio25": row.get("volumeRatio25"),
+        "rci12": row.get("rci12"),
+        "rci24": row.get("rci24"),
+        "rci48": row.get("rci48"),
+        "rangePosition52w": row.get("rangePosition52w"),
+        "newHigh52w": row.get("newHigh52w"),
+    }
+
+
+def load_daily_records(date_value: str, codes: list[str] | None = None) -> list[dict[str, object]] | None:
+    path = DAILY_RECORDS_DIR / f"{date_value}.json"
+    payload = load_json_dict(path)
+    records = payload.get("records")
+    if not isinstance(records, list):
+        return None
+    normalized = [item for item in records if isinstance(item, dict)]
+    if not codes:
+        return normalized
+    code_filter = set(codes)
+    return [item for item in normalized if str(item.get("code") or "") in code_filter]
+
+
+def merge_daily_records(
+    date_value: str,
+    updates: dict[str, dict[str, object]],
+    snapshot_type: str | None = None,
+) -> None:
+    if not updates:
+        return
+    existing = load_daily_records(date_value) or []
+    merged = {str(item.get("code") or ""): item for item in existing if str(item.get("code") or "").strip()}
+    for code, record in updates.items():
+        merged[str(code).strip()] = record
+    payload: dict[str, object] = {
+        "date": date_value,
+        "recordCount": len(merged),
+        "records": sorted(merged.values(), key=lambda item: str(item.get("code") or "")),
+    }
+    if snapshot_type:
+        payload["snapshotType"] = snapshot_type
+    write_json(DAILY_RECORDS_DIR / f"{date_value}.json", payload)
+
+
 def discover_available_dates() -> list[str]:
+    available_dates: list[str] | None = None
     for path in sorted(OHLCV_DIR.glob("*.csv")):
         rows = load_ohlcv_rows(path.stem)
         if rows:
-            return [str(row["date"]) for row in rows]
-    return []
+            available_dates = [str(row["date"]) for row in rows]
+            break
+    if available_dates is None:
+        available_dates = []
+
+    snapshot_context = resolve_current_snapshot_context()
+    snapshot_date = str(snapshot_context.get("date") or "").strip()
+    if snapshot_context.get("useAmSnapshot") and snapshot_date and snapshot_date not in available_dates:
+        available_dates.append(snapshot_date)
+    return available_dates
 
 
 def select_dates(all_dates: list[str], days: int, end_date: str | None = None) -> list[str]:
@@ -329,7 +433,7 @@ def write_json(path: Path, payload: object) -> None:
 
 
 def build_manifest_payload(available_dates: list[str]) -> dict[str, object]:
-    return {
+    payload = {
         "generatedAt": datetime.now().isoformat(timespec="seconds"),
         "latestDate": available_dates[-1] if available_dates else None,
         "availableDates": available_dates,
@@ -344,6 +448,17 @@ def build_manifest_payload(available_dates: list[str]) -> dict[str, object]:
             "watch_candidates",
         ],
     }
+    snapshot_context = resolve_current_snapshot_context()
+    if (
+        snapshot_context.get("date")
+        and snapshot_context.get("type")
+        and snapshot_context.get("date") == payload["latestDate"]
+    ):
+        payload["currentSnapshot"] = {
+            "date": snapshot_context["date"],
+            "type": snapshot_context["type"],
+        }
+    return payload
 
 
 def parse_codes(value: str | None) -> list[str] | None:
@@ -355,3 +470,115 @@ def parse_codes(value: str | None) -> list[str] | None:
 
 def today_jst() -> str:
     return datetime.now().strftime("%Y-%m-%d")
+
+
+def load_am_snapshot() -> dict[str, object]:
+    payload = load_json_dict(AM_SNAPSHOT_JSON)
+    records = payload.get("records")
+    if not isinstance(records, list):
+        payload["records"] = []
+    return payload
+
+
+def load_current_snapshot_state() -> dict[str, object]:
+    payload = load_json_dict(CURRENT_SNAPSHOT_STATE_JSON)
+    if not payload:
+        return {
+            "date": None,
+            "snapshotType": "daily",
+            "active": False,
+            "generatedAt": None,
+        }
+    return payload
+
+
+def current_sync_latest_date() -> str | None:
+    latest = load_json_dict(JQUANTS_SYNC_STATE_JSON).get("lastSuccessfulDate")
+    text = str(latest or "").strip()
+    return text or None
+
+
+def load_am_snapshot_lookup(snapshot_date: str) -> dict[str, dict[str, float | int | str]]:
+    payload = load_am_snapshot()
+    if str(payload.get("date") or "").strip() != snapshot_date:
+        return {}
+    lookup: dict[str, dict[str, float | int | str]] = {}
+    for item in payload.get("records") or []:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "").strip()
+        if not code:
+            continue
+        try:
+            lookup[code] = {
+                "date": snapshot_date,
+                "open": float(item["open"]),
+                "high": float(item["high"]),
+                "low": float(item["low"]),
+                "close": float(item["close"]),
+                "volume": int(float(item.get("volume") or 0)),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+    return lookup
+
+
+def resolve_current_snapshot_context() -> dict[str, object]:
+    state = load_current_snapshot_state()
+    snapshot_date = str(state.get("date") or "").strip()
+    snapshot_type = str(state.get("snapshotType") or "").strip().lower() or "daily"
+    generated_at = state.get("generatedAt")
+    active = bool(state.get("active"))
+    sync_latest = current_sync_latest_date()
+
+    if not snapshot_date:
+        return {"date": None, "type": None, "generatedAt": generated_at, "useAmSnapshot": False}
+
+    if snapshot_type == "am" and active:
+        if sync_latest and sync_latest >= snapshot_date:
+            return {
+                "date": snapshot_date,
+                "type": "daily",
+                "generatedAt": generated_at,
+                "useAmSnapshot": False,
+            }
+        if load_am_snapshot_lookup(snapshot_date):
+            return {
+                "date": snapshot_date,
+                "type": "am",
+                "generatedAt": generated_at,
+                "useAmSnapshot": True,
+            }
+        return {"date": None, "type": None, "generatedAt": generated_at, "useAmSnapshot": False}
+
+    if sync_latest and sync_latest >= snapshot_date:
+        return {
+            "date": snapshot_date,
+            "type": "daily",
+            "generatedAt": generated_at,
+            "useAmSnapshot": False,
+        }
+
+    return {"date": None, "type": None, "generatedAt": generated_at, "useAmSnapshot": False}
+
+
+def apply_snapshot_row(
+    rows: list[dict[str, float | int | str]],
+    code: str,
+    snapshot_context: dict[str, object] | None = None,
+) -> list[dict[str, float | int | str]]:
+    context = snapshot_context or resolve_current_snapshot_context()
+    if not context.get("useAmSnapshot"):
+        return rows
+    snapshot_date = str(context.get("date") or "").strip()
+    if not snapshot_date:
+        return rows
+    snapshot_lookup = context.get("lookup")
+    if not isinstance(snapshot_lookup, dict):
+        snapshot_lookup = load_am_snapshot_lookup(snapshot_date)
+    snapshot_row = snapshot_lookup.get(str(code).strip())
+    if not snapshot_row:
+        return rows
+    merged = {str(row["date"]): dict(row) for row in rows}
+    merged[snapshot_date] = snapshot_row
+    return [merged[key] for key in sorted(merged)]
