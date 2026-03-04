@@ -14,6 +14,7 @@
     { key: "deviation25", label: "25日線乖離" },
     { key: "deviation75", label: "75日線乖離" },
     { key: "deviation200", label: "200日線乖離" },
+    { key: "lower_shadow", label: "下ひげ" },
     { key: "watch_candidates", label: "監視候補" },
   ];
   const TSE_MARKETS = new Set(["TSE", "プライム", "スタンダード", "グロース"]);
@@ -32,6 +33,7 @@
   const INDEX_SCANNER_BARS = [21, 63, 126, 252];
   const INDEX_SCANNER_TIMEFRAMES = ["daily", "weekly", "monthly"];
   const INDEX_SCANNER_TURNOVER_OPTIONS = [0, 50000000, 100000000, 500000000, 1000000000];
+  const INDEX_SCANNER_MIN_CLOSE = 50;
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
@@ -465,6 +467,16 @@
     const techVolumeRatio = document.getElementById("techVolumeRatio");
     const techRciSummary = document.getElementById("techRciSummary");
     const techRangePosition = document.getElementById("techRangePosition");
+    const tickerCardRank = document.getElementById("tickerCardRank");
+    const tickerCardCode = document.getElementById("tickerCardCode");
+    const tickerCardName = document.getElementById("tickerCardName");
+    const tickerCardTradeDate = document.getElementById("tickerCardTradeDate");
+    const tickerCardTradePrice = document.getElementById("tickerCardTradePrice");
+    const tickerCardChange = document.getElementById("tickerCardChange");
+    const tickerCardVolume = document.getElementById("tickerCardVolume");
+    const tickerCardHigh = document.getElementById("tickerCardHigh");
+    const tickerCardLow = document.getElementById("tickerCardLow");
+    const tickerCardLinks = document.getElementById("tickerCardLinks");
     const backLink = document.querySelector(".eyebrow a");
 
     const params = new URLSearchParams(window.location.search);
@@ -550,6 +562,58 @@
       }
     }
 
+    function setTickerSummaryValues(row) {
+      summaryDate.textContent = row.date || "-";
+      summaryClose.textContent = formatNumber(row.close);
+      summaryChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
+        withParens: true,
+      })}`;
+      summaryChange.className = "summary-value";
+      summaryOpen.textContent = formatNumber(row.open);
+      summaryRange.textContent = `${formatNumber(row.high)} / ${formatNumber(row.low)}`;
+      summaryVolume.textContent = formatNumber(row.volume, 0);
+      if (tickerCardTradeDate) {
+        tickerCardTradeDate.textContent = formatScannerTradeDate(row.date);
+      }
+      if (tickerCardTradePrice) {
+        tickerCardTradePrice.textContent = formatNumber(row.close);
+      }
+      if (tickerCardChange) {
+        tickerCardChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent)}`;
+      }
+      if (tickerCardVolume) {
+        tickerCardVolume.textContent = formatNumber(row.volume, 0);
+      }
+      if (tickerCardHigh) {
+        tickerCardHigh.textContent = formatNumber(row.high);
+      }
+      if (tickerCardLow) {
+        tickerCardLow.textContent = formatNumber(row.low);
+      }
+      techDistanceMa25.textContent = formatSignedPercent(row.distanceToMa25);
+      techDistanceMa75.textContent = formatSignedPercent(row.distanceToMa75);
+      techDistanceMa200.textContent = formatSignedPercent(row.distanceToMa200);
+      techVolumeRatio.textContent = formatRatio(row.volumeRatio25);
+      techRciSummary.textContent = [row.rci12, row.rci24, row.rci48]
+        .map((value) => (value == null ? "-" : Number(value).toFixed(1)))
+        .join(" / ");
+      techRangePosition.textContent = formatPercent(row.rangePosition52w);
+      [techDistanceMa25, techDistanceMa75, techDistanceMa200, techRangePosition].forEach((element) => {
+        element.classList.remove("rise", "fall");
+      });
+      [
+        [techDistanceMa25, row.distanceToMa25],
+        [techDistanceMa75, row.distanceToMa75],
+        [techDistanceMa200, row.distanceToMa200],
+        [techRangePosition, row.rangePosition52w],
+      ].forEach(([element, value]) => {
+        const className = getSignedValueClass(value);
+        if (className) {
+          element.classList.add(className);
+        }
+      });
+    }
+
     function renderTicker() {
       const rows = state.payload.ohlcv || [];
       const selectedIndex = findSelectedIndex(rows, state.selectedDate);
@@ -579,16 +643,20 @@
         .filter(Boolean)
         .join(" / ");
 
-      summaryDate.textContent = state.selectedDate;
       summaryRank.textContent = state.rankingItem ? `${state.rankingItem.rank}位` : "-";
-      summaryClose.textContent = formatNumber(row.close);
-      summaryChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
-        withParens: true,
-      })}`;
-      summaryChange.className = "summary-value";
-      summaryOpen.textContent = formatNumber(row.open);
-      summaryRange.textContent = `${formatNumber(row.high)} / ${formatNumber(row.low)}`;
-      summaryVolume.textContent = formatNumber(row.volume, 0);
+      if (tickerCardRank) {
+        tickerCardRank.textContent = state.rankingItem ? `${state.rankingItem.rank}` : "-";
+      }
+      if (tickerCardCode) {
+        tickerCardCode.textContent = code;
+      }
+      if (tickerCardName) {
+        tickerCardName.textContent = state.payload.name || code;
+        tickerCardName.href = buildTickerUrl(code, state.selectedDate, state.rankingKey);
+        tickerCardName.title = state.payload.name || code;
+        tickerCardName.className = scannerNameClass(state.payload.name || code);
+      }
+      setTickerSummaryValues(row);
       tickerRankMeta.textContent = state.rankingItem
         ? `${rankingLabel(state.rankingKey)} / ${state.rankingItem.rank}位`
         : state.rankingKey
@@ -600,28 +668,6 @@
       profileSector.textContent = state.payload.sector || "-";
       profileIndustry.textContent = state.payload.industry || "-";
       profileTags.textContent = state.payload.tags?.length ? state.payload.tags.join(", ") : "-";
-      techDistanceMa25.textContent = formatSignedPercent(row.distanceToMa25);
-      techDistanceMa75.textContent = formatSignedPercent(row.distanceToMa75);
-      techDistanceMa200.textContent = formatSignedPercent(row.distanceToMa200);
-      techVolumeRatio.textContent = formatRatio(row.volumeRatio25);
-      techRciSummary.textContent = [row.rci12, row.rci24, row.rci48]
-        .map((value) => (value == null ? "-" : Number(value).toFixed(1)))
-        .join(" / ");
-      techRangePosition.textContent = formatPercent(row.rangePosition52w);
-      [techDistanceMa25, techDistanceMa75, techDistanceMa200, techRangePosition].forEach((element) => {
-        element.classList.remove("rise", "fall");
-      });
-      [
-        [techDistanceMa25, row.distanceToMa25],
-        [techDistanceMa75, row.distanceToMa75],
-        [techDistanceMa200, row.distanceToMa200],
-        [techRangePosition, row.rangePosition52w],
-      ].forEach(([element, value]) => {
-        const className = getSignedValueClass(value);
-        if (className) {
-          element.classList.add(className);
-        }
-      });
 
       externalLinks.innerHTML = Object.entries(state.payload.links || {})
         .filter(([, href]) => href)
@@ -630,8 +676,22 @@
             `<a class="link-pill" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`
         )
         .join("");
+      if (tickerCardLinks) {
+        const detailItems = [
+          { label: "銘柄一覧", href: `./index.html?date=${encodeURIComponent(state.selectedDate)}`, local: true },
+          { label: "Yahoo", href: state.payload.links?.quote || "" },
+        ];
+        tickerCardLinks.innerHTML = detailItems
+          .filter((item) => item.href)
+          .map((item) =>
+            item.local
+              ? `<a href="${item.href}">${escapeHtml(item.label)}</a>`
+              : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
+          )
+          .join('<span class="scanner-link-separator">|</span>');
+      }
 
-      renderTickerChart(chartEl, rows, selectedIndex, state.selectedMonths, chartMeta);
+      renderTickerChart(chartEl, rows, selectedIndex, state.selectedMonths, chartMeta, setTickerSummaryValues);
     }
   }
 
@@ -938,10 +998,12 @@
       renderTagOptions();
       renderThemeOptions();
       const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
+      const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
+      const baseFiltered = priceFilteredRecords.filter(
+        (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
+      );
       const filtered = sortScannerRecords(
-        turnoverRecords.filter(
-          (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
-        ),
+        state.sort === "lower_shadow" ? baseFiltered.filter(isLowerShadowCandidate) : baseFiltered,
         state.sort
       ).slice(0, state.limit);
       syncIndexScannerUrl(
@@ -1147,7 +1209,15 @@
   }
 
   async function loadRanking(date, key) {
-    return fetchJson(`./data/rankings/${date}/${key}.json`);
+    const path = `./data/rankings/${date}/${key}.json`;
+    const response = await fetch(path);
+    if (!response.ok) {
+      if (key === "lower_shadow" && response.status === 404) {
+        return { date, ranking: rankingLabel(key), count: 0, items: [] };
+      }
+      throw new Error(`JSON 読み込み失敗: ${path} (${response.status})`);
+    }
+    return response.json();
   }
 
   async function loadTickerPayload(code) {
@@ -1654,6 +1724,137 @@
     return leftValue - rightValue;
   }
 
+  function computeLowerShadowMetrics(record) {
+    if ([record.open, record.high, record.low, record.close].some((value) => value == null)) {
+      return {
+        body: null,
+        lowerShadow: null,
+        upperShadow: null,
+        range: null,
+        lowerShadowRatio: null,
+        isLowerShadow: false,
+        shadowStrength: "none",
+        reason: "missing OHLC",
+        strengthPriority: 3,
+      };
+    }
+    const open = Number(record.open);
+    const high = Number(record.high);
+    const low = Number(record.low);
+    const close = Number(record.close);
+    if ([open, high, low, close].some((value) => Number.isNaN(value))) {
+      return {
+        body: null,
+        lowerShadow: null,
+        upperShadow: null,
+        range: null,
+        lowerShadowRatio: null,
+        isLowerShadow: false,
+        shadowStrength: "none",
+        reason: "missing OHLC",
+        strengthPriority: 3,
+      };
+    }
+    const range = high - low;
+    if (!(range > 0)) {
+      return {
+        body: Math.abs(close - open),
+        lowerShadow: Math.min(open, close) - low,
+        upperShadow: high - Math.max(open, close),
+        range,
+        lowerShadowRatio: null,
+        isLowerShadow: false,
+        shadowStrength: "none",
+        reason: "range is zero",
+        strengthPriority: 3,
+      };
+    }
+    const body = Math.abs(close - open);
+    const bodyHigh = Math.max(open, close);
+    const bodyLow = Math.min(open, close);
+    const lowerShadow = bodyLow - low;
+    const upperShadow = high - bodyHigh;
+    const lowerShadowRatio = lowerShadow / range;
+    if (!(lowerShadow > 0)) {
+      return {
+        body,
+        lowerShadow,
+        upperShadow,
+        range,
+        lowerShadowRatio,
+        isLowerShadow: false,
+        shadowStrength: "none",
+        reason: "no lower shadow",
+        strengthPriority: 3,
+      };
+    }
+
+    let shadowStrength = "none";
+    let strengthPriority = 3;
+    if (lowerShadow >= body * 3.0 && lowerShadowRatio >= 0.45 && upperShadow <= lowerShadow * 0.6) {
+      shadowStrength = "strong";
+      strengthPriority = 0;
+    } else if (lowerShadow >= body * 2.0 && lowerShadowRatio >= 0.35) {
+      shadowStrength = "medium";
+      strengthPriority = 1;
+    } else if (lowerShadow >= body * 1.2 && lowerShadowRatio >= 0.25) {
+      shadowStrength = "weak";
+      strengthPriority = 2;
+    }
+
+    const isLowerShadow =
+      lowerShadow > 0 &&
+      range > 0 &&
+      lowerShadow >= body * 2.0 &&
+      lowerShadowRatio >= 0.35 &&
+      upperShadow <= lowerShadow * 0.8;
+
+    let reason = "does not meet lower shadow rule";
+    if (isLowerShadow) {
+      reason =
+        shadowStrength === "strong"
+          ? "strong: lower shadow dominates with small upper shadow"
+          : "medium: long lower shadow and clear rebound shape";
+    } else if (shadowStrength === "weak") {
+      reason = "weak lower shadow only";
+    } else if (!(lowerShadow >= body * 2.0)) {
+      reason = "lower shadow too short vs body";
+    } else if (!(lowerShadowRatio >= 0.35)) {
+      reason = "lower shadow ratio too small";
+    } else if (!(upperShadow <= lowerShadow * 0.8)) {
+      reason = "upper shadow too large";
+    } else {
+      reason = "does not meet lower shadow rule";
+    }
+
+    return {
+      body,
+      lowerShadow,
+      upperShadow,
+      range,
+      lowerShadowRatio,
+      isLowerShadow,
+      shadowStrength,
+      reason,
+      strengthPriority,
+    };
+  }
+
+  function isLowerShadowCandidate(record) {
+    return Boolean(computeLowerShadowMetrics(record)?.isLowerShadow);
+  }
+
+  function compareLowerShadowRecords(left, right) {
+    const leftMetrics = computeLowerShadowMetrics(left);
+    const rightMetrics = computeLowerShadowMetrics(right);
+    return (
+      compareNullableNumbers(leftMetrics.strengthPriority, rightMetrics.strengthPriority) ||
+      compareNullableNumbers(rightMetrics.lowerShadowRatio, leftMetrics.lowerShadowRatio) ||
+      compareNullableNumbers(rightMetrics.lowerShadow, leftMetrics.lowerShadow) ||
+      String(left.code).localeCompare(String(right.code), "ja", { numeric: true, sensitivity: "base" })
+    );
+  }
+
   function average(values) {
     if (!values.length) {
       return null;
@@ -1815,6 +2016,12 @@
     if (label === "出来高増加") {
       return formatRatio(record.volumeRatio25);
     }
+    if (label === "下ひげ") {
+      if (record.shadowStrength && record.shadowStrength !== "none" && record.lowerShadowRatio != null) {
+        return `${record.shadowStrength} ${formatPercent(Number(record.lowerShadowRatio) * 100)}`;
+      }
+      return "-";
+    }
     if (label === "25日線乖離") {
       return formatSignedPercent(record.distanceToMa25);
     }
@@ -1913,9 +2120,6 @@
       rows.push(cells.slice(index, index + 7));
     }
     container.innerHTML = `
-      <div class="mini-calendar-title-row">
-        <div class="mini-calendar-title">今月</div>
-      </div>
       <div class="mini-calendar-head">
         <button type="button" class="mini-calendar-nav" data-calendar-nav="prev"${minMonth && currentMonth <= minMonth ? " disabled" : ""}>&lt;</button>
         <div class="mini-calendar-month">${year}年${month + 1}月</div>
@@ -2010,6 +2214,9 @@
     if (sortKey === "deviation200") {
       return items.sort((a, b) => compareNullableNumbers(b.distanceToMa200, a.distanceToMa200));
     }
+    if (sortKey === "lower_shadow") {
+      return items.sort(compareLowerShadowRecords);
+    }
     if (sortKey === "watch_candidates") {
       return items.sort((a, b) => compareNullableNumbers(b.watchCandidateScore, a.watchCandidateScore));
     }
@@ -2026,6 +2233,7 @@
       deviation25: "25日線乖離順",
       deviation75: "75日線乖離順",
       deviation200: "200日線乖離順",
+      lower_shadow: "下ひげ順",
       watch_candidates: "監視候補順",
     }[sortKey] || sortKey;
   }
@@ -2037,6 +2245,10 @@
     return records.filter((record) => {
       return Number(record.turnoverMa5 || 0) >= turnoverThreshold;
     });
+  }
+
+  function filterByMinimumClose(records, minimumClose) {
+    return records.filter((record) => Number(record.close) >= minimumClose);
   }
 
   function turnoverLabel(value) {
@@ -2326,8 +2538,7 @@
     return `${date.getMonth() + 1}/${date.getDate()}`;
   }
 
-  function renderScannerCompactChart(elementId, code, rows, selectedDate, rangeValue, options = {}) {
-    const element = document.getElementById(elementId);
+  function renderCompactStyleChart(element, rows, selectedDate, rangeValue, options = {}) {
     if (!element || !window.LightweightCharts) {
       return;
     }
@@ -2346,9 +2557,14 @@
       return;
     }
     const baseRow = chartRows[selectedIndex];
-    setScannerTableValues(code, baseRow);
+    if (typeof options.onInitialRow === "function") {
+      options.onInitialRow(baseRow);
+    }
+    if (options.metaTarget) {
+      options.metaTarget.textContent = `${baseRow.date} 基準 / ${visibleRows[0].date} - ${visibleRows[visibleRows.length - 1].date}`;
+    }
     const chart = window.LightweightCharts.createChart(element, {
-      height: 173,
+      height: options.height || 173,
       layout: { background: { color: "#ffffff" }, textColor: "#111111", fontSize: 8 },
       rightPriceScale: {
         borderColor: "#c8d4e3",
@@ -2392,15 +2608,17 @@
         close: row.close,
       }))
     );
-    candleSeries.setMarkers([
-      {
-        time: baseRow.date,
-        position: "aboveBar",
-        color: "#6b7280",
-        shape: "circle",
-        text: selectedDate.slice(5),
-      },
-    ]);
+    if (options.showMarker !== false) {
+      candleSeries.setMarkers([
+        {
+          time: baseRow.date,
+          position: "aboveBar",
+          color: "#6b7280",
+          shape: "circle",
+          text: options.markerText || selectedDate.slice(5),
+        },
+      ]);
+    }
     const volumeColor = "rgba(110, 110, 110, 0.42)";
     const volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
@@ -2444,8 +2662,8 @@
         return;
       }
       const clickedRow = resolveRowByTime(chartRows, param.time);
-      if (clickedRow) {
-        setScannerTableValues(code, clickedRow);
+      if (clickedRow && typeof options.onRowSelect === "function") {
+        options.onRowSelect(clickedRow);
       }
     });
     const timeScale = chart.timeScale();
@@ -2456,116 +2674,30 @@
     });
   }
 
-  function renderTickerChart(element, rows, selectedIndex, months, chartMeta) {
-    if (!element || !window.LightweightCharts) {
+  function renderScannerCompactChart(elementId, code, rows, selectedDate, rangeValue, options = {}) {
+    const element = document.getElementById(elementId);
+    if (!element) {
       return;
     }
-    element.innerHTML = "";
-    const anchorDate = parseDate(rows[selectedIndex].date);
-    const cutoff = addMonths(anchorDate, -months);
-    const visibleRows = rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 10);
-    if (!visibleRows.length) {
+    renderCompactStyleChart(element, rows, selectedDate, rangeValue, {
+      ...options,
+      height: 173,
+      onInitialRow: (row) => setScannerTableValues(code, row),
+      onRowSelect: (row) => setScannerTableValues(code, row),
+    });
+  }
+
+  function renderTickerChart(element, rows, selectedIndex, months, chartMeta, onRowSelect) {
+    const selectedRow = rows[selectedIndex];
+    if (!selectedRow) {
       return;
     }
-
-    chartMeta.textContent = `${rows[selectedIndex].date} 基準 / ${visibleRows[0].date} - ${visibleRows[visibleRows.length - 1].date}`;
-    const chart = window.LightweightCharts.createChart(element, {
-      height: 720,
-      layout: { background: { color: "#ffffff" }, textColor: "#111111", fontSize: 11 },
-      rightPriceScale: {
-        borderColor: "#c8d4e3",
-        scaleMargins: { top: 0.05, bottom: 0.22 },
-      },
-      timeScale: {
-        borderColor: "#c8d4e3",
-        rightOffset: 0,
-        barSpacing: 9,
-        minBarSpacing: 6,
-        fixLeftEdge: true,
-        fixRightEdge: false,
-        lockVisibleTimeRangeOnResize: true,
-        timeVisible: true,
-        secondsVisible: false,
-        tickMarkFormatter: (time, tickMarkType) => formatScannerTickMark(time, tickMarkType),
-      },
-      grid: { vertLines: { color: "#edf2f7" }, horzLines: { color: "#edf2f7" } },
-      handleScroll: false,
-      handleScale: false,
-    });
-
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: "#ef4a60",
-      downColor: "#2d6fb2",
-      borderVisible: true,
-      borderUpColor: "#ef4a60",
-      borderDownColor: "#2d6fb2",
-      wickUpColor: "#ef4a60",
-      wickDownColor: "#2d6fb2",
-    });
-    candleSeries.setData(
-      visibleRows.map((row) => ({
-        time: row.date,
-        open: row.open,
-        high: row.high,
-        low: row.low,
-        close: row.close,
-      }))
-    );
-    candleSeries.setMarkers([
-      {
-        time: rows[selectedIndex].date,
-        position: "aboveBar",
-        color: "#6b7280",
-        shape: "circle",
-        text: rows[selectedIndex].date.slice(5),
-      },
-    ]);
-
-    const volumeColor = "rgba(110, 110, 110, 0.42)";
-    const volumeSeries = chart.addHistogramSeries({
-      priceFormat: { type: "volume" },
-      priceScaleId: "",
-      color: volumeColor,
-    });
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.84, bottom: 0 },
-      borderVisible: false,
-    });
-    volumeSeries.setData(
-      visibleRows.map((row) => ({
-        time: row.date,
-        value: row.volume,
-        color: volumeColor,
-      }))
-    );
-
-    [
-      [5, "#d9485f"],
-      [25, "#2b6cb0"],
-      [75, "#2f855a"],
-      [200, "#1f2937"],
-    ].forEach(([windowSize, color]) => {
-      const series = chart.addLineSeries({
-        color,
-        lineWidth: Number(windowSize) === 200 ? 1 : 1.5,
-        lastValueVisible: false,
-        priceLineVisible: false,
-      });
-      series.setData(
-        visibleRows
-          .map((row) => ({
-            time: row.date,
-            value: row[`ma${windowSize}`],
-          }))
-          .filter((item) => item.value != null)
-      );
-    });
-
-    const timeScale = chart.timeScale();
-    const visibleCount = visibleRows.length;
-    timeScale.setVisibleLogicalRange({
-      from: -0.5,
-      to: visibleCount - 1 + 3,
+    renderCompactStyleChart(element, rows, selectedRow.date, months, {
+      height: 346,
+      metaTarget: chartMeta,
+      markerText: selectedRow.date.slice(5),
+      onInitialRow: onRowSelect,
+      onRowSelect,
     });
   }
 
@@ -2921,6 +3053,7 @@
       deviation25: "deviation25",
       deviation75: "deviation75",
       deviation200: "deviation200",
+      lower_shadow: "lower_shadow",
       watch_candidates: "watch_candidates",
       code: "",
     }[sortKey] || "";

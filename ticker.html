@@ -27,7 +27,6 @@
           </label>
           <div class="meta" id="tickerRankMeta">-</div>
         </div>
-        <div class="meta" id="chartMeta"></div>
       </section>
 
       <section class="panel summary-grid" id="tickerSummary">
@@ -123,7 +122,52 @@
 
       <section class="panel">
         <div id="detailErrorBox" class="status-box error" hidden></div>
-        <div id="chart" class="chart"></div>
+        <article class="scanner-item scanner-item--detail">
+          <div class="scanner-rank-table">
+            <table>
+              <thead>
+                <tr>
+                  <th class="num scanner-col-rank">順位</th>
+                  <th class="scanner-col-code">コード</th>
+                  <th class="scanner-col-name">名称</th>
+                  <th class="num scanner-col-close">取引値</th>
+                  <th class="num scanner-col-change">前日比</th>
+                  <th class="num scanner-col-volume">出来高</th>
+                  <th class="num scanner-col-high">高値</th>
+                  <th class="num scanner-col-low">安値</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td id="tickerCardRank" class="num">-</td>
+                  <td id="tickerCardCode">-</td>
+                  <td class="scanner-name-cell">
+                    <div class="scanner-name-cell-inner">
+                      <a id="tickerCardName" class="scanner-name-link scanner-name-link--normal" href="#" title="-">-</a>
+                    </div>
+                  </td>
+                  <td class="scanner-trade-cell">
+                    <div class="scanner-trade-split">
+                      <span id="tickerCardTradeDate" class="scanner-trade-date">-</span>
+                      <span id="tickerCardTradePrice" class="scanner-trade-price">-</span>
+                    </div>
+                  </td>
+                  <td id="tickerCardChange" class="num">-</td>
+                  <td id="tickerCardVolume" class="num">-</td>
+                  <td id="tickerCardHigh" class="num">-</td>
+                  <td id="tickerCardLow" class="num">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="scanner-item-chart-wrap scanner-item-chart-wrap--detail">
+            <div id="chart" class="chart scanner-chart scanner-chart--detail"></div>
+          </div>
+          <div class="scanner-item-links scanner-item-links--detail">
+            <div id="tickerCardLinks" class="scanner-item-links-main"></div>
+            <div class="meta" id="chartMeta"></div>
+          </div>
+        </article>
       </section>
 
       <section class="panel stack">
