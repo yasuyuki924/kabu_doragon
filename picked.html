@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ローカル株分析ボード | 選別銘柄一覧</title>
     <link rel="stylesheet" href="./assets/style.css" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="picked">
     <main class="container">
@@ -32,7 +33,22 @@
           </div>
           <div id="pickedExportList" class="picked-export-list"></div>
         </section>
+        <section id="pickedRegisterPanel" class="picked-register-panel">
+          <div class="section-head">
+            <h2>登録銘柄</h2>
+          </div>
+          <p class="subtle picked-export-note">選別時のフィルター条件を紐づけて保存します。</p>
+          <div class="picked-register-actions">
+            <button id="pickedRegisterAllButton" class="action-button secondary" type="button">全て登録</button>
+          </div>
+          <div class="picked-meta">
+            <span class="meta">登録セット数</span>
+            <strong id="pickedRegisterCount">0件</strong>
+          </div>
+          <div id="pickedRegisterList" class="picked-register-list"></div>
+        </section>
         <div id="pickedError" class="status-box error" hidden></div>
+        <div id="pickedChartList" class="scanner-list picked-chart-list"></div>
         <div class="table-wrap picked-table-wrap">
           <table>
             <thead>
@@ -53,6 +69,22 @@
         </div>
       </section>
     </main>
+
+    <div id="registerNameModal" class="register-name-modal is-hidden" hidden>
+      <div class="register-name-dialog" role="dialog" aria-modal="true" aria-labelledby="registerNameTitle">
+        <h2 id="registerNameTitle">登録名を入力</h2>
+        <p class="subtle register-name-note">保存名は「日付 + 入力名」で作成します。</p>
+        <label class="register-name-field">
+          <span>登録名</span>
+          <input id="registerNameInput" type="text" maxlength="80" placeholder="例: 下ひげ監視A" />
+        </label>
+        <div id="registerNameError" class="register-name-error" hidden></div>
+        <div class="register-name-actions">
+          <button id="registerNameOkButton" class="action-button" type="button">OK</button>
+          <button id="registerNameCancelButton" class="action-button secondary" type="button">キャンセル</button>
+        </div>
+      </div>
+    </div>
 
     <script src="./assets/app.js"></script>
   </body>

@@ -1105,12 +1105,133 @@ h2 {
   margin: 0 0 8px;
 }
 
+.picked-register-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #fcfffa;
+}
+
+.picked-register-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.picked-register-actions {
+  margin: 0 0 8px;
+}
+
+.picked-register-item {
+  border: 1px solid #d7e0ea;
+  background: #fff;
+  border-radius: 4px;
+  padding: 7px 8px;
+}
+
+.picked-register-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.picked-register-name {
+  font-weight: 700;
+  color: #24384d;
+}
+
+.picked-register-meta {
+  color: #63758a;
+  font-size: 0.76rem;
+  margin-top: 2px;
+}
+
+.picked-register-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .picked-table-wrap {
   margin-top: 6px;
 }
 
+.picked-chart-list {
+  margin-top: 10px;
+}
+
+.picked-chart-empty {
+  grid-column: 1 / -1;
+}
+
 .picked-remove-button {
   white-space: nowrap;
+}
+
+.picked-card-remove {
+  min-width: 56px;
+}
+
+.register-name-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  z-index: 1200;
+}
+
+.register-name-modal[hidden] {
+  display: none;
+}
+
+.register-name-modal.is-hidden {
+  display: none !important;
+}
+
+.register-name-dialog {
+  width: min(460px, 100%);
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+  padding: 14px 14px 12px;
+}
+
+.register-name-note {
+  margin: 4px 0 10px;
+}
+
+.register-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.register-name-field input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 7px 8px;
+  font-size: 0.84rem;
+}
+
+.register-name-error {
+  margin-top: 8px;
+  color: var(--danger);
+  font-size: 0.76rem;
+}
+
+.register-name-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 table {

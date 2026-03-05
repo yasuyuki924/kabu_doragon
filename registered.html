@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ローカル株分析ボード | 登録セット</title>
+    <link rel="stylesheet" href="./assets/style.css" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  </head>
+  <body data-page="registered">
+    <main class="container">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow"><a href="./picked.html">← 選別一覧に戻る</a></p>
+          <h1 id="registeredTitle">登録セット</h1>
+          <p id="registeredMeta" class="subtle">読み込み中...</p>
+        </div>
+      </header>
+
+      <section class="panel">
+        <section class="picked-export-panel">
+          <div class="section-head">
+            <h2>ダウンロード</h2>
+          </div>
+          <p id="registeredExportMessage" class="subtle picked-export-note"></p>
+          <div class="picked-export-actions">
+            <button id="registeredExportTradingViewButton" class="action-button" type="button">TradingView用を作成</button>
+            <button id="registeredExportHyperButton" class="action-button secondary" type="button">HYPER SBI 2用CSVを作成</button>
+          </div>
+          <div id="registeredExportList" class="picked-export-list"></div>
+        </section>
+        <div id="registeredError" class="status-box error" hidden></div>
+        <div id="registeredChartList" class="scanner-list picked-chart-list"></div>
+        <div class="table-wrap picked-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>コード</th>
+                <th>銘柄名</th>
+                <th>市場</th>
+                <th>選別日時</th>
+              </tr>
+            </thead>
+            <tbody id="registeredTableBody">
+              <tr>
+                <td colspan="4" class="empty-cell">読み込み中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>

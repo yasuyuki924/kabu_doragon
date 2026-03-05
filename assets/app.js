@@ -4,6 +4,7 @@
   const WATCHLIST_PATH = "./data/watchlist.json";
   const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v6";
   const SCANNER_PICKS_STORAGE_KEY = "local-stock-dashboard.scanner-picks.v1";
+  const REGISTERED_STORAGE_KEY = "local-stock-dashboard.registered-picks.v1";
   const NOTE_STORAGE_PREFIX = "local-stock-dashboard.note.";
   const PERIOD_MONTHS = [1, 2, 3, 4, 5, 6];
   const RANKING_CONFIG = [
@@ -48,6 +49,9 @@
     }
     if (page === "picked") {
       initPickedPage();
+    }
+    if (page === "registered") {
+      initRegisteredPage();
     }
   });
 
@@ -562,16 +566,7 @@
       }
     }
 
-    function setTickerSummaryValues(row) {
-      summaryDate.textContent = row.date || "-";
-      summaryClose.textContent = formatNumber(row.close);
-      summaryChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
-        withParens: true,
-      })}`;
-      summaryChange.className = "summary-value";
-      summaryOpen.textContent = formatNumber(row.open);
-      summaryRange.textContent = `${formatNumber(row.high)} / ${formatNumber(row.low)}`;
-      summaryVolume.textContent = formatNumber(row.volume, 0);
+    function setTickerCardValues(row) {
       if (tickerCardTradeDate) {
         tickerCardTradeDate.textContent = formatScannerTradeDate(row.date);
       }
@@ -590,6 +585,18 @@
       if (tickerCardLow) {
         tickerCardLow.textContent = formatNumber(row.low);
       }
+    }
+
+    function setTickerSummaryValues(row) {
+      summaryDate.textContent = row.date || "-";
+      summaryClose.textContent = formatNumber(row.close);
+      summaryChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
+        withParens: true,
+      })}`;
+      summaryChange.className = "summary-value";
+      summaryOpen.textContent = formatNumber(row.open);
+      summaryRange.textContent = `${formatNumber(row.high)} / ${formatNumber(row.low)}`;
+      summaryVolume.textContent = formatNumber(row.volume, 0);
       techDistanceMa25.textContent = formatSignedPercent(row.distanceToMa25);
       techDistanceMa75.textContent = formatSignedPercent(row.distanceToMa75);
       techDistanceMa200.textContent = formatSignedPercent(row.distanceToMa200);
@@ -622,6 +629,7 @@
         return;
       }
       const row = rows[selectedIndex];
+      const latestRow = rows.at(-1) || row;
       state.selectedDate = row.date;
       tickerDatePicker.value = row.date;
       syncTickerUrl(code, state.selectedDate, state.rankingKey);
@@ -657,6 +665,7 @@
         tickerCardName.className = scannerNameClass(state.payload.name || code);
       }
       setTickerSummaryValues(row);
+      setTickerCardValues(latestRow);
       tickerRankMeta.textContent = state.rankingItem
         ? `${rankingLabel(state.rankingKey)} / ${state.rankingItem.rank}位`
         : state.rankingKey
@@ -691,7 +700,10 @@
           .join('<span class="scanner-link-separator">|</span>');
       }
 
-      renderTickerChart(chartEl, rows, selectedIndex, state.selectedMonths, chartMeta, setTickerSummaryValues);
+      renderTickerChart(chartEl, rows, selectedIndex, state.selectedMonths, chartMeta, (chartRow) => {
+        setTickerSummaryValues(chartRow);
+        setTickerCardValues(chartRow);
+      });
     }
   }
 
@@ -1087,41 +1099,81 @@
     }
   }
 
-  function initPickedPage() {
+  async function initPickedPage() {
     const count = document.getElementById("pickedCount");
     const exportMessage = document.getElementById("pickedExportMessage");
     const exportTradingViewButton = document.getElementById("pickedExportTradingViewButton");
     const exportHyperButton = document.getElementById("pickedExportHyperButton");
     const exportList = document.getElementById("pickedExportList");
+    const registerAllButton = document.getElementById("pickedRegisterAllButton");
+    const registerCount = document.getElementById("pickedRegisterCount");
+    const registerList = document.getElementById("pickedRegisterList");
+    const registerNameModal = document.getElementById("registerNameModal");
+    const registerNameInput = document.getElementById("registerNameInput");
+    const registerNameError = document.getElementById("registerNameError");
+    const registerNameOkButton = document.getElementById("registerNameOkButton");
+    const registerNameCancelButton = document.getElementById("registerNameCancelButton");
     const errorBox = document.getElementById("pickedError");
     const body = document.getElementById("pickedTableBody");
+    const chartList = document.getElementById("pickedChartList");
     const state = {
       exportEntries: [],
+      manifest: null,
+      selectedDate: "",
+      bars: 63,
+      timeframe: "daily",
+      sort: "code",
+      registered: [],
     };
+
+    bindRegisterNameModalEvents();
 
     exportTradingViewButton?.addEventListener("click", () => {
       const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
-      replaceExportEntries(state, [buildTradingViewExportEntry(picks)], exportList);
-      exportMessage.textContent = "出力候補は毎回最新だけ表示します。過去に保存したダウンロードファイルは自動削除されません。";
+      triggerExportDownloads([buildTradingViewExportEntry(picks)]);
+      renderExportEntries(exportList, []);
+      exportMessage.textContent = "TradingView 用TXTをダウンロードしました。";
     });
 
     exportHyperButton?.addEventListener("click", () => {
       const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
-      replaceExportEntries(state, buildHyperExportEntries(picks), exportList);
-      exportMessage.textContent = "出力候補は毎回最新だけ表示します。過去に保存したダウンロードファイルは自動削除されません。";
+      const entries = buildHyperExportEntries(picks);
+      triggerExportDownloads(entries);
+      renderExportEntries(exportList, []);
+      exportMessage.textContent = `HYPER SBI 2 用CSVを${formatNumber(entries.length, 0)}件ダウンロードしました。`;
+    });
+
+    registerAllButton?.addEventListener("click", () => {
+      const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
+      if (!picks.length) {
+        showError(errorBox, "登録対象の選別銘柄がありません。");
+        return;
+      }
+      errorBox.hidden = true;
+      openRegisterNameModal();
     });
 
     try {
-      render();
+      state.manifest = await loadManifest();
+      state.selectedDate = String(state.manifest.latestDate || "");
+      await render();
     } catch (error) {
       showError(errorBox, error.message);
     }
 
-    function render() {
+    async function render() {
       const picks = sortedScannerPicks(loadScannerPicks());
+      state.registered = loadRegisteredPicks();
       count.textContent = `${formatNumber(picks.length, 0)}件`;
+      if (registerCount) {
+        registerCount.textContent = `${formatNumber(state.registered.length, 0)}件`;
+      }
       errorBox.hidden = true;
+      renderRegisteredPanel(state.registered);
       const hasPicks = picks.length > 0;
+      if (registerAllButton) {
+        registerAllButton.disabled = false;
+      }
       if (exportTradingViewButton) {
         exportTradingViewButton.disabled = !hasPicks;
       }
@@ -1130,6 +1182,9 @@
       }
       if (!picks.length) {
         body.innerHTML = '<tr><td colspan="5" class="empty-cell">選別銘柄はありません。トップ画面でチェックしてください。</td></tr>';
+        if (chartList) {
+          chartList.innerHTML = '<div class="empty-cell picked-chart-empty">選別銘柄はありません。トップ画面でチェックしてください。</div>';
+        }
         revokeExportEntries(state.exportEntries);
         state.exportEntries = [];
         renderExportEntries(exportList, []);
@@ -1137,6 +1192,16 @@
         return;
       }
 
+      renderPickedTable(picks);
+      await renderPickedCharts(picks);
+
+      if (!state.exportEntries.length) {
+        exportMessage.textContent = "選別済み銘柄から TradingView 用TXTと HYPER SBI 2 用CSVを生成します。";
+        exportList.innerHTML = "";
+      }
+    }
+
+    function renderPickedTable(picks) {
       body.innerHTML = picks
         .map(
           (pick) => `
@@ -1145,26 +1210,365 @@
               <td>${escapeHtml(pick.name)}</td>
               <td>${escapeHtml(pick.market)}</td>
               <td>${escapeHtml(formatPickedDateTime(pick.selectedAt))}</td>
-              <td><button type="button" class="row-button picked-remove-button" data-remove-pick="${escapeHtml(pick.code)}">解除</button></td>
+              <td>
+                <div class="actions-cell">
+                  <button type="button" class="row-button picked-remove-button" data-remove-pick="${escapeHtml(pick.code)}">解除</button>
+                </div>
+              </td>
             </tr>
           `
         )
         .join("");
 
       Array.from(body.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
-        button.addEventListener("click", () => {
-          const next = loadScannerPicks();
-          delete next[button.dataset.removePick];
-          saveScannerPicks(next);
+        button.addEventListener("click", async () => {
+          removePickByCode(button.dataset.removePick);
           exportMessage.textContent = "選別内容が変わりました。必要なら再作成してください。";
-          render();
+          await render();
+        });
+      });
+    }
+
+    async function renderPickedCharts(picks) {
+      if (!chartList) {
+        return;
+      }
+
+      const failures = [];
+      const loaded = (
+        await Promise.all(
+          picks.map(async (pick) => {
+            try {
+              const payload = await loadTickerPayload(pick.code);
+              const record = buildPickedRecordFromPayload(pick, payload, state.selectedDate);
+              if (!record) {
+                failures.push(`${pick.code}: 日付に一致する価格データなし`);
+                return null;
+              }
+              return { pick, payload, record };
+            } catch (error) {
+              failures.push(`${pick.code}: ${error.message}`);
+              return null;
+            }
+          })
+        )
+      ).filter(Boolean);
+
+      if (!loaded.length) {
+        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">チャート表示可能な銘柄がありません。</div>';
+        if (failures.length) {
+          showError(errorBox, `チャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
+        }
+        return;
+      }
+
+      if (failures.length) {
+        showError(errorBox, `一部のチャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
+      }
+
+      chartList.innerHTML = loaded
+        .map(({ record }, index) => renderPickedScannerItem(record, index, state))
+        .join("");
+
+      loaded.forEach(({ payload, record }) => {
+        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, payload.ohlcv || [], state.selectedDate, state.bars, {
+          timeframe: state.timeframe,
+          useBarCount: true,
+        });
+        const linksElement = document.getElementById(`pickedLinks-${record.code}`);
+        if (linksElement) {
+          linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+        }
+      });
+
+      Array.from(chartList.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
+        button.addEventListener("click", async () => {
+          removePickByCode(button.dataset.removePick);
+          exportMessage.textContent = "選別内容が変わりました。必要なら再作成してください。";
+          await render();
         });
       });
 
-      if (!state.exportEntries.length) {
-        exportMessage.textContent = "選別済み銘柄から TradingView 用TXTと HYPER SBI 2 用CSVを生成します。";
-        exportList.innerHTML = "";
+    }
+
+    function renderRegisteredPanel(entries) {
+      if (!registerList) {
+        return;
       }
+      if (!entries.length) {
+        registerList.innerHTML = '<div class="empty-cell">登録銘柄はありません。</div>';
+        return;
+      }
+      registerList.innerHTML = entries
+        .slice(0, 20)
+        .map((entry) => renderRegisteredSetRow(entry))
+        .join("");
+
+      Array.from(registerList.querySelectorAll("button[data-open-registered-set]")).forEach((button) => {
+        button.addEventListener("click", () => {
+          const id = String(button.dataset.openRegisteredSet || "").trim();
+          if (!id) {
+            return;
+          }
+          window.location.href = `./registered.html?id=${encodeURIComponent(id)}`;
+        });
+      });
+
+      Array.from(registerList.querySelectorAll("button[data-remove-registered-set]")).forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = String(button.dataset.removeRegisteredSet || "").trim();
+          if (!id) {
+            return;
+          }
+          removeRegisteredSetById(id);
+          exportMessage.textContent = "登録セットを削除しました。";
+          await render();
+        });
+      });
+    }
+
+    function openRegisterNameModal() {
+      if (!registerNameModal || !registerNameInput) {
+        return;
+      }
+      if (registerNameError) {
+        registerNameError.hidden = true;
+        registerNameError.textContent = "";
+      }
+      registerNameInput.value = "";
+      registerNameModal.classList.remove("is-hidden");
+      registerNameModal.hidden = false;
+      registerNameInput.focus();
+      registerNameInput.select();
+    }
+
+    function closeRegisterNameModal() {
+      if (!registerNameModal) {
+        return;
+      }
+      registerNameModal.classList.add("is-hidden");
+      registerNameModal.hidden = true;
+      if (registerNameError) {
+        registerNameError.hidden = true;
+        registerNameError.textContent = "";
+      }
+    }
+
+    async function submitRegisterNameModal() {
+      const input = String(registerNameInput?.value || "").trim();
+      if (!input) {
+        if (registerNameError) {
+          registerNameError.hidden = false;
+          registerNameError.textContent = "登録名を入力してください。";
+        }
+        registerNameInput?.focus();
+        return;
+      }
+      try {
+        const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
+        const entry = registerAllPicks(picks, input);
+        closeRegisterNameModal();
+        exportMessage.textContent = `登録しました: ${entry.name}`;
+        await render();
+      } catch (error) {
+        showError(errorBox, error.message);
+      }
+    }
+
+    function bindRegisterNameModalEvents() {
+      registerNameOkButton?.addEventListener("click", () => {
+        submitRegisterNameModal();
+      });
+      registerNameCancelButton?.addEventListener("click", () => {
+        closeRegisterNameModal();
+      });
+      registerNameModal?.addEventListener("click", (event) => {
+        if (event.target === registerNameModal) {
+          closeRegisterNameModal();
+        }
+      });
+      registerNameInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submitRegisterNameModal();
+        }
+      });
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && registerNameModal && !registerNameModal.hidden) {
+          closeRegisterNameModal();
+        }
+      });
+    }
+  }
+
+  async function initRegisteredPage() {
+    const title = document.getElementById("registeredTitle");
+    const meta = document.getElementById("registeredMeta");
+    const exportMessage = document.getElementById("registeredExportMessage");
+    const exportTradingViewButton = document.getElementById("registeredExportTradingViewButton");
+    const exportHyperButton = document.getElementById("registeredExportHyperButton");
+    const exportList = document.getElementById("registeredExportList");
+    const errorBox = document.getElementById("registeredError");
+    const chartList = document.getElementById("registeredChartList");
+    const tableBody = document.getElementById("registeredTableBody");
+
+    const state = {
+      exportEntries: [],
+      manifest: null,
+      selectedDate: "",
+      bars: 63,
+      timeframe: "daily",
+      set: null,
+    };
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const id = String(params.get("id") || "").trim();
+      if (!id) {
+        throw new Error("登録セットIDが指定されていません。");
+      }
+
+      state.set = getRegisteredSetById(id);
+      if (!state.set) {
+        throw new Error("指定された登録セットが見つかりません。");
+      }
+
+      state.manifest = await loadManifest();
+      state.selectedDate = resolveRegisteredSelectedDate(state.set, state.manifest);
+      renderMeta();
+      renderTable();
+      bindExportEvents();
+      await renderCharts();
+      exportMessage.textContent = "登録セットから TradingView 用TXTと HYPER SBI 2 用CSVを生成します。";
+    } catch (error) {
+      showError(errorBox, error.message);
+      if (chartList) {
+        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">登録セットを表示できません。</div>';
+      }
+      if (tableBody) {
+        tableBody.innerHTML = '<tr><td colspan="4" class="empty-cell">登録セットを表示できません。</td></tr>';
+      }
+      if (exportTradingViewButton) {
+        exportTradingViewButton.disabled = true;
+      }
+      if (exportHyperButton) {
+        exportHyperButton.disabled = true;
+      }
+    }
+
+    function renderMeta() {
+      if (title) {
+        title.textContent = String(state.set?.name || "登録セット");
+      }
+      if (meta) {
+        meta.textContent = `${formatPickedDateTime(state.set?.registeredAt)} / ${formatNumber(Number(state.set?.count || 0), 0)}銘柄`;
+      }
+    }
+
+    function renderTable() {
+      const items = dedupeScannerPicks(state.set?.items || []);
+      if (!tableBody) {
+        return;
+      }
+      if (!items.length) {
+        tableBody.innerHTML = '<tr><td colspan="4" class="empty-cell">登録銘柄がありません。</td></tr>';
+        return;
+      }
+      tableBody.innerHTML = items
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(item.code)}</td>
+              <td>${escapeHtml(item.name || "-")}</td>
+              <td>${escapeHtml(item.market || "-")}</td>
+              <td>${escapeHtml(formatPickedDateTime(item.selectedAt))}</td>
+            </tr>
+          `
+        )
+        .join("");
+    }
+
+    function bindExportEvents() {
+      const items = dedupeScannerPicks(state.set?.items || []);
+      const hasItems = items.length > 0;
+      if (exportTradingViewButton) {
+        exportTradingViewButton.disabled = !hasItems;
+        exportTradingViewButton.addEventListener("click", () => {
+          triggerExportDownloads([buildTradingViewExportEntry(items)]);
+          renderExportEntries(exportList, []);
+          exportMessage.textContent = "TradingView 用TXTをダウンロードしました。";
+        });
+      }
+      if (exportHyperButton) {
+        exportHyperButton.disabled = !hasItems;
+        exportHyperButton.addEventListener("click", () => {
+          const entries = buildHyperExportEntries(items);
+          triggerExportDownloads(entries);
+          renderExportEntries(exportList, []);
+          exportMessage.textContent = `HYPER SBI 2 用CSVを${formatNumber(entries.length, 0)}件ダウンロードしました。`;
+        });
+      }
+    }
+
+    async function renderCharts() {
+      if (!chartList) {
+        return;
+      }
+      errorBox.hidden = true;
+      const items = dedupeScannerPicks(state.set?.items || []);
+      if (!items.length) {
+        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">登録銘柄がありません。</div>';
+        return;
+      }
+
+      const failures = [];
+      const loaded = (
+        await Promise.all(
+          items.map(async (item) => {
+            try {
+              const payload = await loadTickerPayload(item.code);
+              const record = buildPickedRecordFromPayload(item, payload, state.selectedDate);
+              if (!record) {
+                failures.push(`${item.code}: 日付に一致する価格データなし`);
+                return null;
+              }
+              return { item, payload, record };
+            } catch (error) {
+              failures.push(`${item.code}: ${error.message}`);
+              return null;
+            }
+          })
+        )
+      ).filter(Boolean);
+
+      if (!loaded.length) {
+        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">チャート表示可能な銘柄がありません。</div>';
+        if (failures.length) {
+          showError(errorBox, `チャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
+        }
+        return;
+      }
+
+      if (failures.length) {
+        showError(errorBox, `一部のチャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
+      }
+
+      chartList.innerHTML = loaded.map(({ record }, index) => renderRegisteredScannerItem(record, index, state)).join("");
+
+      loaded.forEach(({ payload, record }) => {
+        renderScannerCompactChart(
+          `registeredChart-${record.code}`,
+          record.code,
+          payload.ohlcv || [],
+          state.selectedDate,
+          state.bars,
+          { timeframe: state.timeframe, useBarCount: true }
+        );
+        const linksElement = document.getElementById(`registeredLinks-${record.code}`);
+        if (linksElement) {
+          linksElement.innerHTML = renderScannerItemLinks(payload, record, { selectedDate: state.selectedDate, sort: "code" });
+        }
+      });
     }
   }
 
@@ -1301,13 +1705,198 @@
     localStorage.setItem(SCANNER_PICKS_STORAGE_KEY, JSON.stringify(picks));
   }
 
-  function buildScannerPickPayload(record) {
+  function loadRegisteredPicks() {
+    const raw = localStorage.getItem(REGISTERED_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        if (parsed.every((entry) => entry && typeof entry === "object" && Array.isArray(entry.items))) {
+          return parsed
+            .slice()
+            .sort((left, right) => String(right?.registeredAt || "").localeCompare(String(left?.registeredAt || "")));
+        }
+        const legacyItems = parsed
+          .map((item) => buildRegisteredItemFromPick(item))
+          .filter((item) => item.code);
+        if (legacyItems.length) {
+          return [
+            {
+              id: `legacy-${Date.now()}`,
+              name: "移行データ / 条件情報なし",
+              registeredAt: new Date().toISOString(),
+              count: legacyItems.length,
+              items: legacyItems,
+            },
+          ];
+        }
+        return [];
+      }
+      if (parsed && typeof parsed === "object") {
+        const legacyItems = Object.values(parsed)
+          .map((item) => buildRegisteredItemFromPick(item))
+          .filter((item) => item.code);
+        if (legacyItems.length) {
+          return [
+            {
+              id: `legacy-${Date.now()}`,
+              name: "移行データ / 条件情報なし",
+              registeredAt: new Date().toISOString(),
+              count: legacyItems.length,
+              items: legacyItems,
+            },
+          ];
+        }
+      }
+      return [];
+    } catch (_error) {
+      localStorage.removeItem(REGISTERED_STORAGE_KEY);
+      return [];
+    }
+  }
+
+  function saveRegisteredPicks(records) {
+    localStorage.setItem(REGISTERED_STORAGE_KEY, JSON.stringify(Array.isArray(records) ? records : []));
+  }
+
+  function removePickByCode(code) {
+    const normalizedCode = String(code || "").trim();
+    if (!normalizedCode) {
+      return;
+    }
+    const next = loadScannerPicks();
+    delete next[normalizedCode];
+    saveScannerPicks(next);
+  }
+
+  function buildFilterSnapshotFromState(state) {
+    if (!state || typeof state !== "object") {
+      return null;
+    }
+    const bars = state.bars != null ? Number(state.bars) : state.months != null ? indexScannerBarCountFromMonths(state.months) : 63;
+    return {
+      date: String(state.selectedDate || "").trim(),
+      sort: String(state.sort || "").trim(),
+      tag: String(state.tag || "").trim(),
+      theme: String(state.theme || "").trim(),
+      turnover: Number(state.turnover || 0),
+      limit: Number(state.limit || 0),
+      bars: Number.isFinite(bars) ? bars : 63,
+      timeframe: String(state.timeframe || "daily").trim() || "daily",
+      sourcePage: String(document.body?.dataset?.page || "").trim(),
+    };
+  }
+
+  function formatFilterSummary(snapshot) {
+    if (!snapshot) {
+      return "条件情報なし";
+    }
+    const parts = [];
+    const date = String(snapshot.date || "").trim();
+    const sort = String(snapshot.sort || "").trim();
+    parts.push(date || "日付不明");
+    parts.push(sort ? scannerSortLabel(sort) : "条件不明");
+    const tag = String(snapshot.tag || "").trim();
+    if (tag) {
+      parts.push(`業種:${tag}`);
+    }
+    const theme = String(snapshot.theme || "").trim();
+    if (theme) {
+      parts.push(`テーマ:${theme}`);
+    }
+    const turnover = Number(snapshot.turnover || 0);
+    if (turnover > 0) {
+      parts.push(`売買代金>=${turnoverLabel(turnover)}`);
+    }
+    const bars = Number(snapshot.bars || 63);
+    parts.push(indexScannerBarLabel(Number.isFinite(bars) ? bars : 63));
+    parts.push(indexScannerTimeframeLabel(String(snapshot.timeframe || "daily")));
+    return parts.join(" / ");
+  }
+
+  function buildScannerPickPayload(record, state) {
+    const filterSnapshot = buildFilterSnapshotFromState(state);
     return {
       code: String(record.code || record.ticker || "").trim(),
       name: String(record.name || "").trim(),
       market: String(record.market || "").trim(),
       selectedAt: new Date().toISOString(),
+      filterSnapshot,
+      filterSummary: formatFilterSummary(filterSnapshot),
     };
+  }
+
+  function buildRegisteredItemFromPick(pick) {
+    const filterSnapshot = pick?.filterSnapshot && typeof pick.filterSnapshot === "object" ? pick.filterSnapshot : null;
+    return {
+      code: String(pick?.code || "").trim(),
+      name: String(pick?.name || "").trim(),
+      market: String(pick?.market || "").trim(),
+      selectedAt: String(pick?.selectedAt || ""),
+      registeredAt: new Date().toISOString(),
+      filterSnapshot,
+      filterSummary: formatFilterSummary(filterSnapshot),
+    };
+  }
+
+  function formatYmd(isoValue) {
+    const date = new Date(isoValue);
+    if (Number.isNaN(date.getTime())) {
+      return String(isoValue || "").slice(0, 10);
+    }
+    const pad = (number) => String(number).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function buildRegisteredDisplayName(userLabel, registeredAt) {
+    return `${formatYmd(registeredAt)} ${String(userLabel || "").trim()}`;
+  }
+
+  function registerAllPicks(picks, userLabel) {
+    const normalized = dedupeScannerPicks(Array.isArray(picks) ? picks : []);
+    if (!normalized.length) {
+      throw new Error("登録対象の選別銘柄がありません。");
+    }
+    const trimmedLabel = String(userLabel || "").trim();
+    if (!trimmedLabel) {
+      throw new Error("登録名を入力してください。");
+    }
+    const registeredAt = new Date().toISOString();
+    const items = normalized.map((pick) => buildRegisteredItemFromPick(pick)).filter((item) => item.code);
+    if (!items.length) {
+      throw new Error("登録対象の銘柄コードが取得できません。");
+    }
+    const entry = {
+      id: `reg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: buildRegisteredDisplayName(trimmedLabel, registeredAt),
+      registeredAt,
+      count: items.length,
+      items,
+    };
+    const records = loadRegisteredPicks();
+    records.unshift(entry);
+    saveRegisteredPicks(records);
+    return entry;
+  }
+
+  function removeRegisteredSetById(id) {
+    const normalizedId = String(id || "").trim();
+    if (!normalizedId) {
+      return;
+    }
+    const records = loadRegisteredPicks();
+    saveRegisteredPicks(records.filter((entry) => String(entry?.id || "") !== normalizedId));
+  }
+
+  function getRegisteredSetById(id) {
+    const normalizedId = String(id || "").trim();
+    if (!normalizedId) {
+      return null;
+    }
+    const records = loadRegisteredPicks();
+    return records.find((entry) => String(entry?.id || "") === normalizedId) || null;
   }
 
   function toggleScannerPick(record, checked, state) {
@@ -1316,7 +1905,7 @@
       return;
     }
     if (checked) {
-      state.picks[code] = buildScannerPickPayload(record);
+      state.picks[code] = buildScannerPickPayload(record, state);
     } else {
       delete state.picks[code];
     }
@@ -1455,6 +2044,21 @@
     revokeExportEntries(state.exportEntries);
     state.exportEntries = nextEntries;
     renderExportEntries(container, nextEntries);
+  }
+
+  function triggerExportDownloads(entries) {
+    entries.forEach((entry) => {
+      const anchor = document.createElement("a");
+      anchor.href = entry.href;
+      anchor.download = entry.fileName;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      setTimeout(() => {
+        anchor.remove();
+        entry.revoke?.();
+      }, 2000);
+    });
   }
 
   function normalizeWatchlistRecord(record) {
@@ -2362,6 +2966,182 @@
     }
   }
 
+  function buildPickedRecordFromPayload(pick, payload, selectedDate) {
+    const rows = Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
+    if (!rows.length) {
+      return null;
+    }
+    const selectedIndex = findSelectedIndex(rows, selectedDate);
+    const row = rows[selectedIndex];
+    if (!row) {
+      return null;
+    }
+    return {
+      code: String(pick.code || payload.code || ""),
+      name: String(pick.name || payload.name || ""),
+      market: String(pick.market || payload.market || ""),
+      sector: String(payload.sector || ""),
+      industry: String(payload.industry || ""),
+      themes: Array.isArray(payload.themes) ? payload.themes : [],
+      close: row.close,
+      change: row.change,
+      changePercent: row.changePercent,
+      volume: row.volume,
+      high: row.high,
+      low: row.low,
+    };
+  }
+
+  function resolveRegisteredSelectedDate(set, manifest) {
+    const candidates = [...new Set((set?.items || []).map((item) => String(item?.filterSnapshot?.date || "").trim()).filter(Boolean))].sort(
+      (left, right) => right.localeCompare(left)
+    );
+    const requested = candidates[0] || manifest.latestDate;
+    return resolveAvailableDate(requested, manifest.availableDates);
+  }
+
+  function renderRegisteredSetRow(entry) {
+    const id = String(entry?.id || "");
+    return `
+      <div class="picked-register-item">
+        <div class="picked-register-item-head">
+          <div>
+            <div class="picked-register-name">${escapeHtml(entry?.name || "名称なし")}</div>
+            <div class="picked-register-meta">${escapeHtml(formatPickedDateTime(entry?.registeredAt))} / ${formatNumber(
+              Number(entry?.count || 0),
+              0
+            )}銘柄</div>
+          </div>
+          <div class="picked-register-item-actions">
+            <button type="button" class="row-button" data-open-registered-set="${escapeHtml(id)}">開く</button>
+            <button type="button" class="row-button picked-remove-button" data-remove-registered-set="${escapeHtml(id)}">削除</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderPickedScannerItem(record, index, state) {
+    const rank = index + 1;
+    return `
+      <article class="scanner-item">
+        <div class="scanner-rank-table">
+          <table>
+            <thead>
+              <tr>
+                <th class="num scanner-col-rank">順位</th>
+                <th class="scanner-col-code">コード</th>
+                <th class="scanner-col-name">名称</th>
+                <th class="num scanner-col-close">取引値</th>
+                <th class="num scanner-col-change">前日比</th>
+                <th class="num scanner-col-volume">出来高</th>
+                <th class="num scanner-col-high">高値</th>
+                <th class="num scanner-col-low">安値</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">${formatNumber(rank, 0)}</td>
+                <td>${escapeHtml(record.code)}</td>
+                <td class="scanner-name-cell">
+                  <div class="scanner-name-cell-inner">
+                    <a
+                      class="${scannerNameClass(record.name)}"
+                      href="${buildTickerUrl(record.code, state.selectedDate, "")}"
+                      title="${escapeHtml(record.name)}"
+                    >
+                      ${escapeHtml(record.name)}
+                    </a>
+                  </div>
+                </td>
+                <td class="scanner-trade-cell">
+                  <div class="scanner-trade-split">
+                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
+                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
+                  </div>
+                </td>
+                <td id="scanChange-${escapeHtml(record.code)}" class="num">
+                  ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
+                </td>
+                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
+                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
+                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="scanner-item-chart-wrap">
+          <div id="pickedChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
+        </div>
+        <div class="scanner-item-links">
+          <div id="pickedLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
+            <a href="${buildTickerUrl(record.code, state.selectedDate, "")}">個別ページ</a>
+          </div>
+          <button type="button" class="row-button picked-remove-button picked-card-remove" data-remove-pick="${escapeHtml(record.code)}">解除</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderRegisteredScannerItem(record, index, state) {
+    const rank = index + 1;
+    return `
+      <article class="scanner-item">
+        <div class="scanner-rank-table">
+          <table>
+            <thead>
+              <tr>
+                <th class="num scanner-col-rank">順位</th>
+                <th class="scanner-col-code">コード</th>
+                <th class="scanner-col-name">名称</th>
+                <th class="num scanner-col-close">取引値</th>
+                <th class="num scanner-col-change">前日比</th>
+                <th class="num scanner-col-volume">出来高</th>
+                <th class="num scanner-col-high">高値</th>
+                <th class="num scanner-col-low">安値</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">${formatNumber(rank, 0)}</td>
+                <td>${escapeHtml(record.code)}</td>
+                <td class="scanner-name-cell">
+                  <div class="scanner-name-cell-inner">
+                    <a
+                      class="${scannerNameClass(record.name)}"
+                      href="${buildTickerUrl(record.code, state.selectedDate, "")}"
+                      title="${escapeHtml(record.name)}"
+                    >
+                      ${escapeHtml(record.name)}
+                    </a>
+                  </div>
+                </td>
+                <td class="scanner-trade-cell">
+                  <div class="scanner-trade-split">
+                    <span class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
+                    <span class="scanner-trade-price">${formatNumber(record.close)}</span>
+                  </div>
+                </td>
+                <td class="num">${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}</td>
+                <td class="num">${formatNumber(record.volume, 0)}</td>
+                <td class="num">${formatNumber(record.high)}</td>
+                <td class="num">${formatNumber(record.low)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="scanner-item-chart-wrap">
+          <div id="registeredChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
+        </div>
+        <div class="scanner-item-links">
+          <div id="registeredLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
+            <a href="${buildTickerUrl(record.code, state.selectedDate, "")}">個別ページ</a>
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
   function renderScannerItem(record, index, state) {
     const rank = index + 1;
     const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
@@ -2552,7 +3332,10 @@
     }
     const visibleRows = useBarCount
       ? selectRowsByBarWindow(chartRows, selectedIndex, rangeValue)
-      : selectRowsByMonths(chartRows, selectedDate, rangeValue);
+      : selectRowsByMonths(chartRows, selectedDate, rangeValue, {
+          selectedIndex,
+          extendToLatest: Boolean(options.extendToLatest),
+        });
     if (!visibleRows.length) {
       return;
     }
@@ -2696,6 +3479,7 @@
       height: 346,
       metaTarget: chartMeta,
       markerText: selectedRow.date.slice(5),
+      extendToLatest: true,
       onInitialRow: onRowSelect,
       onRowSelect,
     });
@@ -2905,14 +3689,22 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function selectRowsByMonths(rows, selectedDate, months) {
-    const selectedIndex = findSelectedIndex(rows, selectedDate);
+  function selectRowsByMonths(rows, selectedDate, months, options = {}) {
+    const selectedIndex = Number.isInteger(options.selectedIndex) ? options.selectedIndex : findSelectedIndex(rows, selectedDate);
     if (selectedIndex < 0) {
       return [];
     }
     const anchorDate = parseDate(rows[selectedIndex].date);
     const cutoff = addMonths(anchorDate, -months);
-    return rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 8);
+    return rows.filter((row, index) => {
+      if (parseDate(row.date) < cutoff) {
+        return false;
+      }
+      if (options.extendToLatest) {
+        return true;
+      }
+      return index <= selectedIndex + 8;
+    });
   }
 
   function buildScannerChartRows(rows, timeframe) {
