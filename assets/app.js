@@ -35,6 +35,43 @@
   const INDEX_SCANNER_TIMEFRAMES = ["daily", "weekly", "monthly"];
   const INDEX_SCANNER_TURNOVER_OPTIONS = [0, 50000000, 100000000, 500000000, 1000000000];
   const INDEX_SCANNER_MIN_CLOSE = 50;
+  const STOP_HIGH_EPSILON = 0.001;
+  const JPX_PRICE_LIMIT_TABLE = [
+    [100, 30],
+    [200, 50],
+    [500, 80],
+    [700, 100],
+    [1000, 150],
+    [1500, 300],
+    [2000, 400],
+    [3000, 500],
+    [5000, 700],
+    [7000, 1000],
+    [10000, 1500],
+    [15000, 3000],
+    [20000, 4000],
+    [30000, 5000],
+    [50000, 7000],
+    [70000, 10000],
+    [100000, 15000],
+    [150000, 30000],
+    [200000, 40000],
+    [300000, 50000],
+    [500000, 70000],
+    [700000, 100000],
+    [1000000, 150000],
+    [1500000, 300000],
+    [2000000, 400000],
+    [3000000, 500000],
+    [5000000, 700000],
+    [7000000, 1000000],
+    [10000000, 1500000],
+    [15000000, 3000000],
+    [20000000, 4000000],
+    [30000000, 5000000],
+    [50000000, 7000000],
+    [Infinity, 10000000],
+  ];
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
@@ -1127,6 +1164,7 @@
     };
 
     bindRegisterNameModalEvents();
+    closeRegisterNameModal();
 
     exportTradingViewButton?.addEventListener("click", () => {
       const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
@@ -1376,10 +1414,12 @@
     }
 
     function bindRegisterNameModalEvents() {
-      registerNameOkButton?.addEventListener("click", () => {
+      registerNameOkButton?.addEventListener("click", (event) => {
+        event.preventDefault();
         submitRegisterNameModal();
       });
-      registerNameCancelButton?.addEventListener("click", () => {
+      registerNameCancelButton?.addEventListener("click", (event) => {
+        event.preventDefault();
         closeRegisterNameModal();
       });
       registerNameModal?.addEventListener("click", (event) => {
@@ -2827,6 +2867,41 @@
     return items.sort((a, b) => String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" }));
   }
 
+  function getPriceLimitWidth(prevClose) {
+    const price = Number(prevClose);
+    if (!Number.isFinite(price) || price <= 0) {
+      return null;
+    }
+    for (const [maxPrice, width] of JPX_PRICE_LIMIT_TABLE) {
+      if (price < maxPrice) {
+        return width;
+      }
+    }
+    return null;
+  }
+
+  function isStopHighRecord(record) {
+    const close = Number(record?.close);
+    const high = Number(record?.high);
+    const change = Number(record?.change);
+    if (!Number.isFinite(close) || !Number.isFinite(high) || !Number.isFinite(change)) {
+      return false;
+    }
+    const prevClose = close - change;
+    if (!(prevClose > 0)) {
+      return false;
+    }
+    const limitWidth = getPriceLimitWidth(prevClose);
+    if (limitWidth == null) {
+      return false;
+    }
+    const limitUpPrice = prevClose + limitWidth;
+    return (
+      Math.abs(high - limitUpPrice) <= STOP_HIGH_EPSILON &&
+      Math.abs(close - limitUpPrice) <= STOP_HIGH_EPSILON
+    );
+  }
+
   function scannerSortLabel(sortKey) {
     return {
       gainers: "値上がり率順",
@@ -3146,8 +3221,9 @@
     const rank = index + 1;
     const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
     const picked = Boolean(state.picks[record.code]);
+    const stopHighClass = state.sort === "gainers" && isStopHighRecord(record) ? " scanner-item-stop-high" : "";
     return `
-      <article class="scanner-item">
+      <article class="scanner-item${stopHighClass}">
         <div class="scanner-rank-table">
           <table>
             <thead>

@@ -786,6 +786,17 @@ h2 {
   padding: 2px;
 }
 
+.scanner-item-stop-high {
+  border-color: #eab308;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.35);
+  background: #fffdf2;
+}
+
+.scanner-item-stop-high .scanner-rank-table,
+.scanner-item-stop-high .scanner-item-chart-wrap {
+  background: #fffdf2;
+}
+
 .scanner-item--detail {
   max-width: 1180px;
   margin: 0 auto;
@@ -1190,6 +1201,10 @@ h2 {
 }
 
 .register-name-modal.is-hidden {
+  display: none !important;
+}
+
+#registerNameModal[hidden] {
   display: none !important;
 }
 
