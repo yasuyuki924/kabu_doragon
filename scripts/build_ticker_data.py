@@ -8,6 +8,7 @@ from common import (
     apply_snapshot_row,
     build_daily_record,
     build_enriched_rows,
+    discover_available_dates,
     load_am_snapshot_lookup,
     load_ohlcv_rows,
     load_update_state,
@@ -25,6 +26,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=0, help="Limit number of tickers for testing")
     parser.add_argument("--use-update-state", action="store_true", help="Build only codes from data/update_state.json")
     parser.add_argument("--all", action="store_true", help="Build all ticker payloads")
+    parser.add_argument("--cache-days", help="Comma separated trading dates to refresh in daily_records")
+    parser.add_argument("--cache-recent-months", type=int, default=0, help="Refresh recent N calendar months in daily_records")
     return parser.parse_args()
 
 
@@ -33,12 +36,18 @@ def main() -> int:
     code_filter = set(parse_codes(args.codes) or [])
     update_state = load_update_state() if args.use_update_state else {}
     if args.use_update_state and not code_filter:
-        code_filter = set(update_state.get("updatedCodes") or [])
+        code_filter = set(update_state.get("updatedCodes") or []) | set(update_state.get("adjustedCodes") or [])
     cache_dates = {str(item).strip() for item in update_state.get("updatedDates") or [] if str(item).strip()}
+    cache_dates.update(str(item).strip() for item in (parse_codes(args.cache_days) or []) if str(item).strip())
+    adjusted_date_from = str(update_state.get("adjustedDateFrom") or "").strip()
     watchlist = load_watchlist()
     snapshot_context = resolve_current_snapshot_context()
     snapshot_date = str(snapshot_context.get("date") or "").strip()
     snapshot_lookup = load_am_snapshot_lookup(snapshot_date) if snapshot_context.get("useAmSnapshot") else {}
+    if adjusted_date_from:
+        cache_dates.update(date_value for date_value in discover_available_dates() if date_value >= adjusted_date_from)
+    if args.cache_recent_months > 0:
+        cache_dates.update(discover_available_dates(args.cache_recent_months))
     items = watchlist
     if code_filter:
         items = [item for item in items if str(item.get("ticker")) in code_filter]

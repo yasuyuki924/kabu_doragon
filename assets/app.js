@@ -35,7 +35,7 @@
   const INDEX_SCANNER_TIMEFRAMES = ["daily", "weekly", "monthly"];
   const INDEX_SCANNER_TURNOVER_OPTIONS = [0, 50000000, 100000000, 500000000, 1000000000];
   const INDEX_SCANNER_MIN_CLOSE = 50;
-  const STOP_HIGH_EPSILON = 0.001;
+  const STOP_HIGH_EPSILON = 0.5;
   const JPX_PRICE_LIMIT_TABLE = [
     [100, 30],
     [200, 50],
@@ -1051,10 +1051,15 @@
       const baseFiltered = priceFilteredRecords.filter(
         (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
       );
-      const filtered = sortScannerRecords(
-        state.sort === "lower_shadow" ? baseFiltered.filter(isLowerShadowCandidate) : baseFiltered,
-        state.sort
-      ).slice(0, state.limit);
+      let scannerBase = baseFiltered;
+      if (state.sort === "lower_shadow") {
+        scannerBase = baseFiltered.filter(isLowerShadowCandidate);
+      } else if (state.sort === "stop_high") {
+        scannerBase = baseFiltered.filter((record) => getStopHighStatus(record) !== "none");
+      } else if (state.sort === "new_high_20d") {
+        scannerBase = baseFiltered.filter((record) => record.newHigh20d === true);
+      }
+      const filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
       syncIndexScannerUrl(
         state.selectedDate,
         state.sort,
@@ -2834,6 +2839,14 @@
     if (sortKey === "gainers") {
       return items.sort((a, b) => compareNullableNumbers(b.changePercent, a.changePercent));
     }
+    if (sortKey === "stop_high") {
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     if (sortKey === "losers") {
       return items.sort((a, b) => compareNullableNumbers(a.changePercent, b.changePercent));
     }
@@ -2846,6 +2859,15 @@
           compareNullableNumbers(b.newHigh52w ? 1 : 0, a.newHigh52w ? 1 : 0) ||
           compareNullableNumbers(b.changePercent, a.changePercent) ||
           compareNullableNumbers(b.distanceToMa25, a.distanceToMa25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
+    if (sortKey === "new_high_20d") {
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(b.newHigh20d ? 1 : 0, a.newHigh20d ? 1 : 0) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
     }
@@ -2880,35 +2902,39 @@
     return null;
   }
 
-  function isStopHighRecord(record) {
+  function getStopHighStatus(record) {
     const close = Number(record?.close);
     const high = Number(record?.high);
     const change = Number(record?.change);
     if (!Number.isFinite(close) || !Number.isFinite(high) || !Number.isFinite(change)) {
-      return false;
+      return "none";
     }
     const prevClose = close - change;
     if (!(prevClose > 0)) {
-      return false;
+      return "none";
     }
     const limitWidth = getPriceLimitWidth(prevClose);
     if (limitWidth == null) {
-      return false;
+      return "none";
     }
     const limitUpPrice = prevClose + limitWidth;
-    return (
-      Math.abs(high - limitUpPrice) <= STOP_HIGH_EPSILON &&
-      Math.abs(close - limitUpPrice) <= STOP_HIGH_EPSILON
-    );
+    const reachedLimit = Math.abs(high - limitUpPrice) <= STOP_HIGH_EPSILON;
+    if (!reachedLimit) {
+      return "none";
+    }
+    const isLock = Math.abs(close - limitUpPrice) <= STOP_HIGH_EPSILON;
+    return isLock ? "lock" : "peeled";
   }
 
   function scannerSortLabel(sortKey) {
     return {
       gainers: "値上がり率順",
+      stop_high: "ストップ高",
       losers: "値下がり率順",
       volume: "出来高増加順",
       code: "コード順",
       new_high: "新高値順",
+      new_high_20d: "20日終値高値",
       deviation25: "25日線乖離順",
       deviation75: "75日線乖離順",
       deviation200: "200日線乖離順",
@@ -3221,7 +3247,13 @@
     const rank = index + 1;
     const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
     const picked = Boolean(state.picks[record.code]);
-    const stopHighClass = state.sort === "gainers" && isStopHighRecord(record) ? " scanner-item-stop-high" : "";
+    const stopHighStatus = getStopHighStatus(record);
+    const hasStopHighBadge = stopHighStatus !== "none";
+    const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
+    const stopHighBadgeClass = stopHighStatus === "peeled" ? " scanner-stop-high-badge--peeled" : "";
+    const stopHighBadge = hasStopHighBadge
+      ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
+      : "";
     return `
       <article class="scanner-item${stopHighClass}">
         <div class="scanner-rank-table">
@@ -3241,7 +3273,7 @@
             <tbody>
               <tr>
                 <td class="num">${formatNumber(rank, 0)}</td>
-                <td>${escapeHtml(record.code)}</td>
+                <td>${escapeHtml(record.code)}${stopHighBadge}</td>
                 <td class="scanner-name-cell">
                   <div class="scanner-name-cell-inner">
                     <a
@@ -3915,9 +3947,11 @@
   function mapScannerSortToRanking(sortKey) {
     return {
       gainers: "gainers",
+      stop_high: "",
       losers: "losers",
       volume: "volume_spike",
       new_high: "new_high",
+      new_high_20d: "",
       deviation25: "deviation25",
       deviation75: "deviation75",
       deviation200: "deviation200",

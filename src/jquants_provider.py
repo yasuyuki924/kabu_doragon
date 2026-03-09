@@ -8,6 +8,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from fractions import Fraction
 from pathlib import Path
 from time import perf_counter
 
@@ -20,6 +21,8 @@ from requests.exceptions import HTTPError, RetryError
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 OHLCV_DIR = DATA_DIR / "ohlcv"
+OHLCV_RAW_DIR = DATA_DIR / "ohlcv_raw"
+CORPORATE_ACTIONS_DIR = DATA_DIR / "corporate_actions"
 INTRADAY_DIR = DATA_DIR / "intraday"
 AM_SNAPSHOT_JSON = INTRADAY_DIR / "am_snapshot.json"
 CURRENT_SNAPSHOT_STATE_JSON = DATA_DIR / "current_snapshot_state.json"
@@ -46,6 +49,8 @@ class ProviderPaths:
     root: Path
     data_dir: Path
     ohlcv_dir: Path
+    ohlcv_raw_dir: Path
+    corporate_actions_dir: Path
     watchlist_json: Path
     theme_map_json: Path
     summary_json: Path
@@ -72,6 +77,8 @@ def default_paths() -> ProviderPaths:
         root=ROOT,
         data_dir=DATA_DIR,
         ohlcv_dir=OHLCV_DIR,
+        ohlcv_raw_dir=OHLCV_RAW_DIR,
+        corporate_actions_dir=CORPORATE_ACTIONS_DIR,
         watchlist_json=WATCHLIST_JSON,
         theme_map_json=THEME_MAP_JSON,
         summary_json=SUMMARY_JSON,
@@ -334,7 +341,50 @@ def coerce_frame_dates(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def frame_to_ohlcv_rows(frame: pd.DataFrame, api_version: str) -> dict[str, list[dict[str, float | int | str]]]:
+def coerce_float(value: object) -> float | None:
+    if value is None or pd.isna(value):
+        return None
+    return float(value)
+
+
+def coerce_volume(value: object) -> int:
+    numeric = coerce_float(value)
+    if numeric is None:
+        return 0
+    return int(round(numeric))
+
+
+def make_ohlcv_row(
+    *,
+    date_text: str,
+    open_value: object,
+    high_value: object,
+    low_value: object,
+    close_value: object,
+    volume_value: object,
+) -> dict[str, float | int | str] | None:
+    open_number = coerce_float(open_value)
+    high_number = coerce_float(high_value)
+    low_number = coerce_float(low_value)
+    close_number = coerce_float(close_value)
+    if open_number is None or high_number is None or low_number is None or close_number is None:
+        return None
+    return {
+        "date": date_text,
+        "open": round(open_number, 4),
+        "high": round(high_number, 4),
+        "low": round(low_number, 4),
+        "close": round(close_number, 4),
+        "volume": coerce_volume(volume_value),
+    }
+
+
+def frame_to_ohlcv_rows(
+    frame: pd.DataFrame,
+    api_version: str,
+    *,
+    adjusted: bool = False,
+) -> dict[str, list[dict[str, float | int | str]]]:
     if frame.empty:
         return {}
     frame = coerce_frame_dates(frame)
@@ -344,41 +394,84 @@ def frame_to_ohlcv_rows(frame: pd.DataFrame, api_version: str) -> dict[str, list
         if not code:
             continue
         if api_version == "v2":
-            open_value = row.get("O")
-            high_value = row.get("H")
-            low_value = row.get("L")
-            close_value = row.get("C")
-            volume_value = row.get("Vo")
+            prefix = "Adj" if adjusted else ""
+            open_value = row.get(f"{prefix}O")
+            high_value = row.get(f"{prefix}H")
+            low_value = row.get(f"{prefix}L")
+            close_value = row.get(f"{prefix}C")
+            volume_value = row.get(f"{prefix}Vo")
+            if adjusted and any(value is None or pd.isna(value) for value in (open_value, high_value, low_value, close_value)):
+                open_value = row.get("O")
+                high_value = row.get("H")
+                low_value = row.get("L")
+                close_value = row.get("C")
+                volume_value = row.get("Vo")
         else:
             open_value = row.get("Open")
             high_value = row.get("High")
             low_value = row.get("Low")
             close_value = row.get("Close")
             volume_value = row.get("Volume")
-        if open_value is None or high_value is None or low_value is None or close_value is None:
-            continue
-        if pd.isna(open_value) or pd.isna(high_value) or pd.isna(low_value) or pd.isna(close_value):
-            continue
-        if volume_value is None or pd.isna(volume_value):
-            volume_value = 0
         row_date = row.get("Date")
         if isinstance(row_date, pd.Timestamp):
             date_text = row_date.strftime("%Y-%m-%d")
         else:
-            date_text = pd.to_datetime(row_date, errors="coerce").strftime("%Y-%m-%d")
-        rows_by_code.setdefault(code, []).append(
-            {
-                "date": date_text,
-                "open": round(float(open_value), 4),
-                "high": round(float(high_value), 4),
-                "low": round(float(low_value), 4),
-                "close": round(float(close_value), 4),
-                "volume": int(float(volume_value or 0)),
-            }
+            parsed_date = pd.to_datetime(row_date, errors="coerce")
+            if pd.isna(parsed_date):
+                continue
+            date_text = parsed_date.strftime("%Y-%m-%d")
+        normalized_row = make_ohlcv_row(
+            date_text=date_text,
+            open_value=open_value,
+            high_value=high_value,
+            low_value=low_value,
+            close_value=close_value,
+            volume_value=volume_value,
         )
+        if normalized_row is None:
+            continue
+        rows_by_code.setdefault(code, []).append(normalized_row)
     for code, rows in rows_by_code.items():
         rows_by_code[code] = sorted(rows, key=lambda item: item["date"])
     return rows_by_code
+
+
+def fraction_from_factor(value: float) -> tuple[float, float]:
+    normalized = Fraction(str(value)).limit_denominator(1000)
+    return float(normalized.denominator), float(normalized.numerator)
+
+
+def frame_to_corporate_action_events(frame: pd.DataFrame, api_version: str) -> dict[str, list[dict[str, float | str]]]:
+    if frame.empty or api_version != "v2" or "AdjFactor" not in frame.columns:
+        return {}
+    frame = coerce_frame_dates(frame)
+    events_by_code: dict[str, dict[str, dict[str, float | str]]] = {}
+    for row in frame.to_dict("records"):
+        code = normalize_repo_code(row.get("Code"))
+        adj_factor = coerce_float(row.get("AdjFactor"))
+        row_date = pd.to_datetime(row.get("Date"), errors="coerce")
+        if not code or adj_factor in {None, 0} or pd.isna(row_date):
+            continue
+        if abs(adj_factor - 1.0) < 1e-10:
+            continue
+        factor = round(1.0 / adj_factor, 10)
+        if factor <= 0:
+            continue
+        pre_shares, post_shares = fraction_from_factor(factor)
+        effective_date = row_date.strftime("%Y-%m-%d")
+        events_by_code.setdefault(code, {})[effective_date] = {
+            "code": code,
+            "effectiveDate": effective_date,
+            "type": "split" if factor > 1 else "reverse_split",
+            "preShares": pre_shares,
+            "postShares": post_shares,
+            "factor": factor,
+            "adjFactor": round(adj_factor, 10),
+        }
+    return {
+        code: [events[key] for key in sorted(events)]
+        for code, events in events_by_code.items()
+    }
 
 
 def read_ohlcv_rows(path: Path) -> list[dict[str, float | int | str]]:
@@ -419,17 +512,187 @@ def write_ohlcv_rows(path: Path, rows: list[dict[str, float | int | str]]) -> No
         writer.writerows(rows)
 
 
+def read_corporate_action_events(path: Path) -> list[dict[str, float | str]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    events = payload.get("events") if isinstance(payload, dict) else []
+    if not isinstance(events, list):
+        return []
+    normalized: list[dict[str, float | str]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        effective_date = str(event.get("effectiveDate") or "").strip()
+        factor = coerce_float(event.get("factor"))
+        if not effective_date or factor in {None, 0}:
+            continue
+        pre_shares = coerce_float(event.get("preShares")) or 1.0
+        post_shares = coerce_float(event.get("postShares")) or factor
+        normalized.append(
+            {
+                "code": str(event.get("code") or path.stem),
+                "effectiveDate": effective_date,
+                "type": str(event.get("type") or ("split" if factor > 1 else "reverse_split")),
+                "preShares": pre_shares,
+                "postShares": post_shares,
+                "factor": factor,
+                "adjFactor": coerce_float(event.get("adjFactor")) or round(1.0 / factor, 10),
+            }
+        )
+    normalized.sort(key=lambda item: str(item["effectiveDate"]))
+    return normalized
+
+
+def merge_corporate_action_events(
+    existing_events: list[dict[str, float | str]],
+    new_events: list[dict[str, float | str]],
+) -> list[dict[str, float | str]]:
+    merged = {str(item["effectiveDate"]): item for item in existing_events}
+    for event in new_events:
+        merged[str(event["effectiveDate"])] = event
+    return [merged[key] for key in sorted(merged)]
+
+
+def write_corporate_action_events(
+    path: Path,
+    *,
+    code: str,
+    events: list[dict[str, float | str]],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "code": code,
+        "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "events": events,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def build_cumulative_adjustment_map(
+    rows: list[dict[str, float | int | str]],
+    events: list[dict[str, float | str]],
+) -> dict[str, float]:
+    cumulative_map: dict[str, float] = {}
+    if not rows:
+        return cumulative_map
+    factor_by_date: dict[str, float] = {}
+    for event in events:
+        effective_date = str(event.get("effectiveDate") or "").strip()
+        factor = coerce_float(event.get("factor"))
+        if not effective_date or factor in {None, 0}:
+            continue
+        factor_by_date[effective_date] = factor_by_date.get(effective_date, 1.0) * factor
+
+    cumulative = 1.0
+    for row in reversed(rows):
+        row_date = str(row["date"])
+        cumulative_map[row_date] = cumulative
+        cumulative *= factor_by_date.get(row_date, 1.0)
+    return cumulative_map
+
+
+def apply_corporate_actions(
+    rows: list[dict[str, float | int | str]],
+    events: list[dict[str, float | str]],
+) -> list[dict[str, float | int | str]]:
+    if not rows:
+        return []
+    cumulative_map = build_cumulative_adjustment_map(rows, events)
+    adjusted_rows: list[dict[str, float | int | str]] = []
+    for row in rows:
+        factor = cumulative_map.get(str(row["date"]), 1.0)
+        if factor <= 0:
+            raise ValueError(f"invalid corporate action factor for {row['date']}: {factor}")
+        open_value = round(float(row["open"]) / factor, 4)
+        high_value = round(float(row["high"]) / factor, 4)
+        low_value = round(float(row["low"]) / factor, 4)
+        close_value = round(float(row["close"]) / factor, 4)
+        volume_value = int(round(float(row["volume"]) * factor))
+        if min(open_value, high_value, low_value, close_value) <= 0 or volume_value < 0:
+            raise ValueError(f"invalid adjusted OHLCV on {row['date']}")
+        if high_value < max(open_value, close_value) or low_value > min(open_value, close_value):
+            raise ValueError(f"inconsistent adjusted high/low on {row['date']}")
+        adjusted_rows.append(
+            {
+                "date": str(row["date"]),
+                "open": open_value,
+                "high": high_value,
+                "low": low_value,
+                "close": close_value,
+                "volume": volume_value,
+            }
+        )
+    return adjusted_rows
+
+
 def flush_pending_rows(
     paths: ProviderPaths,
     pending_rows_by_code: dict[str, list[dict[str, float | int | str]]],
-) -> None:
+) -> tuple[set[str], str | None]:
+    adjusted_codes: set[str] = set()
+    adjusted_date_from: str | None = None
     for code, pending_rows in pending_rows_by_code.items():
         if not pending_rows:
             continue
-        path = paths.ohlcv_dir / f"{code}.csv"
-        merged = merge_ohlcv_rows(read_ohlcv_rows(path), pending_rows)
-        write_ohlcv_rows(path, merged)
+        raw_path = paths.ohlcv_raw_dir / f"{code}.csv"
+        event_path = paths.corporate_actions_dir / f"{code}.json"
+        adjusted_path = paths.ohlcv_dir / f"{code}.csv"
+
+        existing_raw_rows = read_ohlcv_rows(raw_path)
+        merged_raw_rows = merge_ohlcv_rows(existing_raw_rows, pending_rows)
+        write_ohlcv_rows(raw_path, merged_raw_rows)
+
+        existing_events = read_corporate_action_events(event_path)
+        merged_events = merge_corporate_action_events(existing_events, [])
+        if existing_events != merged_events:
+            write_corporate_action_events(event_path, code=code, events=merged_events)
+        adjusted_rows = apply_corporate_actions(merged_raw_rows, merged_events)
+        write_ohlcv_rows(adjusted_path, adjusted_rows)
     pending_rows_by_code.clear()
+    return adjusted_codes, adjusted_date_from
+
+
+def flush_pending_price_data(
+    paths: ProviderPaths,
+    pending_raw_rows_by_code: dict[str, list[dict[str, float | int | str]]],
+    pending_events_by_code: dict[str, list[dict[str, float | str]]],
+) -> tuple[set[str], str | None]:
+    adjusted_codes: set[str] = set()
+    adjusted_date_from: str | None = None
+    all_codes = sorted(set(pending_raw_rows_by_code) | set(pending_events_by_code))
+    for code in all_codes:
+        new_raw_rows = pending_raw_rows_by_code.get(code, [])
+        new_events = pending_events_by_code.get(code, [])
+        if not new_raw_rows and not new_events:
+            continue
+
+        raw_path = paths.ohlcv_raw_dir / f"{code}.csv"
+        adjusted_path = paths.ohlcv_dir / f"{code}.csv"
+        event_path = paths.corporate_actions_dir / f"{code}.json"
+
+        existing_raw_rows = read_ohlcv_rows(raw_path)
+        merged_raw_rows = merge_ohlcv_rows(existing_raw_rows, new_raw_rows)
+        write_ohlcv_rows(raw_path, merged_raw_rows)
+
+        existing_events = read_corporate_action_events(event_path)
+        merged_events = merge_corporate_action_events(existing_events, new_events)
+        if existing_events != merged_events:
+            write_corporate_action_events(event_path, code=code, events=merged_events)
+            adjusted_codes.add(code)
+            event_start = str(merged_events[0]["effectiveDate"]) if merged_events else None
+            if event_start and (adjusted_date_from is None or event_start < adjusted_date_from):
+                adjusted_date_from = event_start
+        elif new_events and not event_path.exists():
+            write_corporate_action_events(event_path, code=code, events=merged_events)
+
+        adjusted_rows = apply_corporate_actions(merged_raw_rows, merged_events)
+        write_ohlcv_rows(adjusted_path, adjusted_rows)
+
+    pending_raw_rows_by_code.clear()
+    pending_events_by_code.clear()
+    return adjusted_codes, adjusted_date_from
 
 
 def write_update_state(
@@ -438,12 +701,16 @@ def write_update_state(
     snapshot_type: str,
     updated_dates: set[str] | list[str],
     updated_codes: set[str] | list[str],
+    adjusted_codes: set[str] | list[str] | None = None,
+    adjusted_date_from: str | None = None,
 ) -> None:
     payload = {
         "lastRunAt": datetime.now().astimezone().isoformat(timespec="seconds"),
         "snapshotType": snapshot_type,
         "updatedDates": sorted({str(item).strip() for item in updated_dates if str(item).strip()}),
         "updatedCodes": sorted({str(item).strip() for item in updated_codes if str(item).strip()}),
+        "adjustedCodes": sorted({str(item).strip() for item in adjusted_codes or [] if str(item).strip()}),
+        "adjustedDateFrom": str(adjusted_date_from or "").strip() or None,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -687,6 +954,13 @@ def fetch_am_bars_frame(client: object, api_version: str, *, code: str) -> pd.Da
     return client.get_eq_bars_daily_am(code=normalize_api_code(code))
 
 
+def is_http_status(exc: Exception, status_code: int) -> bool:
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) == status_code:
+        return True
+    return f"{status_code}" in str(exc)
+
+
 def write_current_snapshot_state(
     path: Path,
     *,
@@ -749,15 +1023,18 @@ def sync_prices(
     start_date: date,
     end_date: date,
     chunk_days: int,
-) -> tuple[str | None, set[str], set[str]]:
+) -> tuple[str | None, set[str], set[str], set[str], str | None]:
     latest_date: str | None = None
     updated_codes: set[str] = set()
     updated_dates: set[str] = set()
+    adjusted_codes: set[str] = set()
+    adjusted_date_from: str | None = None
     code_set = set(codes)
     if api_version == "v2":
         trading_dates = fetch_trading_dates(client, api_version, start_date, end_date)
         total = len(trading_dates)
-        pending_rows_by_code: dict[str, list[dict[str, float | int | str]]] = {}
+        pending_raw_rows_by_code: dict[str, list[dict[str, float | int | str]]] = {}
+        pending_events_by_code: dict[str, list[dict[str, float | str]]] = {}
         flush_interval = 20
         for index, trading_date in enumerate(trading_dates, start=1):
             print(f"syncing {format_yyyymmdd(trading_date)} ({index}/{total})")
@@ -781,18 +1058,35 @@ def sync_prices(
             if "Code" in frame.columns:
                 frame = frame[frame["Code"].map(normalize_repo_code).isin(code_set)]
             rows_by_code = frame_to_ohlcv_rows(frame, api_version)
+            events_by_code = frame_to_corporate_action_events(frame, api_version)
             if not rows_by_code:
                 continue
             for code, new_rows in rows_by_code.items():
-                pending_rows_by_code.setdefault(code, []).extend(new_rows)
+                pending_raw_rows_by_code.setdefault(code, []).extend(new_rows)
                 latest_date = new_rows[-1]["date"]
                 updated_codes.add(code)
                 updated_dates.update(str(row["date"]) for row in new_rows)
+            for code, new_events in events_by_code.items():
+                pending_events_by_code.setdefault(code, []).extend(new_events)
             print(f"  updated {len(rows_by_code)} tickers")
             if index % flush_interval == 0:
-                flush_pending_rows(paths, pending_rows_by_code)
-        flush_pending_rows(paths, pending_rows_by_code)
-        return latest_date, updated_dates, updated_codes
+                batch_adjusted_codes, batch_adjusted_date_from = flush_pending_price_data(
+                    paths,
+                    pending_raw_rows_by_code,
+                    pending_events_by_code,
+                )
+                adjusted_codes.update(batch_adjusted_codes)
+                if batch_adjusted_date_from and (adjusted_date_from is None or batch_adjusted_date_from < adjusted_date_from):
+                    adjusted_date_from = batch_adjusted_date_from
+        batch_adjusted_codes, batch_adjusted_date_from = flush_pending_price_data(
+            paths,
+            pending_raw_rows_by_code,
+            pending_events_by_code,
+        )
+        adjusted_codes.update(batch_adjusted_codes)
+        if batch_adjusted_date_from and (adjusted_date_from is None or batch_adjusted_date_from < adjusted_date_from):
+            adjusted_date_from = batch_adjusted_date_from
+        return latest_date, updated_dates, updated_codes, adjusted_codes, adjusted_date_from
 
     pending_rows_by_code: dict[str, list[dict[str, float | int | str]]] = {}
     for chunk_start, chunk_end in chunk_date_ranges(start_date, end_date, chunk_days):
@@ -812,7 +1106,7 @@ def sync_prices(
             updated_dates.update(str(row["date"]) for row in new_rows)
         print(f"  updated {len(rows_by_code)} tickers")
     flush_pending_rows(paths, pending_rows_by_code)
-    return latest_date, updated_dates, updated_codes
+    return latest_date, updated_dates, updated_codes, set(), None
 
 
 def sync_am_snapshot(
@@ -837,6 +1131,26 @@ def sync_am_snapshot(
                 frame = fetch_am_bars_frame(client, api_version, code=code)
                 break
             except (RetryError, HTTPError) as exc:
+                if is_http_status(exc, 403):
+                    write_am_snapshot(
+                        paths.am_snapshot_json,
+                        snapshot_date=target_date,
+                        rows_by_code={},
+                        requested_count=total,
+                        succeeded_count=0,
+                    )
+                    write_current_snapshot_state(
+                        paths.current_snapshot_state_json,
+                        snapshot_date=target_date,
+                        snapshot_type="am",
+                        active=False,
+                    )
+                    elapsed = round(perf_counter() - start_time, 1)
+                    print(
+                        f"PENDING: AM snapshot unavailable date={target_date} "
+                        f"reason=403 forbidden requested={total} succeeded=0 failed={total} elapsed={elapsed}s"
+                    )
+                    return target_date, set(), False
                 message = str(exc)
                 if "429" not in message or attempt == 4:
                     raise
@@ -1042,6 +1356,8 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
     latest_date = None
     updated_dates: set[str] = set()
     updated_codes: set[str] = set()
+    adjusted_codes: set[str] = set()
+    adjusted_date_from: str | None = None
     if args.am_snapshot:
         target_date = resolve_latest_trading_date(client, api_version)
         am_codes = selected_codes or load_am_target_codes(paths, limit=300)
@@ -1058,7 +1374,7 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
         )
         updated_dates = {latest_date} if latest_date else set()
     elif not args.skip_price_download:
-        latest_date, updated_dates, updated_codes = sync_prices(
+        latest_date, updated_dates, updated_codes, adjusted_codes, adjusted_date_from = sync_prices(
             client,
             api_version,
             paths,
@@ -1075,6 +1391,8 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
             snapshot_type="am" if args.am_snapshot else "daily",
             updated_dates=updated_dates,
             updated_codes=updated_codes,
+            adjusted_codes=adjusted_codes,
+            adjusted_date_from=adjusted_date_from,
         )
     if not args.am_snapshot:
         write_sync_state(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import csv
 import json
 from datetime import date, datetime
@@ -90,8 +91,12 @@ def load_update_state() -> dict[str, object]:
     payload = load_json_dict(UPDATE_STATE_JSON)
     updated_dates = payload.get("updatedDates")
     updated_codes = payload.get("updatedCodes")
+    adjusted_codes = payload.get("adjustedCodes")
+    adjusted_date_from = str(payload.get("adjustedDateFrom") or "").strip()
     payload["updatedDates"] = [str(item).strip() for item in updated_dates] if isinstance(updated_dates, list) else []
     payload["updatedCodes"] = [str(item).strip() for item in updated_codes] if isinstance(updated_codes, list) else []
+    payload["adjustedCodes"] = [str(item).strip() for item in adjusted_codes] if isinstance(adjusted_codes, list) else []
+    payload["adjustedDateFrom"] = adjusted_date_from or None
     return payload
 
 
@@ -174,6 +179,7 @@ def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[
         "rci48": row.get("rci48"),
         "rangePosition52w": row.get("rangePosition52w"),
         "newHigh52w": row.get("newHigh52w"),
+        "newHigh20d": row.get("newHigh20d"),
     }
 
 
@@ -211,21 +217,46 @@ def merge_daily_records(
     write_json(DAILY_RECORDS_DIR / f"{date_value}.json", payload)
 
 
-def discover_available_dates() -> list[str]:
-    available_dates: list[str] | None = None
+def discover_available_dates(months: int = 3) -> list[str]:
+    available_dates: list[str] = []
     for path in sorted(OHLCV_DIR.glob("*.csv")):
         rows = load_ohlcv_rows(path.stem)
-        if rows:
-            available_dates = [str(row["date"]) for row in rows]
-            break
-    if available_dates is None:
-        available_dates = []
+        if not rows:
+            continue
+        available_dates = [str(row["date"]) for row in rows]
+        break
+    latest_date = available_dates[-1] if available_dates else None
+    available_dates = filter_dates_to_recent_window(available_dates, latest_date=latest_date, months=months)
 
     snapshot_context = resolve_current_snapshot_context()
     snapshot_date = str(snapshot_context.get("date") or "").strip()
     if snapshot_context.get("useAmSnapshot") and snapshot_date and snapshot_date not in available_dates:
         available_dates.append(snapshot_date)
     return available_dates
+
+
+def shift_calendar_months(date_str: str, months: int) -> str:
+    base_date = datetime.strptime(str(date_str), "%Y-%m-%d").date()
+    month_index = (base_date.month - 1) + months
+    year = base_date.year + (month_index // 12)
+    month = (month_index % 12) + 1
+    last_day = calendar.monthrange(year, month)[1]
+    day = min(base_date.day, last_day)
+    return date(year, month, day).isoformat()
+
+
+def filter_dates_to_recent_window(
+    all_dates: list[str],
+    latest_date: str | None = None,
+    months: int = 3,
+) -> list[str]:
+    if not all_dates:
+        return []
+    resolved_latest_date = str(latest_date or all_dates[-1]).strip()
+    if not resolved_latest_date:
+        return []
+    start_date = shift_calendar_months(resolved_latest_date, -max(0, months))
+    return [date_value for date_value in all_dates if start_date <= date_value <= resolved_latest_date]
 
 
 def select_dates(all_dates: list[str], days: int, end_date: str | None = None) -> list[str]:
@@ -333,10 +364,23 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
 
         highest_52w = max(highs[max(0, index - 251) : index + 1])
         lowest_52w = min(lows[max(0, index - 251) : index + 1])
+        window_start = max(0, index - 19)
+        bullish_closes_20d = [
+            float(rows[pos]["close"])
+            for pos in range(window_start, index + 1)
+            if float(rows[pos]["close"]) >= float(rows[pos]["open"])
+        ]
         range_position_52w = (
             ((close - lowest_52w) / (highest_52w - lowest_52w)) * 100 if highest_52w != lowest_52w else None
         )
         new_high_52w = close >= highest_52w if highest_52w else False
+        today_bullish = close >= float(row["open"])
+        highest_20d_bullish_close = max(bullish_closes_20d) if bullish_closes_20d else None
+        new_high_20d = bool(
+            today_bullish
+            and highest_20d_bullish_close is not None
+            and close >= highest_20d_bullish_close
+        )
 
         ma5 = ma_map[5][index]
         ma25 = ma_map[25][index]
@@ -374,6 +418,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
                 "rci48": rci_map[48][index],
                 "rangePosition52w": round(range_position_52w, 4) if range_position_52w is not None else None,
                 "newHigh52w": bool(new_high_52w),
+                "newHigh20d": bool(new_high_20d),
             }
         )
     return enriched

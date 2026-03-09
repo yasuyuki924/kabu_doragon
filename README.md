@@ -29,6 +29,10 @@
 │   │   └── 3133.json
 │   ├── ohlcv/
 │   │   └── 3133.csv
+│   ├── ohlcv_raw/
+│   │   └── 3133.csv
+│   ├── corporate_actions/
+│   │   └── 3133.json
 │   ├── tse_listed_components.csv
 │   └── watchlist.json
 ├── index.html
@@ -61,6 +65,7 @@
   - 一連の処理をまとめて実行する入口
 - `src/jquants_provider.py`
   - J-Quants Light を使って上場銘柄一覧と日次 OHLCV を取得する
+  - `data/ohlcv_raw` に未補正 OHLCV、`data/ohlcv` に分割・併合補正後 OHLCV、`data/corporate_actions` に補正イベントを保存する
 - `data/jquants_sync_state.json`
   - J-Quants の最終成功同期日を保持する
 
@@ -174,7 +179,7 @@ cd "/Users/okamoto/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py --provider jquants
 ```
 
-通常実行は増分 build です。`fetch_prices.py` が書く `data/update_state.json` を使って、更新された銘柄だけ `tickers/*.json` を再生成し、同時に更新日だけの軽量キャッシュ `data/daily_records/YYYY-MM-DD.json` を更新し、その日付だけ `rankings / overview / manifest` を再生成します。
+通常実行は増分 build です。`fetch_prices.py` が書く `data/update_state.json` を使って、更新された銘柄だけ `tickers/*.json` を再生成し、同時に更新日だけの軽量キャッシュ `data/daily_records/YYYY-MM-DD.json` を更新し、その日付だけ `rankings / overview / manifest` を再生成します。株式分割・併合が入った場合は `adjustedDateFrom` 以降をまとめて再生成します。
 
 取得済み CSV から JSON だけ再生成したい場合:
 
@@ -190,7 +195,11 @@ cd "/Users/okamoto/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py --skip-fetch --full-rebuild --days 60
 ```
 
-`--days 60` は full rebuild 時に直近 60 営業日ぶんの `rankings / overview / manifest` を再生成する指定です。
+full rebuild では `tickers` 全件を再生成した上で、カレンダー用の `daily_records / rankings / overview / manifest` は「最新日から暦 3 か月」の営業日範囲だけを再生成します。`--days 60` はこのモードでは実質使われません。
+
+`data/ohlcv/*.csv` は描画と指標計算に使う補正済み系列です。未補正の正本は `data/ohlcv_raw/*.csv` に残ります。株式分割・併合の反映後は、過去日のチャート、移動平均、乖離率、ランキングが変わることがあります。
+
+トップ画面とスキャナーのカレンダーは全履歴ではなく、`manifest.latestDate` から暦 3 か月前までの営業日だけを表示します。
 
 ### 少数銘柄でのテスト
 
@@ -564,6 +573,7 @@ launchctl unload ~/Library/LaunchAgents/com.okamoto.kabutan_news_daily.plist
 加えて、平日 `08:00` に 1 回、前営業日分の上場銘柄一覧などの再更新を拾います。  
 まだ返ってきていなければ `PENDING` として終了し、次の枠で再試行します。  
 返ってきた回で `ohlcv / tickers / rankings / overview / manifest` を更新します。
+日足同期時は分割・併合イベントも同時に取り込み、必要なら `adjustedDateFrom` 以降を追加で再生成します。
 
 登録/解除コマンド:
 

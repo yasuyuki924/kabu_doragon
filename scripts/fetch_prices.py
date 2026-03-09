@@ -22,6 +22,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--full-refresh", action="store_true")
     parser.add_argument("--skip-price-download", action="store_true")
     parser.add_argument("--am-snapshot", action="store_true")
+    parser.add_argument("--max-tickers", type=int, default=0)
+    parser.add_argument("--codes", help="Comma separated repo-format codes for testing")
+    parser.add_argument("--chunk-days", type=int, default=180)
     return parser.parse_args()
 
 
@@ -42,6 +45,12 @@ def main() -> int:
             cmd.append("--full-refresh")
         if args.am_snapshot:
             cmd.append("--am-snapshot")
+        if args.max_tickers > 0:
+            cmd.extend(["--max-tickers", str(args.max_tickers)])
+        if args.codes:
+            cmd.extend(["--codes", args.codes])
+        if args.chunk_days > 0:
+            cmd.extend(["--chunk-days", str(args.chunk_days)])
     else:
         cmd = [
             sys.executable,

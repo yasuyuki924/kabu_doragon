@@ -5,8 +5,10 @@ import argparse
 import json
 import subprocess
 import sys
-from time import perf_counter
 from pathlib import Path
+from time import perf_counter
+
+from common import discover_available_dates
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,15 +64,17 @@ def main() -> int:
         print(f"timing fetch={fetch_elapsed:.1f}s")
 
     incremental_dates: list[str] = []
+    adjusted_date_from: str | None = None
     if not args.full_rebuild and not args.codes:
         update_state = load_update_state()
         incremental_dates = [str(item).strip() for item in update_state.get("updatedDates") or [] if str(item).strip()]
+        adjusted_date_from = str(update_state.get("adjustedDateFrom") or "").strip() or None
 
     ticker_args = ["scripts/build_ticker_data.py"]
     if args.codes:
         ticker_args.extend(["--codes", args.codes])
     elif args.full_rebuild:
-        ticker_args.append("--all")
+        ticker_args.extend(["--all", "--cache-recent-months", "3"])
     else:
         ticker_args.append("--use-update-state")
     if args.limit > 0:
@@ -81,8 +85,21 @@ def main() -> int:
     ranking_args = ["scripts/build_rankings.py"]
     overview_args = ["scripts/build_market_overview.py"]
     if args.full_rebuild or args.codes:
-        ranking_args.extend(["--days", str(args.days)])
-        overview_args.extend(["--days", str(args.days)])
+        if args.full_rebuild and not args.codes:
+            recent_dates = discover_available_dates()
+            recent_count = len(recent_dates)
+            recent_end_date = recent_dates[-1] if recent_dates else None
+            ranking_args.extend(["--days", str(recent_count)])
+            overview_args.extend(["--days", str(recent_count)])
+            if recent_end_date:
+                ranking_args.extend(["--end-date", recent_end_date])
+                overview_args.extend(["--end-date", recent_end_date])
+        else:
+            ranking_args.extend(["--days", str(args.days)])
+            overview_args.extend(["--days", str(args.days)])
+    elif adjusted_date_from:
+        ranking_args.extend(["--from-date", adjusted_date_from])
+        overview_args.extend(["--from-date", adjusted_date_from])
     elif incremental_dates:
         ranking_args.extend(["--dates", ",".join(incremental_dates)])
         overview_args.extend(["--dates", ",".join(incremental_dates)])
@@ -92,11 +109,11 @@ def main() -> int:
     if args.codes:
         ranking_args.extend(["--codes", args.codes])
         overview_args.extend(["--codes", args.codes])
-    if args.end_date:
+    if args.end_date and not (args.full_rebuild and not args.codes):
         ranking_args.extend(["--end-date", args.end_date])
         overview_args.extend(["--end-date", args.end_date])
 
-    if args.full_rebuild or args.codes or incremental_dates:
+    if args.full_rebuild or args.codes or incremental_dates or adjusted_date_from:
         rankings_elapsed = run_step(*ranking_args)
         print(f"timing rankings={rankings_elapsed:.1f}s")
         overview_elapsed = run_step(*overview_args)

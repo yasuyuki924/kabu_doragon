@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build date-based market overview JSON files")
     parser.add_argument("--days", type=int, default=60, help="Recent trading dates to build")
     parser.add_argument("--end-date", help="Build until this date")
+    parser.add_argument("--from-date", help="Build from this date forward")
     parser.add_argument("--codes", help="Comma separated ticker codes")
     parser.add_argument("--dates", help="Comma separated trading dates to build")
     return parser.parse_args()
@@ -38,7 +39,12 @@ def main() -> int:
         explicit_dates = [str(item) for item in load_update_state().get("updatedDates") or []]
     selected_dates = [date_value for date_value in (explicit_dates or []) if date_value in set(all_dates)]
     if not selected_dates:
-        selected_dates = select_dates(all_dates, args.days, args.end_date)
+        if args.from_date:
+            selected_dates = [date_value for date_value in all_dates if date_value >= args.from_date]
+            if args.end_date:
+                selected_dates = [date_value for date_value in selected_dates if date_value <= args.end_date]
+        else:
+            selected_dates = select_dates(all_dates, args.days, args.end_date)
     selected_date_set = set(selected_dates)
     per_date: dict[str, list[dict[str, object]]] = {date_value: [] for date_value in selected_dates}
     missing_dates: list[str] = []
