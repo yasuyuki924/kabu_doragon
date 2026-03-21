@@ -6,6 +6,8 @@ import json
 from datetime import date, datetime
 from pathlib import Path
 
+from rebound_signal import classify_rebound_signal
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 WATCHLIST_JSON = DATA_DIR / "watchlist.json"
@@ -180,6 +182,11 @@ def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[
         "rangePosition52w": row.get("rangePosition52w"),
         "newHigh52w": row.get("newHigh52w"),
         "newHigh20d": row.get("newHigh20d"),
+        "signalCategory": row.get("signalCategory"),
+        "lowerWickFlag": row.get("lowerWickFlag"),
+        "strongHammerFlag": row.get("strongHammerFlag"),
+        "prevBearFlag": row.get("prevBearFlag"),
+        "belowMa5Flag": row.get("belowMa5Flag"),
     }
 
 
@@ -359,6 +366,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         close = float(row["close"])
         volume = int(row["volume"])
         previous_close = float(rows[index - 1]["close"]) if index > 0 else None
+        previous_open = float(rows[index - 1]["open"]) if index > 0 else None
         change = close - previous_close if previous_close is not None else None
         change_percent = ((change / previous_close) * 100) if previous_close not in {None, 0} else None
 
@@ -390,6 +398,17 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         volume_ma25 = volume_ma_map[25][index]
         turnover = turnovers[index]
         turnover_ma5 = turnover_ma_map[5][index]
+        rebound_signal = classify_rebound_signal(
+            {
+                "open": row["open"],
+                "high": row["high"],
+                "low": row["low"],
+                "close": row["close"],
+                "prev_open": previous_open,
+                "prev_close": previous_close,
+                "ma5": ma5,
+            }
+        )
 
         enriched.append(
             {
@@ -419,6 +438,11 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
                 "rangePosition52w": round(range_position_52w, 4) if range_position_52w is not None else None,
                 "newHigh52w": bool(new_high_52w),
                 "newHigh20d": bool(new_high_20d),
+                "signalCategory": str(rebound_signal["category"]),
+                "lowerWickFlag": bool(rebound_signal["lower_wick"]),
+                "strongHammerFlag": bool(rebound_signal["strong_hammer_like"]),
+                "prevBearFlag": bool(rebound_signal["prev_bear"]),
+                "belowMa5Flag": bool(rebound_signal["below_ma5"]),
             }
         )
     return enriched
@@ -491,6 +515,7 @@ def build_manifest_payload(available_dates: list[str]) -> dict[str, object]:
             "deviation75",
             "deviation200",
             "watch_candidates",
+            "rebound_signal",
         ],
     }
     snapshot_context = resolve_current_snapshot_context()

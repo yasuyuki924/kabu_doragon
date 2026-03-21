@@ -164,6 +164,28 @@ def sort_lower_shadow_records(records: list[dict[str, object]]) -> list[dict[str
     return items
 
 
+def sort_rebound_signal_records(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    priority = {
+        "strong_rebound": 0,
+        "rebound_candidate": 1,
+        "lower_wick_only": 2,
+    }
+    items = [
+        record
+        for record in records
+        if str(record.get("signalCategory") or "") in priority
+    ]
+    items.sort(
+        key=lambda item: (
+            priority.get(str(item.get("signalCategory") or ""), 9),
+            -float(item.get("changePercent") or 0),
+            -float(item.get("volumeRatio25") or 0),
+            str(item.get("code") or ""),
+        )
+    )
+    return items
+
+
 def pick_top(records: list[dict[str, object]], key: str, reverse: bool, limit: int) -> list[dict[str, object]]:
     items = [record for record in records if record.get(key) is not None]
     items.sort(key=lambda item: float(item.get(key) or 0), reverse=reverse)
@@ -193,6 +215,11 @@ def normalize_item(rank: int, record: dict[str, object]) -> dict[str, object]:
         "rci48": record.get("rci48"),
         "rangePosition52w": record.get("rangePosition52w"),
         "newHigh52w": record.get("newHigh52w"),
+        "signalCategory": record.get("signalCategory"),
+        "lowerWickFlag": record.get("lowerWickFlag"),
+        "strongHammerFlag": record.get("strongHammerFlag"),
+        "prevBearFlag": record.get("prevBearFlag"),
+        "belowMa5Flag": record.get("belowMa5Flag"),
         "open": record.get("open"),
         "high": record.get("high"),
         "low": record.get("low"),
@@ -282,6 +309,7 @@ def main() -> int:
         deviation200 = pick_top(records, "distanceToMa200", True, args.limit)
         lower_shadow = sort_lower_shadow_records(records)[: args.limit]
         watch_candidates = sorted(records, key=score_watch_candidate, reverse=True)[: args.limit]
+        rebound_signal = sort_rebound_signal_records(records)[: args.limit]
 
         output_dir = RANKINGS_DIR / date_value
         write_json(output_dir / "gainers.json", build_ranking_payload(date_value, "値上がり率", gainers))
@@ -295,6 +323,10 @@ def main() -> int:
         write_json(
             output_dir / "watch_candidates.json",
             build_ranking_payload(date_value, "監視候補", watch_candidates),
+        )
+        write_json(
+            output_dir / "rebound_signal.json",
+            build_ranking_payload(date_value, "反発シグナル", rebound_signal),
         )
         print(f"built rankings: {date_value} ({len(records)} records)")
 

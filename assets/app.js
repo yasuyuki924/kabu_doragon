@@ -16,6 +16,7 @@
     { key: "deviation75", label: "75日線乖離" },
     { key: "deviation200", label: "200日線乖離" },
     { key: "lower_shadow", label: "下ひげ" },
+    { key: "rebound_signal", label: "反発シグナル" },
     { key: "watch_candidates", label: "監視候補" },
   ];
   const TSE_MARKETS = new Set(["TSE", "プライム", "スタンダード", "グロース"]);
@@ -914,6 +915,7 @@
     const barsSelect = document.getElementById("indexBars");
     const timeframeSelect = document.getElementById("indexTimeframe");
     const pickedLink = document.getElementById("indexPickedLink");
+    const selectAllPicksButton = document.getElementById("indexSelectAllButton");
     const resetPicksButton = document.getElementById("indexResetPicksButton");
     const miniCalendar = document.getElementById("indexMiniCalendar");
     const dateMeta = document.getElementById("indexDateMeta");
@@ -935,6 +937,7 @@
       calendarMonth: null,
       picks: {},
       themeOrder: [],
+      visibleRecords: [],
     };
 
     const params = new URLSearchParams(window.location.search);
@@ -974,6 +977,12 @@
     if (resetPicksButton) {
       resetPicksButton.addEventListener("click", async () => {
         resetScannerPicks(state);
+        await render();
+      });
+    }
+    if (selectAllPicksButton) {
+      selectAllPicksButton.addEventListener("click", async () => {
+        selectAllScannerPicks(state.visibleRecords, state);
         await render();
       });
     }
@@ -1058,8 +1067,11 @@
         scannerBase = baseFiltered.filter((record) => getStopHighStatus(record) !== "none");
       } else if (state.sort === "new_high_20d") {
         scannerBase = baseFiltered.filter((record) => record.newHigh20d === true);
+      } else if (state.sort === "rebound_signal") {
+        scannerBase = baseFiltered.filter((record) => String(record.signalCategory || "") !== "none");
       }
       const filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
+      state.visibleRecords = filtered;
       syncIndexScannerUrl(
         state.selectedDate,
         state.sort,
@@ -1074,8 +1086,14 @@
       meta.textContent = formatSnapshotBaseDate(state.selectedDate, state.manifest.currentSnapshot);
 
       if (!filtered.length) {
+        if (selectAllPicksButton) {
+          selectAllPicksButton.disabled = true;
+        }
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
         return;
+      }
+      if (selectAllPicksButton) {
+        selectAllPicksButton.disabled = false;
       }
 
       list.innerHTML = filtered
@@ -1664,6 +1682,9 @@
       if (key === "lower_shadow" && response.status === 404) {
         return { date, ranking: rankingLabel(key), count: 0, items: [] };
       }
+      if (key === "rebound_signal" && response.status === 404) {
+        return { date, ranking: rankingLabel(key), count: 0, items: [] };
+      }
       throw new Error(`JSON 読み込み失敗: ${path} (${response.status})`);
     }
     return response.json();
@@ -1954,6 +1975,23 @@
     } else {
       delete state.picks[code];
     }
+    saveScannerPicks(state.picks);
+  }
+
+  function selectAllScannerPicks(records, state) {
+    const source = Array.isArray(records) ? records : [];
+    if (!source.length) {
+      return;
+    }
+    const next = { ...(state.picks || {}) };
+    source.forEach((record) => {
+      const code = String(record?.code || record?.ticker || "").trim();
+      if (!code) {
+        return;
+      }
+      next[code] = buildScannerPickPayload(record, state);
+    });
+    state.picks = next;
     saveScannerPicks(state.picks);
   }
 
@@ -2871,6 +2909,23 @@
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
     }
+    if (sortKey === "rebound_signal") {
+      const priority = {
+        strong_rebound: 0,
+        rebound_candidate: 1,
+        lower_wick_only: 2,
+      };
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(
+            -(priority[String(a.signalCategory || "")] ?? 9),
+            -(priority[String(b.signalCategory || "")] ?? 9)
+          ) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     if (sortKey === "deviation25") {
       return items.sort((a, b) => compareNullableNumbers(b.distanceToMa25, a.distanceToMa25));
     }
@@ -2935,6 +2990,7 @@
       code: "コード順",
       new_high: "新高値順",
       new_high_20d: "20日終値高値",
+      rebound_signal: "反発シグナル",
       deviation25: "25日線乖離順",
       deviation75: "75日線乖離順",
       deviation200: "200日線乖離順",
@@ -3952,6 +4008,7 @@
       volume: "volume_spike",
       new_high: "new_high",
       new_high_20d: "",
+      rebound_signal: "rebound_signal",
       deviation25: "deviation25",
       deviation75: "deviation75",
       deviation200: "deviation200",
