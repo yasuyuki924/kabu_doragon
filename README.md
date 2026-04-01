@@ -116,9 +116,43 @@ cd "/Users/okamoto/kabu_doragon"
 
 ## データ更新方法
 
-### J-Quants の初期設定
+### 標準経路: Yahoo Finance
 
-J-Quants Light を標準経路として使います。まず `.env.example` をコピーして `.env` を作成してください。
+標準の取得経路は `yfinance` です。通常運用では J-Quants の設定は不要です。
+
+通常の更新:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/fetch_prices.py \
+  --universe tse \
+  --segments prime,standard,growth \
+  --history-years 5 \
+  --batch-size 50
+```
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/run_daily.py
+```
+
+初回 5 年同期をやり直したい場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/fetch_prices.py \
+  --universe tse \
+  --segments prime,standard,growth \
+  --history-years 5 \
+  --batch-size 50 \
+  --full-refresh
+```
+
+`run_daily.py` の既定 provider も `yfinance` です。何も指定しなければ Yahoo 経路で取得と再生成を行います。
+
+### J-Quants を明示利用する場合
+
+J-Quants は予備経路として残しています。明示的に使う場合だけ `.env.example` をコピーして `.env` を作成してください。
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
@@ -149,7 +183,7 @@ J-Quants のプラン差:
 
 このプロジェクトは最新日次更新が目的なので、`Light` を前提にしています。
 
-### 価格データの取得
+### J-Quants で価格データを取得する場合
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
@@ -172,7 +206,7 @@ cd "/Users/okamoto/kabu_doragon"
   --full-refresh
 ```
 
-### JSON の再生成
+### J-Quants で JSON を再生成する場合
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
@@ -211,7 +245,7 @@ cd "/Users/okamoto/kabu_doragon"
   --codes 1301,3133,7203
 ```
 
-### 旧 yfinance 経路を使う場合
+### Yahoo Finance の日足取得
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
@@ -219,13 +253,95 @@ cd "/Users/okamoto/kabu_doragon"
   --provider yfinance \
   --universe tse \
   --segments prime,standard,growth \
-  --period 5y \
+  --history-years 5 \
   --batch-size 50
 ```
 
-J-Quants の取得に失敗した場合、自動で `yfinance` には切り替わりません。エラーで停止します。
+`yfinance` は `auto_adjust=False` の raw 日足を `data/ohlcv_raw/*.csv` に差分マージし、既存の分割・併合補正ロジックを通して `data/ohlcv/*.csv` を再生成します。  
+J-Quants の取得に失敗した場合、自動で `yfinance` には切り替わりません。標準経路そのものを Yahoo にしているため、通常は J-Quants を経由しません。
 
-### 当日分が返ってきたかの確認
+`run_daily.py` を使う場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/python scripts/run_daily.py --provider yfinance
+```
+
+### 場中5分更新と引け後確定
+
+通常運用の自動更新は次の 2 本です。
+
+- 場中5分更新: `scripts/run_yfinance_intraday_update.sh`
+- 引け後確定: `scripts/run_yfinance_close_retry.sh`
+
+### yfinance の場中データ
+
+`yfinance` 由来の場中データを `暫定データ` として表示できます。これは正式日足ではなく、当日中だけの参考値です。
+
+手動で取得する場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+./.venv/bin/zsh scripts/run_yfinance_intraday_update.sh
+```
+
+補足:
+
+- 暫定値は `data/intraday/yf_snapshot.json` に保存されます
+- 画面上のラベルは `暫定データ` です
+- `更新` ボタンは取得開始ではなく、最新JSONの再読込と再描画だけを行います
+- 取れなければ前営業日の正式データ表示を維持します
+- 引け後に正式な日足が反映された場合は `daily` が優先されます
+
+自宅Macで場中に自動更新したい場合:
+
+```bash
+cd "/Users/okamoto/kabu_doragon"
+mkdir -p ~/Library/LaunchAgents
+cp "launchd/com.okamoto.kabu_doragon_yfinance_intraday.plist" ~/Library/LaunchAgents/
+launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_intraday.plist 2>/dev/null || true
+launchctl load -w ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_intraday.plist
+```
+
+補足:
+
+- `launchd` 側は 5 分ごとに起動し、実際の更新は平日 9:20-11:30 / 12:30-15:30 の間だけ行います
+- 多重起動は `logs/run_yfinance_intraday_update.lock` で防止します
+- `logs/yfinance_intraday_launchd.log` と `logs/yfinance_intraday_launchd.err.log` で実行状況を確認できます
+- `Refresh` ボタンは Yahoo 取得を起動せず、最新 JSON を再読込するだけです
+- 朝一は Yahoo 側が当日足をまだ返さないことがあり、`PENDING` の回が出ます。これは失敗ではなく未公開タイミング扱いです
+- 日足がまだ出ていない回でも、取得できる場合は intraday バーから当日 OHLCV を組み立てて反映します
+
+### yfinance の引け後確定更新
+
+設定ファイル:
+
+- `launchd/com.okamoto.kabu_doragon_yfinance_close_retry.plist`
+
+平日 `15:35` に当日分の日足を取得し、まだ未反映なら `15:40`、`16:00`、`16:15` に再試行します。  
+成功した回で `current_snapshot_state.json` を `daily` に切り替え、画面上の当日表示も正式日足に移行します。  
+`16:15` でも未反映なら、その日は `暫定データ（引け後未確定）` として固定し、翌営業日の通常更新へ戻します。
+
+登録/解除コマンド:
+
+```bash
+mkdir -p ~/Library/LaunchAgents
+cp "launchd/com.okamoto.kabu_doragon_yfinance_close_retry.plist" ~/Library/LaunchAgents/
+launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_close_retry.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_close_retry.plist
+```
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_close_retry.plist
+```
+
+ログ:
+
+- `logs/yfinance_close_retry.out.log`
+- `logs/yfinance_close_retry.err.log`
+- lock が 20 分以上古い場合は、次回実行で自動解放して再試行します
+
+### J-Quants の当日反映チェック
 
 `Light` は日中リアルタイム更新ではなく、J-Quants 側に当日の日足が出たあとで反映されます。  
 J-Quants の公式ドキュメント上では、株価（四本値）の日次データは `16:30頃（JST）` に更新されます。  
@@ -246,10 +362,9 @@ cd "/Users/okamoto/kabu_doragon"
 - まだ未反映:
   - `PENDING: targetDate=2026-03-02 manifest.latestDate=2026-02-27 sync.lastSuccessfulDate=2026-02-27`
 
-### 引け後の30分おき再試行
+### J-Quants の引け後再試行（旧運用 / 予備）
 
-日中のトップ画面チャートは自動では動きません。  
-ただし、自動更新は次の時刻帯で「当日分が出たか」を確認し、出ていれば自動で反映できます。
+この経路は残していますが、通常運用は Yahoo 側の場中5分更新と引け後確定を使ってください。
 
 - 平日 `16:30` から `20:00` まで 30 分おき
 - 平日 `08:00` に 1 回
@@ -276,7 +391,7 @@ cd "/Users/okamoto/kabu_doragon"
 - 最新反映後はブラウザを再読込すると [http://127.0.0.1:8010/index.html](http://127.0.0.1:8010/index.html) に当日分が出ます
 - 当日分がまだない回は、次の 30 分枠で再試行されます
 
-### 前場四本値の確認
+### J-Quants 前場更新（旧運用 / 非推奨）
 
 当日分の前場スナップショットが有効かは、次のコマンドで確認できます。
 

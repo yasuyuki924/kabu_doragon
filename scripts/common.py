@@ -7,6 +7,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from rebound_signal import classify_rebound_signal
+from trend_turn_strategy import DEFAULT_THRESHOLDS as TREND_TURN_THRESHOLDS
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -15,6 +16,7 @@ THEME_MAP_JSON = DATA_DIR / "theme_map.json"
 OHLCV_DIR = DATA_DIR / "ohlcv"
 INTRADAY_DIR = DATA_DIR / "intraday"
 AM_SNAPSHOT_JSON = INTRADAY_DIR / "am_snapshot.json"
+YF_SNAPSHOT_JSON = INTRADAY_DIR / "yf_snapshot.json"
 CURRENT_SNAPSHOT_STATE_JSON = DATA_DIR / "current_snapshot_state.json"
 TICKERS_DIR = DATA_DIR / "tickers"
 DAILY_RECORDS_DIR = DATA_DIR / "daily_records"
@@ -25,7 +27,7 @@ JQUANTS_SYNC_STATE_JSON = DATA_DIR / "jquants_sync_state.json"
 UPDATE_STATE_JSON = DATA_DIR / "update_state.json"
 
 MA_WINDOWS = (5, 25, 75, 200)
-VOLUME_MA_WINDOWS = (5, 25)
+VOLUME_MA_WINDOWS = (5, 20, 25)
 RCI_WINDOWS = (12, 24, 48)
 
 
@@ -170,6 +172,7 @@ def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[
         "ma75": row.get("ma75"),
         "ma200": row.get("ma200"),
         "volumeMa5": row.get("volumeMa5"),
+        "volumeMa20": row.get("volumeMa20"),
         "volumeMa25": row.get("volumeMa25"),
         "turnoverMa5": row.get("turnoverMa5"),
         "distanceToMa25": row.get("distanceToMa25"),
@@ -187,6 +190,13 @@ def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[
         "strongHammerFlag": row.get("strongHammerFlag"),
         "prevBearFlag": row.get("prevBearFlag"),
         "belowMa5Flag": row.get("belowMa5Flag"),
+        "trendTurnCandidate": row.get("trendTurnCandidate"),
+        "trendTurnBreakoutDate": row.get("trendTurnBreakoutDate"),
+        "trendTurnDaysAfterBreakout": row.get("trendTurnDaysAfterBreakout"),
+        "trendTurnRangePct": row.get("trendTurnRangePct"),
+        "trendTurnAboveMa75Ratio": row.get("trendTurnAboveMa75Ratio"),
+        "trendTurnScore": row.get("trendTurnScore"),
+        "trendTurnReason": row.get("trendTurnReason"),
     }
 
 
@@ -237,7 +247,7 @@ def discover_available_dates(months: int = 3) -> list[str]:
 
     snapshot_context = resolve_current_snapshot_context()
     snapshot_date = str(snapshot_context.get("date") or "").strip()
-    if snapshot_context.get("useAmSnapshot") and snapshot_date and snapshot_date not in available_dates:
+    if snapshot_context.get("useSnapshot") and snapshot_date and snapshot_date not in available_dates:
         available_dates.append(snapshot_date)
     return available_dates
 
@@ -346,6 +356,70 @@ def calculate_rci_series(values: list[float], window_size: int) -> list[float | 
     return out
 
 
+def build_wtd_mtd_bars(rows: list[dict[str, float | int | str]]) -> tuple[list[dict[str, float | int | str]], list[dict[str, float | int | str]]]:
+    wtd_rows: list[dict[str, float | int | str]] = []
+    mtd_rows: list[dict[str, float | int | str]] = []
+    
+    current_week = None
+    week_open = week_high = week_low = week_vol = 0.0
+    
+    current_month = None
+    month_open = month_high = month_low = month_vol = 0.0
+    
+    for row in rows:
+        d = datetime.strptime(str(row["date"]), "%Y-%m-%d").date()
+        week_str = f"{d.isocalendar()[0]}-W{d.isocalendar()[1]:02d}"
+        month_str = f"{d.year}-{d.month:02d}"
+        
+        open_val = float(row["open"])
+        high_val = float(row["high"])
+        low_val = float(row["low"])
+        close_val = float(row["close"])
+        vol_val = int(row["volume"])
+        
+        if current_week != week_str:
+            current_week = week_str
+            week_open = open_val
+            week_high = high_val
+            week_low = low_val
+            week_vol = vol_val
+        else:
+            week_high = max(week_high, high_val)
+            week_low = min(week_low, low_val)
+            week_vol += vol_val
+            
+        wtd_rows.append({
+            "date": row["date"],
+            "open": week_open,
+            "high": week_high,
+            "low": week_low,
+            "close": close_val,
+            "volume": week_vol,
+        })
+        
+        if current_month != month_str:
+            current_month = month_str
+            month_open = open_val
+            month_high = high_val
+            month_low = low_val
+            month_vol = vol_val
+        else:
+            month_high = max(month_high, high_val)
+            month_low = min(month_low, low_val)
+            month_vol += vol_val
+            
+        mtd_rows.append({
+            "date": row["date"],
+            "open": month_open,
+            "high": month_high,
+            "low": month_low,
+            "close": close_val,
+            "volume": month_vol,
+        })
+        
+    return wtd_rows, mtd_rows
+
+
 def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[str, float | int | str | bool | None]]:
     if not rows:
         return []
@@ -395,6 +469,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         ma75 = ma_map[75][index]
         ma200 = ma_map[200][index]
         volume_ma5 = volume_ma_map[5][index]
+        volume_ma20 = volume_ma_map[20][index]
         volume_ma25 = volume_ma_map[25][index]
         turnover = turnovers[index]
         turnover_ma5 = turnover_ma_map[5][index]
@@ -409,6 +484,65 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
                 "ma5": ma5,
             }
         )
+
+        trend_turn_candidate = False
+        trend_turn_breakout_date = None
+        trend_turn_days_after_breakout = None
+        trend_turn_range_pct = None
+        trend_turn_above_ma75_ratio = None
+        trend_turn_score = 0
+        trend_turn_reason = ""
+
+        ref_index = index - TREND_TURN_THRESHOLDS.ref_days_below_ma75
+        if (
+            ref_index >= 0
+            and ma75 is not None
+            and ma_map[75][ref_index] is not None
+            and float(rows[ref_index]["close"]) < float(ma_map[75][ref_index])
+        ):
+            below_window_start = index - TREND_TURN_THRESHOLDS.below_ma75_window + 1
+            above_window_start = index - TREND_TURN_THRESHOLDS.above_ma75_window + 1
+            if below_window_start >= 0 and above_window_start >= 0:
+                below_count = 0
+                above_count = 0
+                below_window_valid = True
+                above_window_valid = True
+
+                for pos in range(below_window_start, index + 1):
+                    pos_ma75 = ma_map[75][pos]
+                    if pos_ma75 is None:
+                        below_window_valid = False
+                        break
+                    if float(rows[pos]["close"]) < float(pos_ma75):
+                        below_count += 1
+
+                for pos in range(above_window_start, index + 1):
+                    pos_ma75 = ma_map[75][pos]
+                    if pos_ma75 is None:
+                        above_window_valid = False
+                        break
+                    if float(rows[pos]["close"]) > float(pos_ma75):
+                        above_count += 1
+
+                if (
+                    below_window_valid
+                    and above_window_valid
+                    and below_count >= TREND_TURN_THRESHOLDS.below_ma75_min_count
+                    and above_count >= TREND_TURN_THRESHOLDS.above_ma75_min_count
+                ):
+                    trend_turn_candidate = True
+                    trend_turn_breakout_date = None
+                    trend_turn_days_after_breakout = None
+                    trend_turn_range_pct = float(below_count)
+                    trend_turn_above_ma75_ratio = round(above_count / TREND_TURN_THRESHOLDS.above_ma75_window, 4)
+                    trend_turn_score = int(below_count + above_count)
+                    trend_turn_reason = "|".join(
+                        [
+                            "10日目前MA75下",
+                            f"30日中{below_count}日MA75下",
+                            f"5日中{above_count}日MA75上",
+                        ]
+                    )
 
         enriched.append(
             {
@@ -426,6 +560,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
                 "ma75": ma75,
                 "ma200": ma200,
                 "volumeMa5": volume_ma5,
+                "volumeMa20": volume_ma20,
                 "volumeMa25": volume_ma25,
                 "turnoverMa5": round(turnover_ma5, 4) if turnover_ma5 is not None else None,
                 "distanceToMa25": round(distance_from_baseline(close, ma25), 4) if ma25 else None,
@@ -443,6 +578,13 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
                 "strongHammerFlag": bool(rebound_signal["strong_hammer_like"]),
                 "prevBearFlag": bool(rebound_signal["prev_bear"]),
                 "belowMa5Flag": bool(rebound_signal["below_ma5"]),
+                "trendTurnCandidate": bool(trend_turn_candidate),
+                "trendTurnBreakoutDate": trend_turn_breakout_date,
+                "trendTurnDaysAfterBreakout": trend_turn_days_after_breakout,
+                "trendTurnRangePct": trend_turn_range_pct,
+                "trendTurnAboveMa75Ratio": trend_turn_above_ma75_ratio,
+                "trendTurnScore": int(trend_turn_score),
+                "trendTurnReason": trend_turn_reason,
             }
         )
     return enriched
@@ -515,6 +657,7 @@ def build_manifest_payload(available_dates: list[str]) -> dict[str, object]:
             "deviation75",
             "deviation200",
             "watch_candidates",
+            "trend_turn",
             "rebound_signal",
         ],
     }
@@ -527,6 +670,10 @@ def build_manifest_payload(available_dates: list[str]) -> dict[str, object]:
         payload["currentSnapshot"] = {
             "date": snapshot_context["date"],
             "type": snapshot_context["type"],
+            "status": snapshot_context.get("status"),
+            "staleAfterClose": bool(snapshot_context.get("staleAfterClose")),
+            "finalRetryAt": snapshot_context.get("finalRetryAt"),
+            "generatedAt": snapshot_context.get("generatedAt"),
         }
     return payload
 
@@ -550,6 +697,14 @@ def load_am_snapshot() -> dict[str, object]:
     return payload
 
 
+def load_yf_snapshot() -> dict[str, object]:
+    payload = load_json_dict(YF_SNAPSHOT_JSON)
+    records = payload.get("records")
+    if not isinstance(records, list):
+        payload["records"] = []
+    return payload
+
+
 def load_current_snapshot_state() -> dict[str, object]:
     payload = load_json_dict(CURRENT_SNAPSHOT_STATE_JSON)
     if not payload:
@@ -557,6 +712,9 @@ def load_current_snapshot_state() -> dict[str, object]:
             "date": None,
             "snapshotType": "daily",
             "active": False,
+            "status": None,
+            "staleAfterClose": False,
+            "finalRetryAt": None,
             "generatedAt": None,
         }
     return payload
@@ -593,43 +751,127 @@ def load_am_snapshot_lookup(snapshot_date: str) -> dict[str, dict[str, float | i
     return lookup
 
 
+def load_yf_snapshot_lookup(snapshot_date: str) -> dict[str, dict[str, float | int | str]]:
+    payload = load_yf_snapshot()
+    if str(payload.get("date") or "").strip() != snapshot_date:
+        return {}
+    lookup: dict[str, dict[str, float | int | str]] = {}
+    for item in payload.get("records") or []:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "").strip()
+        if not code:
+            continue
+        try:
+            lookup[code] = {
+                "date": snapshot_date,
+                "open": float(item["open"]),
+                "high": float(item["high"]),
+                "low": float(item["low"]),
+                "close": float(item["close"]),
+                "volume": int(float(item.get("volume") or 0)),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+    return lookup
+
+
+def load_snapshot_lookup(snapshot_type: str, snapshot_date: str) -> dict[str, dict[str, float | int | str]]:
+    if snapshot_type == "am":
+        return load_am_snapshot_lookup(snapshot_date)
+    if snapshot_type == "yf_intraday":
+        return load_yf_snapshot_lookup(snapshot_date)
+    return {}
+
+
 def resolve_current_snapshot_context() -> dict[str, object]:
     state = load_current_snapshot_state()
     snapshot_date = str(state.get("date") or "").strip()
     snapshot_type = str(state.get("snapshotType") or "").strip().lower() or "daily"
+    snapshot_status = str(state.get("status") or "").strip().lower()
     generated_at = state.get("generatedAt")
     active = bool(state.get("active"))
-    sync_latest = current_sync_latest_date()
 
     if not snapshot_date:
-        return {"date": None, "type": None, "generatedAt": generated_at, "useAmSnapshot": False}
+        return {
+            "date": None,
+            "type": None,
+            "status": snapshot_status or None,
+            "generatedAt": generated_at,
+            "staleAfterClose": bool(state.get("staleAfterClose")),
+            "finalRetryAt": state.get("finalRetryAt"),
+            "useSnapshot": False,
+            "useAmSnapshot": False,
+        }
+
+    if snapshot_type == "daily":
+        return {
+            "date": snapshot_date,
+            "type": "daily",
+            "status": snapshot_status or "finalized",
+            "generatedAt": generated_at,
+            "staleAfterClose": bool(state.get("staleAfterClose")),
+            "finalRetryAt": state.get("finalRetryAt"),
+            "useSnapshot": False,
+            "useAmSnapshot": False,
+        }
 
     if snapshot_type == "am" and active:
-        if sync_latest and sync_latest >= snapshot_date:
-            return {
-                "date": snapshot_date,
-                "type": "daily",
-                "generatedAt": generated_at,
-                "useAmSnapshot": False,
-            }
         if load_am_snapshot_lookup(snapshot_date):
             return {
                 "date": snapshot_date,
                 "type": "am",
+                "status": snapshot_status or "intraday",
                 "generatedAt": generated_at,
+                "staleAfterClose": bool(state.get("staleAfterClose")),
+                "finalRetryAt": state.get("finalRetryAt"),
+                "useSnapshot": True,
                 "useAmSnapshot": True,
             }
-        return {"date": None, "type": None, "generatedAt": generated_at, "useAmSnapshot": False}
-
-    if sync_latest and sync_latest >= snapshot_date:
         return {
-            "date": snapshot_date,
-            "type": "daily",
+            "date": None,
+            "type": None,
+            "status": snapshot_status or None,
             "generatedAt": generated_at,
+            "staleAfterClose": bool(state.get("staleAfterClose")),
+            "finalRetryAt": state.get("finalRetryAt"),
+            "useSnapshot": False,
             "useAmSnapshot": False,
         }
 
-    return {"date": None, "type": None, "generatedAt": generated_at, "useAmSnapshot": False}
+    if snapshot_type == "yf_intraday" and active:
+        if load_yf_snapshot_lookup(snapshot_date):
+            return {
+                "date": snapshot_date,
+                "type": "stale_after_close" if snapshot_status == "stale" else "yf_intraday",
+                "status": snapshot_status or "intraday",
+                "generatedAt": generated_at,
+                "staleAfterClose": bool(state.get("staleAfterClose")),
+                "finalRetryAt": state.get("finalRetryAt"),
+                "useSnapshot": True,
+                "useAmSnapshot": False,
+            }
+        return {
+            "date": None,
+            "type": None,
+            "status": snapshot_status or None,
+            "generatedAt": generated_at,
+            "staleAfterClose": bool(state.get("staleAfterClose")),
+            "finalRetryAt": state.get("finalRetryAt"),
+            "useSnapshot": False,
+            "useAmSnapshot": False,
+        }
+
+    return {
+        "date": None,
+        "type": None,
+        "status": snapshot_status or None,
+        "generatedAt": generated_at,
+        "staleAfterClose": bool(state.get("staleAfterClose")),
+        "finalRetryAt": state.get("finalRetryAt"),
+        "useSnapshot": False,
+        "useAmSnapshot": False,
+    }
 
 
 def apply_snapshot_row(
@@ -638,14 +880,14 @@ def apply_snapshot_row(
     snapshot_context: dict[str, object] | None = None,
 ) -> list[dict[str, float | int | str]]:
     context = snapshot_context or resolve_current_snapshot_context()
-    if not context.get("useAmSnapshot"):
+    if not context.get("useSnapshot"):
         return rows
     snapshot_date = str(context.get("date") or "").strip()
     if not snapshot_date:
         return rows
     snapshot_lookup = context.get("lookup")
     if not isinstance(snapshot_lookup, dict):
-        snapshot_lookup = load_am_snapshot_lookup(snapshot_date)
+        snapshot_lookup = load_snapshot_lookup(str(context.get("type") or "").strip(), snapshot_date)
     snapshot_row = snapshot_lookup.get(str(code).strip())
     if not snapshot_row:
         return rows

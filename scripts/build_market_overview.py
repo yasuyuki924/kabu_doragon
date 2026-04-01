@@ -33,6 +33,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     codes = parse_codes(args.codes)
+    if codes:
+        print(f"warning: partial overview build for {len(codes)} code(s); shared overview/manifest JSON will be overwritten")
     all_dates = discover_available_dates()
     explicit_dates = parse_codes(args.dates)
     if args.dates == "__UPDATE_STATE__":
@@ -76,35 +78,40 @@ def main() -> int:
                 per_date[date_value].append({**meta, **row})
 
     for date_value in selected_dates:
-        records = sorted(per_date[date_value], key=lambda item: str(item["code"]))
-        rise_count = sum(1 for item in records if float(item.get("changePercent") or 0) > 0)
-        fall_count = sum(1 for item in records if float(item.get("changePercent") or 0) < 0)
-        flat_count = len(records) - rise_count - fall_count
-        above_ma25 = sum(1 for item in records if float(item.get("distanceToMa25") or 0) > 0)
-        above_ma75 = sum(1 for item in records if float(item.get("distanceToMa75") or 0) > 0)
-        above_ma200 = sum(1 for item in records if float(item.get("distanceToMa200") or 0) > 0)
-        volume_spike_count = sum(1 for item in records if float(item.get("volumeRatio25") or 0) >= 2.0)
-        average_change = (
-            sum(float(item.get("changePercent") or 0) for item in records) / len(records) if records else None
-        )
-        payload = {
-            "date": date_value,
-            "recordCount": len(records),
-            "riseCount": rise_count,
-            "fallCount": fall_count,
-            "flatCount": flat_count,
-            "aboveMa25Count": above_ma25,
-            "aboveMa75Count": above_ma75,
-            "aboveMa200Count": above_ma200,
-            "averageChangePercent": round(average_change, 4) if average_change is not None else None,
-            "volumeSpikeCount": volume_spike_count,
-            "sectorBreadth": summarize_sector_strength(records)[:12],
-            "themeBreadth": summarize_theme_counts(records)[:12],
-            "tagBreadth": summarize_tag_counts(records)[:12],
-            "records": records,
-        }
-        write_json(OVERVIEW_DIR / date_value / "market_pulse.json", payload)
-        print(f"built overview: {date_value} ({len(records)} records)")
+        for suffix in ["", "_weekly", "_monthly"]:
+            cached = load_daily_records(date_value + suffix, codes)
+            if cached is None:
+                continue
+            
+            records = sorted(cached, key=lambda item: str(item.get("code") or ""))
+            rise_count = sum(1 for item in records if float(item.get("changePercent") or 0) > 0)
+            fall_count = sum(1 for item in records if float(item.get("changePercent") or 0) < 0)
+            flat_count = len(records) - rise_count - fall_count
+            above_ma25 = sum(1 for item in records if float(item.get("distanceToMa25") or 0) > 0)
+            above_ma75 = sum(1 for item in records if float(item.get("distanceToMa75") or 0) > 0)
+            above_ma200 = sum(1 for item in records if float(item.get("distanceToMa200") or 0) > 0)
+            volume_spike_count = sum(1 for item in records if float(item.get("volumeRatio25") or 0) >= 2.0)
+            average_change = (
+                sum(float(item.get("changePercent") or 0) for item in records) / len(records) if records else None
+            )
+            payload = {
+                "date": date_value,
+                "recordCount": len(records),
+                "riseCount": rise_count,
+                "fallCount": fall_count,
+                "flatCount": flat_count,
+                "aboveMa25Count": above_ma25,
+                "aboveMa75Count": above_ma75,
+                "aboveMa200Count": above_ma200,
+                "averageChangePercent": round(average_change, 4) if average_change is not None else None,
+                "volumeSpikeCount": volume_spike_count,
+                "sectorBreadth": summarize_sector_strength(records)[:12],
+                "themeBreadth": summarize_theme_counts(records)[:12],
+                "tagBreadth": summarize_tag_counts(records)[:12],
+                "records": records,
+            }
+            write_json(OVERVIEW_DIR / date_value / f"market_pulse{suffix}.json", payload)
+            print(f"built overview{suffix}: {date_value} ({len(records)} records)")
 
     write_json(MANIFEST_JSON, build_manifest_payload(all_dates))
     print(f"wrote manifest: {MANIFEST_JSON}")

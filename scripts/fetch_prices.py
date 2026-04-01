@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch OHLCV CSVs and refresh watchlist from the existing fetcher")
-    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="jquants")
+    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="yfinance")
     parser.add_argument("--universe", choices=["nikkei225", "tse"], default="tse")
     parser.add_argument("--segments", default="prime,standard,growth")
     parser.add_argument("--period", default="5y")
@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--full-refresh", action="store_true")
     parser.add_argument("--skip-price-download", action="store_true")
     parser.add_argument("--am-snapshot", action="store_true")
+    parser.add_argument("--intraday-snapshot", action="store_true")
     parser.add_argument("--max-tickers", type=int, default=0)
     parser.add_argument("--codes", help="Comma separated repo-format codes for testing")
     parser.add_argument("--chunk-days", type=int, default=180)
@@ -54,18 +55,26 @@ def main() -> int:
     else:
         cmd = [
             sys.executable,
-            str(ROOT / "src" / "fetch_nikkei225.py"),
+            str(ROOT / "src" / "yfinance_provider.py"),
             "--universe",
             args.universe,
             "--segments",
             args.segments,
-            "--period",
-            args.period,
+            "--history-years",
+            str(args.history_years),
             "--batch-size",
             str(args.batch_size),
             "--pause",
             str(args.pause),
         ]
+        if args.full_refresh:
+            cmd.append("--full-refresh")
+        if args.intraday_snapshot:
+            cmd.append("--intraday-snapshot")
+        if args.max_tickers > 0:
+            cmd.extend(["--max-tickers", str(args.max_tickers)])
+        if args.codes:
+            cmd.extend(["--codes", args.codes])
     if args.skip_price_download:
         cmd.append("--skip-price-download")
     return subprocess.run(cmd, check=False, cwd=ROOT).returncode

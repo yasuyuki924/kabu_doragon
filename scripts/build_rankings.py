@@ -186,6 +186,23 @@ def sort_rebound_signal_records(records: list[dict[str, object]]) -> list[dict[s
     return items
 
 
+def sort_trend_turn_records(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    items = [
+        record
+        for record in records
+        if bool(record.get("trendTurnCandidate"))
+    ]
+    items.sort(
+        key=lambda item: (
+            -float(item.get("trendTurnScore") or 0),
+            -float(item.get("trendTurnAboveMa75Ratio") or 0),
+            -float(item.get("changePercent") or 0),
+            str(item.get("code") or ""),
+        )
+    )
+    return items
+
+
 def pick_top(records: list[dict[str, object]], key: str, reverse: bool, limit: int) -> list[dict[str, object]]:
     items = [record for record in records if record.get(key) is not None]
     items.sort(key=lambda item: float(item.get(key) or 0), reverse=reverse)
@@ -220,6 +237,13 @@ def normalize_item(rank: int, record: dict[str, object]) -> dict[str, object]:
         "strongHammerFlag": record.get("strongHammerFlag"),
         "prevBearFlag": record.get("prevBearFlag"),
         "belowMa5Flag": record.get("belowMa5Flag"),
+        "trendTurnCandidate": record.get("trendTurnCandidate"),
+        "trendTurnBreakoutDate": record.get("trendTurnBreakoutDate"),
+        "trendTurnDaysAfterBreakout": record.get("trendTurnDaysAfterBreakout"),
+        "trendTurnRangePct": record.get("trendTurnRangePct"),
+        "trendTurnAboveMa75Ratio": record.get("trendTurnAboveMa75Ratio"),
+        "trendTurnScore": record.get("trendTurnScore"),
+        "trendTurnReason": record.get("trendTurnReason"),
         "open": record.get("open"),
         "high": record.get("high"),
         "low": record.get("low"),
@@ -247,6 +271,8 @@ def build_ranking_payload(date_value: str, name: str, items: list[dict[str, obje
 def main() -> int:
     args = parse_args()
     codes = parse_codes(args.codes)
+    if codes:
+        print(f"warning: partial ranking build for {len(codes)} code(s); shared ranking JSON will be overwritten")
     all_dates = discover_available_dates()
     explicit_dates = parse_codes(args.dates)
     if args.dates == "__UPDATE_STATE__":
@@ -310,6 +336,7 @@ def main() -> int:
         lower_shadow = sort_lower_shadow_records(records)[: args.limit]
         watch_candidates = sorted(records, key=score_watch_candidate, reverse=True)[: args.limit]
         rebound_signal = sort_rebound_signal_records(records)[: args.limit]
+        trend_turn = sort_trend_turn_records(records)[: args.limit]
 
         output_dir = RANKINGS_DIR / date_value
         write_json(output_dir / "gainers.json", build_ranking_payload(date_value, "値上がり率", gainers))
@@ -327,6 +354,10 @@ def main() -> int:
         write_json(
             output_dir / "rebound_signal.json",
             build_ranking_payload(date_value, "反発シグナル", rebound_signal),
+        )
+        write_json(
+            output_dir / "trend_turn.json",
+            build_ranking_payload(date_value, "ベース・リカバリー", trend_turn),
         )
         print(f"built rankings: {date_value} ({len(records)} records)")
 

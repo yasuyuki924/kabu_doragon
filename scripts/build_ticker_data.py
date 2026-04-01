@@ -8,9 +8,10 @@ from common import (
     apply_snapshot_row,
     build_daily_record,
     build_enriched_rows,
+    build_wtd_mtd_bars,
     discover_available_dates,
-    load_am_snapshot_lookup,
     load_ohlcv_rows,
+    load_snapshot_lookup,
     load_update_state,
     load_watchlist,
     merge_daily_records,
@@ -43,7 +44,7 @@ def main() -> int:
     watchlist = load_watchlist()
     snapshot_context = resolve_current_snapshot_context()
     snapshot_date = str(snapshot_context.get("date") or "").strip()
-    snapshot_lookup = load_am_snapshot_lookup(snapshot_date) if snapshot_context.get("useAmSnapshot") else {}
+    snapshot_lookup = load_snapshot_lookup(str(snapshot_context.get("type") or "").strip(), snapshot_date) if snapshot_context.get("useSnapshot") else {}
     if adjusted_date_from:
         cache_dates.update(date_value for date_value in discover_available_dates() if date_value >= adjusted_date_from)
     if args.cache_recent_months > 0:
@@ -62,6 +63,8 @@ def main() -> int:
 
     built = 0
     date_updates: dict[str, dict[str, dict[str, object]]] = {date_value: {} for date_value in sorted(cache_dates)}
+    date_updates_weekly: dict[str, dict[str, dict[str, object]]] = {f"{date_value}_weekly": {} for date_value in sorted(cache_dates)}
+    date_updates_monthly: dict[str, dict[str, dict[str, object]]] = {f"{date_value}_monthly": {} for date_value in sorted(cache_dates)}
     for item in items:
         code = str(item["ticker"])
         rows = load_ohlcv_rows(code)
@@ -69,7 +72,10 @@ def main() -> int:
             rows = apply_snapshot_row(rows, code, {**snapshot_context, "lookup": snapshot_lookup})
         if not rows:
             continue
+        wtd_rows, mtd_rows = build_wtd_mtd_bars(rows)
         enriched_rows = build_enriched_rows(rows)
+        enriched_wtd_rows = build_enriched_rows(wtd_rows)
+        enriched_mtd_rows = build_enriched_rows(mtd_rows)
         payload_snapshot_type = None
         payload_snapshot_date = None
         if snapshot_date and any(str(row["date"]) == snapshot_date for row in rows) and snapshot_context.get("type"):
@@ -93,10 +99,12 @@ def main() -> int:
         }
         write_json(TICKERS_DIR / f"{code}.json", payload)
         if cache_dates:
-            for row in enriched_rows:
+            for i, row in enumerate(enriched_rows):
                 date_value = str(row["date"])
                 if date_value in date_updates:
                     date_updates[date_value][code] = build_daily_record(meta, row)
+                    date_updates_weekly[f"{date_value}_weekly"][code] = build_daily_record(meta, enriched_wtd_rows[i])
+                    date_updates_monthly[f"{date_value}_monthly"][code] = build_daily_record(meta, enriched_mtd_rows[i])
         built += 1
         if built % 250 == 0:
             print(f"built {built} tickers")
@@ -108,6 +116,14 @@ def main() -> int:
             snapshot_context.get("type") if date_value == snapshot_date else None,
         )
         print(f"updated daily cache: {date_value} ({len(updates)} records)")
+
+    for date_value, updates in date_updates_weekly.items():
+        if updates:
+            merge_daily_records(date_value, updates, None)
+            
+    for date_value, updates in date_updates_monthly.items():
+        if updates:
+            merge_daily_records(date_value, updates, None)
 
     print(f"done: {built} tickers")
     return 0

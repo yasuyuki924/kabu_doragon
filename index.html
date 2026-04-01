@@ -4,106 +4,142 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ローカル株分析ボード | ランキングチャート一覧</title>
-    <link rel="stylesheet" href="./assets/style.css" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.68" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
     <main class="container">
       <header class="page-header">
-        <div>
-          <p class="eyebrow">ローカル株分析ボード</p>
-          <h1>ランキングチャート一覧</h1>
-          <p class="subtle">ランキング銘柄を小型チャート付きで連続確認</p>
-        </div>
-        <div class="header-actions">
-          <a id="indexPickedLink" class="action-button secondary scanner-picked-link" href="./picked.html">選別一覧</a>
-          <button id="indexSelectAllButton" class="text-button scanner-select-all" type="button">表示中を全選択</button>
-          <button id="indexResetPicksButton" class="text-button scanner-reset-picks" type="button">選別リセット</button>
+        <div id="indexStickyBar" class="index-sticky-bar" aria-label="Primary controls">
+          <div class="index-sticky-bar-inner">
+            <a id="indexPickedLink" class="action-button secondary scanner-picked-link index-sticky-action" href="./picked.html">Picks</a>
+            <button id="indexRefreshButton" class="action-button secondary index-sticky-action" type="button">Refresh</button>
+            <span id="indexUpdatedStatus" class="index-header-status">Updated --</span>
+            <div class="index-sticky-date-wrap">
+              <button id="indexStickyDateButton" class="text-button index-sticky-action" type="button" aria-expanded="false">Date</button>
+              <div id="indexStickyDatePopover" class="index-sticky-date-popover" hidden>
+                <div class="index-sticky-section-title">Date</div>
+                <div id="indexStickyMiniCalendar" class="date-calendar-wrap index-sticky-calendar"></div>
+              </div>
+            </div>
+            <div class="index-timeframe-popover-wrap">
+              <div id="indexTimeframe" class="button-group index-sticky-timeframe" role="group" aria-label="Timeframe">
+                <button type="button" class="group-btn" data-value="daily">D</button>
+                <button type="button" class="group-btn" data-value="weekly">W</button>
+                <button type="button" class="group-btn" data-value="monthly">M</button>
+              </div>
+              <div id="indexTimeframePopover" class="index-timeframe-popover" hidden>
+                <div id="indexTimeframePopoverTitle" class="index-timeframe-popover-title">Range</div>
+                <div id="indexTimeframeOptions" class="index-timeframe-options"></div>
+              </div>
+            </div>
+            <select id="indexSort" class="index-sticky-select" aria-label="Sort">
+              <option value="gainers">値上がり</option>
+              <option value="losers">値下がり</option>
+              <option value="volume">出来高</option>
+              <option value="code">コード順</option>
+              <option value="stop_high">S高</option>
+              <option value="new_high">新高値</option>
+              <option value="new_high_20d">20D Close High</option>
+              <option value="trend_turn">ベース・リカバリー</option>
+              <option value="rebound_signal">反発</option>
+              <option value="deviation25">25日乖離</option>
+              <option value="deviation75">75日乖離</option>
+              <option value="deviation200">200日乖離</option>
+              <option value="lower_shadow">下ひげ</option>
+              <option value="watch_candidates">監視候補</option>
+            </select>
+            <select id="indexLimit" class="index-sticky-select index-sticky-limit" aria-label="Rows">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="200">200</option>
+            </select>
+            <div class="index-sticky-filters-wrap index-sticky-filters-wrap--left">
+                <button id="indexStickyFiltersButton" class="text-button index-sticky-action" type="button" aria-expanded="false">Filters</button>
+                <div id="indexStickyFiltersPopover" class="index-sticky-filters-popover" hidden>
+                  <div class="index-sticky-section-title">Filters</div>
+                  <div class="index-sticky-filters-grid">
+                    <label>
+                      <span>Sector</span>
+                      <select id="indexStickyTag">
+                        <option value="">All</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Theme</span>
+                      <select id="indexStickyTheme">
+                        <option value="">All</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Turnover</span>
+                      <select id="indexStickyTurnover">
+                        <option value="0">0</option>
+                        <option value="50000000">50M</option>
+                        <option value="100000000">100M</option>
+                        <option value="500000000">500M</option>
+                        <option value="1000000000">1B</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div id="indexStickyAdvanced" class="index-sticky-advanced" hidden>
+                    <div class="index-sticky-section-title">Advanced</div>
+                    <div class="index-sticky-advanced-grid index-sticky-advanced-grid--slider">
+                      <div id="indexStickyDeviationTitle" class="index-dev200-popover-title">Deviation (%)</div>
+                      <div class="index-deviation-compact-row">
+                        <label class="index-deviation-input-group">
+                          <span>Min</span>
+                          <div class="index-deviation-input-shell">
+                            <input id="indexStickyDev200MinNumber" type="number" inputmode="decimal" step="0.1" min="-20" max="20" value="" placeholder="-∞" aria-label="Deviation min value" />
+                            <span>%</span>
+                          </div>
+                        </label>
+                        <div class="index-deviation-slider-compact">
+                          <div class="index-deviation-slider-scale index-deviation-slider-scale--compact">
+                            <span>-20</span>
+                            <span>0</span>
+                            <span>+20</span>
+                          </div>
+                          <div class="index-deviation-slider-stack index-deviation-slider-stack--compact">
+                            <div class="index-deviation-slider-track"></div>
+                            <div id="indexStickyDev200RangeFill" class="index-deviation-slider-fill"></div>
+                            <div class="index-deviation-slider-zero"></div>
+                            <input id="indexStickyDev200Min" class="index-deviation-slider index-deviation-slider--min" type="range" min="-20" max="20" step="0.5" value="-5" aria-label="Deviation min" />
+                            <input id="indexStickyDev200Max" class="index-deviation-slider index-deviation-slider--max" type="range" min="-20" max="20" step="0.5" value="8" aria-label="Deviation max" />
+                          </div>
+                        </div>
+                        <label class="index-deviation-input-group">
+                          <span>Max</span>
+                          <div class="index-deviation-input-shell">
+                            <input id="indexStickyDev200MaxNumber" type="number" inputmode="decimal" step="0.1" min="-20" max="20" value="" placeholder="+∞" aria-label="Deviation max value" />
+                            <span>%</span>
+                          </div>
+                        </label>
+                      </div>
+                      <div class="index-dev200-popover-actions index-dev200-popover-actions--compact">
+                        <button id="indexStickyDev200Reset" class="action-button secondary" type="button">Reset</button>
+                        <button id="indexStickyDev200Apply" class="action-button" type="button">Apply</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <div class="index-right-actions">
+              <div class="index-selection-actions">
+                <button id="indexSelectAllButton" class="text-button index-sticky-action index-sticky-action--selectall" type="button">Select All</button>
+                <button id="indexResetPicksButton" class="text-button index-sticky-action index-sticky-action--clear" type="button">Clear</button>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
-      <section class="panel scanner-toolbar index-scanner-toolbar">
-        <div class="scanner-toolbar-row scanner-date-row">
-          <div class="scanner-toolbar-title">日付</div>
-          <div class="date-picker-wrap scanner-date-tools">
-            <div id="indexMiniCalendar" class="date-calendar-wrap"></div>
-            <div id="indexDateMeta" class="meta"></div>
-          </div>
-        </div>
-        <label>
-          <span>条件</span>
-          <select id="indexSort">
-            <option value="gainers">値上がり率順</option>
-            <option value="losers">値下がり率順</option>
-            <option value="volume">出来高順</option>
-            <option value="code">コード順</option>
-            <option value="stop_high">ストップ高</option>
-            <option value="new_high">新高値順</option>
-            <option value="new_high_20d">20日終値高値</option>
-            <option value="rebound_signal">反発シグナル</option>
-            <option value="deviation25">25日線乖離順</option>
-            <option value="deviation75">75日線乖離順</option>
-            <option value="deviation200">200日線乖離順</option>
-            <option value="lower_shadow">下ひげ順</option>
-            <option value="watch_candidates">監視候補順</option>
-          </select>
-        </label>
-        <label>
-          <span>業種</span>
-          <select id="indexTag">
-            <option value="">すべて</option>
-          </select>
-        </label>
-        <label>
-          <span>テーマ</span>
-          <select id="indexTheme">
-            <option value="">すべて</option>
-          </select>
-        </label>
-        <label>
-          <span>5日平均売買代金</span>
-          <select id="indexTurnover">
-            <option value="0">0</option>
-            <option value="50000000">5000万</option>
-            <option value="100000000">1億</option>
-            <option value="500000000">5億</option>
-            <option value="1000000000">10億</option>
-          </select>
-        </label>
-        <label>
-          <span>表示件数</span>
-          <select id="indexLimit">
-            <option value="50">50</option>
-            <option value="100" selected>100</option>
-            <option value="200">200</option>
-          </select>
-        </label>
-        <label>
-          <span>期間</span>
-          <select id="indexBars">
-            <option value="21">21本</option>
-            <option value="63" selected>63本</option>
-            <option value="126">126本</option>
-            <option value="252">252本</option>
-          </select>
-        </label>
-        <label>
-          <span>足種</span>
-          <select id="indexTimeframe">
-            <option value="daily">日足</option>
-            <option value="weekly">週足</option>
-            <option value="monthly">月足</option>
-          </select>
-        </label>
-      </section>
-
       <section class="panel">
-        <div id="indexMeta" class="meta"></div>
         <div id="indexError" class="status-box error" hidden></div>
         <div id="indexList" class="scanner-list index-scanner-list"></div>
       </section>
     </main>
 
-    <script src="./assets/app.js"></script>
+    <script src="./assets/app.js?v=1.4.68"></script>
   </body>
 </html>

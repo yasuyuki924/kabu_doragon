@@ -18,7 +18,7 @@ UPDATE_STATE_JSON = ROOT / "data" / "update_state.json"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the local daily build pipeline")
     parser.add_argument("--skip-fetch", action="store_true")
-    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="jquants")
+    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="yfinance")
     parser.add_argument("--full-refresh", action="store_true")
     parser.add_argument("--history-years", type=int, default=5)
     parser.add_argument("--days", type=int, default=60)
@@ -26,6 +26,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=0, help="Limit tickers for testing when building ticker JSON")
     parser.add_argument("--end-date", help="Build until this date")
     parser.add_argument("--full-rebuild", action="store_true")
+    parser.add_argument(
+        "--include-shared-views",
+        action="store_true",
+        help="When used with --codes, also rebuild rankings/overview shared JSON files",
+    )
     return parser.parse_args()
 
 
@@ -45,6 +50,7 @@ def load_update_state() -> dict[str, object]:
 def main() -> int:
     args = parse_args()
     total_start = perf_counter()
+    codes_mode = bool(args.codes)
 
     if not args.skip_fetch:
         fetch_args = [
@@ -60,6 +66,8 @@ def main() -> int:
         ]
         if args.full_refresh:
             fetch_args.append("--full-refresh")
+        if args.codes:
+            fetch_args.extend(["--codes", args.codes])
         fetch_elapsed = run_step(*fetch_args)
         print(f"timing fetch={fetch_elapsed:.1f}s")
 
@@ -113,14 +121,26 @@ def main() -> int:
         ranking_args.extend(["--end-date", args.end_date])
         overview_args.extend(["--end-date", args.end_date])
 
-    if args.full_rebuild or args.codes or incremental_dates or adjusted_date_from:
+    should_refresh_shared_views = False
+    if args.full_rebuild:
+        should_refresh_shared_views = True
+    elif codes_mode:
+        should_refresh_shared_views = bool(args.include_shared_views)
+        if not should_refresh_shared_views:
+            print("timing rankings=0.0s (skipped: --codes safe mode)")
+            print("timing overview=0.0s (skipped: --codes safe mode)")
+    elif incremental_dates or adjusted_date_from:
+        should_refresh_shared_views = True
+
+    if should_refresh_shared_views:
         rankings_elapsed = run_step(*ranking_args)
         print(f"timing rankings={rankings_elapsed:.1f}s")
         overview_elapsed = run_step(*overview_args)
         print(f"timing overview={overview_elapsed:.1f}s")
     else:
-        print("timing rankings=0.0s (skipped)")
-        print("timing overview=0.0s (skipped)")
+        if not codes_mode:
+            print("timing rankings=0.0s (skipped)")
+            print("timing overview=0.0s (skipped)")
     print(f"timing total={perf_counter() - total_start:.1f}s")
     return 0
 

@@ -7,6 +7,13 @@
   const REGISTERED_STORAGE_KEY = "local-stock-dashboard.registered-picks.v1";
   const NOTE_STORAGE_PREFIX = "local-stock-dashboard.note.";
   const PERIOD_MONTHS = [1, 2, 3, 4, 5, 6];
+  const TICKER_CHART_MODES = [
+    { key: "1m", label: "1ヶ月", timeframe: "daily", rangeValue: 1, useBarCount: false },
+    { key: "3m", label: "3ヶ月", timeframe: "daily", rangeValue: 3, useBarCount: false },
+    { key: "6m", label: "6ヶ月", timeframe: "daily", rangeValue: 6, useBarCount: false },
+    { key: "weekly", label: "週足", timeframe: "weekly", rangeValue: 30, useBarCount: true },
+    { key: "monthly", label: "月足", timeframe: "monthly", rangeValue: 24, useBarCount: true },
+  ];
   const RANKING_CONFIG = [
     { key: "gainers", label: "値上がり率" },
     { key: "losers", label: "値下がり率" },
@@ -32,8 +39,22 @@
   ];
   const INDEX_SCANNER_LIMITS = [50, 100, 200];
   const INDEX_SCANNER_MONTHS = [1, 3, 6, 12];
-  const INDEX_SCANNER_BARS = [21, 63, 126, 252];
-  const INDEX_SCANNER_TIMEFRAMES = ["daily", "weekly", "monthly"];
+    const INDEX_SCANNER_TIMEFRAMES = ["daily", "weekly", "monthly"];
+  const INDEX_SCANNER_TIMEFRAME_RANGES = {
+    daily: [
+      { months: 1, label: "1M" },
+      { months: 3, label: "3M" },
+      { months: 6, label: "6M" },
+    ],
+    weekly: [
+      { months: 12, label: "1Y" },
+      { months: 36, label: "3Y" },
+    ],
+    monthly: [
+      { months: 36, label: "3Y" },
+      { months: 60, label: "5Y" },
+    ],
+  };
   const INDEX_SCANNER_TURNOVER_OPTIONS = [0, 50000000, 100000000, 500000000, 1000000000];
   const INDEX_SCANNER_MIN_CLOSE = 50;
   const STOP_HIGH_EPSILON = 0.5;
@@ -373,7 +394,7 @@
           return `
             <tr data-code="${escapeHtml(record.ticker)}">
               <td>${escapeHtml(record.ticker)}</td>
-              <td>${escapeHtml(record.name)}</td>
+              <td>${renderTickerIdentity(record.ticker, record.name, { variant: "table", showCode: false })}</td>
               <td>${escapeHtml(record.market)}</td>
               <td class="num">${formatNumber(record.close)}</td>
               <td class="num ${getChangeClass(record.changePercent)}">${formatSignedPercent(record.changePercent)}</td>
@@ -481,6 +502,9 @@
     const tickerTitle = document.getElementById("tickerTitle");
     const tickerMeta = document.getElementById("tickerMeta");
     const chartMeta = document.getElementById("chartMeta");
+    const refreshButton = document.getElementById("tickerRefreshButton");
+    const refreshMeta = document.getElementById("tickerRefreshMeta");
+    const snapshotBadge = document.getElementById("tickerSnapshotBadge");
     const externalLinks = document.getElementById("externalLinks");
     const errorBox = document.getElementById("detailErrorBox");
     const periodButtons = document.getElementById("periodButtons");
@@ -511,7 +535,6 @@
     const techRangePosition = document.getElementById("techRangePosition");
     const tickerCardRank = document.getElementById("tickerCardRank");
     const tickerCardCode = document.getElementById("tickerCardCode");
-    const tickerCardName = document.getElementById("tickerCardName");
     const tickerCardTradeDate = document.getElementById("tickerCardTradeDate");
     const tickerCardTradePrice = document.getElementById("tickerCardTradePrice");
     const tickerCardChange = document.getElementById("tickerCardChange");
@@ -534,18 +557,19 @@
       payload: null,
       rankingKey,
       rankingItem: null,
-      selectedMonths: 3,
+      selectedChartMode: normalizeTickerChartMode(params.get("chart") || "3m"),
       selectedDate: "",
     };
 
-    periodButtons.innerHTML = PERIOD_MONTHS.map(
-      (month) => `<button class="period-button${month === state.selectedMonths ? " active" : ""}" data-months="${month}">${month}ヶ月</button>`
+    periodButtons.innerHTML = TICKER_CHART_MODES.map(
+      (mode) =>
+        `<button class="period-button${mode.key === state.selectedChartMode ? " active" : ""}" data-chart-mode="${mode.key}">${mode.label}</button>`
     ).join("");
 
     Array.from(periodButtons.querySelectorAll(".period-button")).forEach((button) => {
       button.addEventListener("click", () => {
-        state.selectedMonths = Number(button.dataset.months);
-        updatePeriodButtonState(periodButtons, state.selectedMonths);
+        state.selectedChartMode = normalizeTickerChartMode(button.dataset.chartMode);
+        updatePeriodButtonState(periodButtons, state.selectedChartMode);
         renderTicker();
       });
     });
@@ -576,6 +600,19 @@
       );
       await refreshRankContext();
       renderTicker();
+    });
+
+    refreshButton?.addEventListener("click", async () => {
+      await runRefreshAction(refreshButton, errorBox, async () => {
+        state.manifest = await loadManifest();
+        state.payload = await loadTickerPayload(code);
+        const availableDates = state.payload.ohlcv.map((row) => row.date);
+        state.selectedDate = resolveAvailableDate(state.selectedDate || state.manifest.latestDate, availableDates);
+        tickerDatePicker.min = availableDates[0];
+        tickerDatePicker.max = availableDates.at(-1);
+        await refreshRankContext();
+        renderTicker();
+      });
     });
 
     try {
@@ -670,7 +707,7 @@
       const latestRow = rows.at(-1) || row;
       state.selectedDate = row.date;
       tickerDatePicker.value = row.date;
-      syncTickerUrl(code, state.selectedDate, state.rankingKey);
+      syncTickerUrl(code, state.selectedDate, state.rankingKey, state.selectedChartMode);
       if (backLink) {
         backLink.href = `./index.html?date=${encodeURIComponent(state.selectedDate)}`;
       }
@@ -681,26 +718,24 @@
         formatSnapshotBaseDate(
           state.selectedDate,
           state.payload.snapshotDate === state.selectedDate
-            ? { date: state.payload.snapshotDate, type: state.payload.snapshotType }
+            ? resolveTickerSnapshot(state)
             : null
         ),
         state.payload.tags?.length ? `タグ: ${state.payload.tags.join(", ")}` : null,
       ]
         .filter(Boolean)
         .join(" / ");
+      syncSnapshotStatusUi(snapshotBadge, refreshMeta, state.selectedDate, resolveTickerSnapshot(state));
 
       summaryRank.textContent = state.rankingItem ? `${state.rankingItem.rank}位` : "-";
       if (tickerCardRank) {
         tickerCardRank.textContent = state.rankingItem ? `${state.rankingItem.rank}` : "-";
       }
       if (tickerCardCode) {
-        tickerCardCode.textContent = code;
-      }
-      if (tickerCardName) {
-        tickerCardName.textContent = state.payload.name || code;
-        tickerCardName.href = buildTickerUrl(code, state.selectedDate, state.rankingKey);
-        tickerCardName.title = state.payload.name || code;
-        tickerCardName.className = scannerNameClass(state.payload.name || code);
+        tickerCardCode.innerHTML = renderTickerIdentity(code, state.payload.name || code, {
+          href: buildTickerUrl(code, state.selectedDate, state.rankingKey),
+          variant: "detail",
+        });
       }
       setTickerSummaryValues(row);
       setTickerCardValues(latestRow);
@@ -738,10 +773,29 @@
           .join('<span class="scanner-link-separator">|</span>');
       }
 
-      renderTickerChart(chartEl, rows, selectedIndex, state.selectedMonths, chartMeta, (chartRow) => {
+      renderTickerChart(chartEl, rows, selectedIndex, state.selectedChartMode, chartMeta, (chartRow) => {
         setTickerSummaryValues(chartRow);
         setTickerCardValues(chartRow);
       });
+    }
+
+    function resolveTickerSnapshot(currentState) {
+      if (currentState.payload?.snapshotDate !== currentState.selectedDate || !currentState.payload?.snapshotType) {
+        return null;
+      }
+      const currentSnapshot = currentState.manifest?.currentSnapshot;
+      if (
+        currentSnapshot &&
+        currentSnapshot.date === currentState.payload.snapshotDate &&
+        currentSnapshot.type === currentState.payload.snapshotType
+      ) {
+        return currentSnapshot;
+      }
+      return {
+        date: currentState.payload.snapshotDate,
+        type: currentState.payload.snapshotType,
+        generatedAt: null,
+      };
     }
   }
 
@@ -853,24 +907,55 @@
         });
       });
 
-      for (const record of filtered) {
+      const results = await mapWithConcurrency(filtered, CHART_FETCH_CONCURRENCY, async (record) => {
         try {
-          const payload = await loadTickerPayload(record.code);
-          renderScannerCompactChart(
-            `scanChart-${record.code}`,
-            record.code,
-            payload.ohlcv,
-            state.selectedDate,
-            state.months
-          );
-          const linksElement = document.getElementById(`scanLinks-${record.code}`);
-          if (linksElement) {
-            linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
-          }
+          return {
+            record,
+            status: "fulfilled",
+            value: await loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate }),
+          };
         } catch (error) {
-          showError(errorBox, `一部のチャート読込に失敗: ${error.message}`);
+          return { record, status: "rejected", reason: error };
         }
-      }
+      });
+
+      const baselineShape = results.find((result) => result.status === "fulfilled" && !result.value.validation.issues.length)?.value.shape || null;
+
+      results.forEach((result) => {
+        const record = result.record;
+        if (result.status === "rejected") {
+          renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
+          showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${result.reason?.message}`);
+          return;
+        }
+        const { payload, validation, shape, requestUrl, status, responseBody } = result.value;
+        if (validation.issues.length) {
+          console.debug("[ticker-chart:validation]", {
+            code: record.code,
+            requestUrl,
+            status,
+            responseBody: responseBody.slice(0, 1200),
+            parsedCandleCount: validation.parsedCandleCount,
+            issues: validation.issues,
+            warnings: validation.warnings,
+            shapeDiff: diffShapeAgainstBaseline(baselineShape, shape),
+          });
+          renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
+          showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
+          return;
+        }
+        renderScannerCompactChart(
+          `scanChart-${record.code}`,
+          record.code,
+          payload.ohlcv,
+          state.selectedDate,
+          state.months
+        );
+        const linksElement = document.getElementById(`scanLinks-${record.code}`);
+        if (linksElement) {
+          linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+        }
+      });
     }
 
     function renderDateControls() {
@@ -908,18 +993,54 @@
 
   async function initIndexScannerPage() {
     const sortSelect = document.getElementById("indexSort");
-    const tagSelect = document.getElementById("indexTag");
-    const themeSelect = document.getElementById("indexTheme");
-    const turnoverSelect = document.getElementById("indexTurnover");
+    const stickyBar = document.getElementById("indexStickyBar");
+    const stickyPickedLink = document.getElementById("indexStickyPickedLink");
+    const stickyRefreshButton = document.getElementById("indexStickyRefreshButton");
+    const stickyDateButton = document.getElementById("indexStickyDateButton");
+    const stickyDatePopover = document.getElementById("indexStickyDatePopover");
+    const stickyTimeframeGroup = document.getElementById("indexStickyTimeframe");
+    const stickySortSelect = document.getElementById("indexStickySort");
+    const stickyLimitSelect = document.getElementById("indexStickyLimit");
+    const stickySelectAllPicksButton = document.getElementById("indexStickySelectAllButton");
+    const stickyResetPicksButton = document.getElementById("indexStickyResetPicksButton");
+    const stickyFiltersButton = document.getElementById("indexStickyFiltersButton");
+    const stickyFiltersPopover = document.getElementById("indexStickyFiltersPopover");
+    const stickyMiniCalendar = document.getElementById("indexStickyMiniCalendar");
+    const stickyTagSelect = document.getElementById("indexStickyTag");
+    const stickyThemeSelect = document.getElementById("indexStickyTheme");
+    const stickyTurnoverSelect = document.getElementById("indexStickyTurnover");
+    const stickyAdvanced = document.getElementById("indexStickyAdvanced");
+    const stickyDeviationTitle = document.getElementById("indexStickyDeviationTitle");
+    const stickyDevMinInput = document.getElementById("indexStickyDev200Min");
+    const stickyDevMaxInput = document.getElementById("indexStickyDev200Max");
+    const stickyDevMinNumberInput = document.getElementById("indexStickyDev200MinNumber");
+    const stickyDevMaxNumberInput = document.getElementById("indexStickyDev200MaxNumber");
+    const stickyDevRangeFill = document.getElementById("indexStickyDev200RangeFill");
+    const stickyDevApplyButton = document.getElementById("indexStickyDev200Apply");
+    const stickyDevResetButton = document.getElementById("indexStickyDev200Reset");
+    const dev200Button = document.getElementById("indexDev200Button");
+    const dev200Popover = document.getElementById("indexDev200Popover");
+    const deviationPopoverTitle = document.getElementById("indexDeviationPopoverTitle");
+    const dev200ModeSelect = document.getElementById("indexDev200Mode");
+    const dev200MinInput = document.getElementById("indexDev200Min");
+    const dev200MaxInput = document.getElementById("indexDev200Max");
+    const dev200ApplyButton = document.getElementById("indexDev200Apply");
+    const dev200ResetButton = document.getElementById("indexDev200Reset");
+    const tagSelect = document.getElementById("indexTag") || stickyTagSelect;
+    const themeSelect = document.getElementById("indexTheme") || stickyThemeSelect;
+    const turnoverSelect = document.getElementById("indexTurnover") || stickyTurnoverSelect;
     const limitSelect = document.getElementById("indexLimit");
-    const barsSelect = document.getElementById("indexBars");
-    const timeframeSelect = document.getElementById("indexTimeframe");
+    const timeframeGroup = document.getElementById("indexTimeframe");
+    const timeframePopover = document.getElementById("indexTimeframePopover");
+    const timeframePopoverTitle = document.getElementById("indexTimeframePopoverTitle");
+    const timeframeOptions = document.getElementById("indexTimeframeOptions");
+    const rangeChip = document.getElementById("indexRangeChip");
     const pickedLink = document.getElementById("indexPickedLink");
+    const updatedStatus = document.getElementById("indexUpdatedStatus");
+    const refreshButton = document.getElementById("indexRefreshButton");
     const selectAllPicksButton = document.getElementById("indexSelectAllButton");
     const resetPicksButton = document.getElementById("indexResetPicksButton");
-    const miniCalendar = document.getElementById("indexMiniCalendar");
-    const dateMeta = document.getElementById("indexDateMeta");
-    const meta = document.getElementById("indexMeta");
+    const miniCalendar = document.getElementById("indexMiniCalendar") || stickyMiniCalendar;
     const errorBox = document.getElementById("indexError");
     const list = document.getElementById("indexList");
 
@@ -931,14 +1052,47 @@
       theme: "",
       turnover: 0,
       limit: 100,
-      bars: 63,
       timeframe: "daily",
+      rangeMonths: 3,
+      rangeMonthsByTimeframe: {
+        daily: 3,
+        weekly: 12,
+        monthly: 36,
+      },
+      timeframePopoverOpen: false,
+      timeframePopoverTarget: "",
+      deviationFilters: {
+        deviation25: { mode: "", min: "", max: "" },
+        deviation75: { mode: "", min: "", max: "" },
+        deviation200: { mode: "", min: "", max: "" },
+      },
+      deviationDrafts: {
+        deviation25: { mode: "", min: "", max: "" },
+        deviation75: { mode: "", min: "", max: "" },
+        deviation200: { mode: "", min: "", max: "" },
+      },
+      pendingManifest: null,
+      hasFreshUpdate: false,
+      isRefreshing: false,
+      headerStatusFlashTimer: null,
+      headerStatusFlashActive: false,
+      manifestPollId: null,
+      dev200PopoverOpen: false,
+      stickyDateOpen: false,
+      stickyFiltersOpen: false,
       selectedDate: "",
       calendarMonth: null,
       picks: {},
       themeOrder: [],
       visibleRecords: [],
     };
+
+    if (stickyDatePopover && stickyDatePopover.parentElement !== document.body) {
+      document.body.appendChild(stickyDatePopover);
+    }
+    if (stickyFiltersPopover && stickyBar && stickyFiltersPopover.parentElement !== stickyBar.parentElement) {
+      stickyBar.insertAdjacentElement("afterend", stickyFiltersPopover);
+    }
 
     const params = new URLSearchParams(window.location.search);
     state.sort = params.get("sort") || state.sort;
@@ -948,34 +1102,669 @@
       ? Number(params.get("turnover"))
       : 0;
     state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
-    state.bars = INDEX_SCANNER_BARS.includes(Number(params.get("bars"))) ? Number(params.get("bars")) : state.bars;
     state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
+    state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
+    state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
+    state.deviationFilters.deviation25 = {
+      mode: normalizeDeviationFilterInputMode(params.get("dev25_mode")),
+      min: normalizeDeviationFilterValue(params.get("dev25_min")),
+      max: normalizeDeviationFilterValue(params.get("dev25_max")),
+    };
+    state.deviationFilters.deviation75 = {
+      mode: normalizeDeviationFilterInputMode(params.get("dev75_mode")),
+      min: normalizeDeviationFilterValue(params.get("dev75_min")),
+      max: normalizeDeviationFilterValue(params.get("dev75_max")),
+    };
+    state.deviationFilters.deviation200 = {
+      mode: normalizeDeviationFilterInputMode(params.get("dev200_mode")),
+      min: normalizeDeviationFilterValue(params.get("dev200_min")),
+      max: normalizeDeviationFilterValue(params.get("dev200_max")),
+    };
+    const genericDevMin = normalizeDeviationFilterValue(params.get("devMin"));
+    const genericDevMax = normalizeDeviationFilterValue(params.get("devMax"));
+    const activeDeviationKeyFromUrl = getActiveDeviationSortKey(state.sort);
+    if (activeDeviationKeyFromUrl && (genericDevMin !== "" || genericDevMax !== "")) {
+      state.deviationFilters[activeDeviationKeyFromUrl] = buildDeviationFilterFromBounds(genericDevMin, genericDevMax);
+    }
+    state.deviationDrafts = {
+      deviation25: { ...state.deviationFilters.deviation25 },
+      deviation75: { ...state.deviationFilters.deviation75 },
+      deviation200: { ...state.deviationFilters.deviation200 },
+    };
     state.picks = loadScannerPicks();
-    sortSelect.value = state.sort;
+    if (sortSelect) {
+      sortSelect.value = state.sort;
+    }
     themeSelect.value = state.theme;
     turnoverSelect.value = String(state.turnover);
     limitSelect.value = String(state.limit);
-    barsSelect.value = String(state.bars);
-    timeframeSelect.value = state.timeframe;
+    if (stickySortSelect) {
+      stickySortSelect.value = state.sort;
+    }
+    if (stickyLimitSelect) {
+      stickyLimitSelect.value = String(state.limit);
+    }
+    if (stickyTurnoverSelect) {
+      stickyTurnoverSelect.value = String(state.turnover);
+    }
+    const initialDeviationFilter = getActiveDeviationFilter(state);
+    if (dev200ModeSelect) {
+      dev200ModeSelect.value = initialDeviationFilter.mode || "gte";
+    }
+    if (dev200MinInput) {
+      dev200MinInput.value = initialDeviationFilter.min;
+    }
+    if (dev200MaxInput) {
+      dev200MaxInput.value = initialDeviationFilter.max;
+    }
+    if (stickyDevMinInput) {
+      stickyDevMinInput.value = initialDeviationFilter.min || "-20";
+    }
+    if (stickyDevMaxInput) {
+      stickyDevMaxInput.value = initialDeviationFilter.max || "20";
+    }
+
+    function updateTimeframeUI() {
+      if (!timeframeGroup) {
+        return;
+      }
+      timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
+        const isActive = btn.dataset.value === state.timeframe;
+        btn.classList.toggle("active", isActive);
+        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function updateRangeChip() {
+      if (!rangeChip) {
+        return;
+      }
+      rangeChip.textContent = "";
+    }
+
+    function updateStickyTimeframeUI() {
+      if (!stickyTimeframeGroup) {
+        return;
+      }
+      stickyTimeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
+        const isActive = btn.dataset.value === state.timeframe;
+        btn.classList.toggle("active", isActive);
+        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function updateStickyBarVisibility() {
+      if (!stickyBar) {
+        return;
+      }
+      stickyBar.hidden = false;
+    }
+
+    function updateStickyHeaderActions() {
+      if (!stickyPickedLink) {
+        return;
+      }
+      const pickCount = Object.keys(state.picks || {}).length;
+      stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+    }
+
+    function updateStickyFiltersUi() {
+      const activeKey = getActiveDeviationSortKey(state.sort);
+      const activeFilter = getActiveDeviationFilter(state);
+      const activeDraft = getActiveDeviationDraft(state);
+      const hasFilterSettings =
+        Boolean(state.tag) || Boolean(state.theme) || Number(state.turnover || 0) > 0 || Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
+      if (stickyFiltersButton) {
+        const deviationSummary = activeKey ? formatDeviationFilterSummary(activeFilter) : "";
+        stickyFiltersButton.textContent = deviationSummary || (hasFilterSettings ? "Filters ON" : "Filters");
+        stickyFiltersButton.setAttribute("aria-expanded", state.stickyFiltersOpen ? "true" : "false");
+        stickyFiltersButton.classList.toggle("is-active", state.stickyFiltersOpen || hasFilterSettings);
+      }
+      if (stickyFiltersPopover) {
+        stickyFiltersPopover.hidden = !state.stickyFiltersOpen;
+        stickyFiltersPopover.classList.toggle("is-open", state.stickyFiltersOpen);
+      }
+      if (stickyTagSelect) {
+        stickyTagSelect.value = state.tag;
+      }
+      if (stickyThemeSelect) {
+        stickyThemeSelect.value = state.theme;
+      }
+      if (stickyTurnoverSelect) {
+        stickyTurnoverSelect.value = String(state.turnover);
+      }
+      if (stickyAdvanced) {
+        stickyAdvanced.hidden = !activeKey;
+      }
+      if (stickyDeviationTitle) {
+        stickyDeviationTitle.textContent = activeKey ? getDeviationSortLabel(activeKey) : "Deviation";
+      }
+      setStickyDeviationControls(activeDraft);
+    }
+
+    function updateStickyDateUi() {
+      if (stickyDateButton) {
+        const label = state.selectedDate ? state.selectedDate.replace(/-/g, ".") : "";
+        stickyDateButton.textContent = label ? `Date ${label} ▼` : "Date ▼";
+        stickyDateButton.setAttribute("aria-expanded", state.stickyDateOpen ? "true" : "false");
+      }
+      if (stickyDatePopover) {
+        stickyDatePopover.hidden = !state.stickyDateOpen;
+        stickyDatePopover.classList.toggle("is-open", state.stickyDateOpen);
+        if (state.stickyDateOpen) {
+          requestAnimationFrame(positionDatePopover);
+        } else {
+          stickyDatePopover.style.left = "";
+          stickyDatePopover.style.top = "";
+          stickyDatePopover.style.maxHeight = "";
+        }
+      }
+    }
+
+    function buildDeviationFilterFromBounds(minValue, maxValue) {
+      const min = normalizeDeviationFilterValue(minValue);
+      const max = normalizeDeviationFilterValue(maxValue);
+      if (min === "" && max === "") {
+        return { mode: "", min: "", max: "" };
+      }
+      if (min !== "" && max !== "") {
+        const minNum = Number(min);
+        const maxNum = Number(max);
+        if (Number.isFinite(minNum) && Number.isFinite(maxNum) && minNum > maxNum) {
+          return { mode: "between", min: String(maxNum), max: String(minNum) };
+        }
+        return { mode: "between", min, max };
+      }
+      if (min !== "") {
+        return { mode: "gte", min, max: "" };
+      }
+      return { mode: "lte", min: "", max };
+    }
+
+    function formatDeviationFilterSummary(filter) {
+      if (!filter || (!filter.mode && filter.min === "" && filter.max === "")) {
+        return "";
+      }
+      if (filter.min !== "" && filter.max !== "") {
+        return `Dev ${formatDeviationPercent(filter.min)} ~ ${formatDeviationPercent(filter.max)}`;
+      }
+      if (filter.min !== "") {
+        return `Dev >= ${formatDeviationPercent(filter.min)}`;
+      }
+      if (filter.max !== "") {
+        return `Dev <= ${formatDeviationPercent(filter.max)}`;
+      }
+      return "";
+    }
+
+    function setStickyDeviationControls(filter) {
+      const min = filter?.min ?? "";
+      const max = filter?.max ?? "";
+      if (stickyDevMinInput) {
+        stickyDevMinInput.value = min === "" ? "-20" : String(min);
+      }
+      if (stickyDevMaxInput) {
+        stickyDevMaxInput.value = max === "" ? "20" : String(max);
+      }
+      if (stickyDevMinNumberInput) {
+        stickyDevMinNumberInput.value = min === "" ? "" : Number(min).toFixed(1);
+      }
+      if (stickyDevMaxNumberInput) {
+        stickyDevMaxNumberInput.value = max === "" ? "" : Number(max).toFixed(1);
+      }
+      syncStickyDeviationSliderUi("state");
+    }
+
+    function formatDeviationPercent(value) {
+      const numeric = Number(value || 0);
+      const text = Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1);
+      return `${numeric > 0 ? "+" : ""}${text}%`;
+    }
+
+    function clampDeviationSliderValue(value, fallback = 0) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return fallback;
+      }
+      return Math.max(-20, Math.min(20, Math.round(numeric * 10) / 10));
+    }
+
+    function syncStickyDeviationSliderUi(source = "slider") {
+      if (!stickyDevMinInput || !stickyDevMaxInput) {
+        return;
+      }
+      let minValue = -20;
+      let maxValue = 20;
+      let minDraftValue = stickyDevMinNumberInput?.value?.trim?.() ?? "";
+      let maxDraftValue = stickyDevMaxNumberInput?.value?.trim?.() ?? "";
+
+      if (source === "slider") {
+        minValue = clampDeviationSliderValue(stickyDevMinInput.value, -20);
+        maxValue = clampDeviationSliderValue(stickyDevMaxInput.value, 20);
+        if (minValue > maxValue) {
+          if (document.activeElement === stickyDevMinInput) {
+            maxValue = minValue;
+          } else {
+            minValue = maxValue;
+          }
+        }
+        stickyDevMinInput.value = String(minValue);
+        stickyDevMaxInput.value = String(maxValue);
+        minDraftValue = minValue.toFixed(1);
+        maxDraftValue = maxValue.toFixed(1);
+        if (stickyDevMinNumberInput) {
+          stickyDevMinNumberInput.value = minDraftValue;
+        }
+        if (stickyDevMaxNumberInput) {
+          stickyDevMaxNumberInput.value = maxDraftValue;
+        }
+      } else {
+        minValue = minDraftValue === "" ? -20 : clampDeviationSliderValue(minDraftValue, -20);
+        maxValue = maxDraftValue === "" ? 20 : clampDeviationSliderValue(maxDraftValue, 20);
+        if (minValue > maxValue) {
+          if (document.activeElement === stickyDevMinInput || document.activeElement === stickyDevMinNumberInput) {
+            maxValue = minValue;
+            if (maxDraftValue !== "") {
+              maxDraftValue = maxValue.toFixed(1);
+            }
+          } else {
+            minValue = maxValue;
+            if (minDraftValue !== "") {
+              minDraftValue = minValue.toFixed(1);
+            }
+          }
+        }
+        stickyDevMinInput.value = String(minValue);
+        stickyDevMaxInput.value = String(maxValue);
+        if (source === "input") {
+          if (stickyDevMinNumberInput && minDraftValue !== "") {
+            stickyDevMinNumberInput.value = Number(minDraftValue).toFixed(1);
+          }
+          if (stickyDevMaxNumberInput && maxDraftValue !== "") {
+            stickyDevMaxNumberInput.value = Number(maxDraftValue).toFixed(1);
+          }
+        }
+      }
+      const percent = (value) => ((value + 20) / 40) * 100;
+      if (stickyDevRangeFill) {
+        stickyDevRangeFill.style.left = `${percent(minValue)}%`;
+        stickyDevRangeFill.style.width = `${Math.max(0, percent(maxValue) - percent(minValue))}%`;
+      }
+      const activeKey = getActiveDeviationSortKey(state.sort);
+      if (activeKey && source !== "state") {
+        const nextDraft = buildDeviationFilterFromBounds(
+          minDraftValue,
+          maxDraftValue,
+        );
+        state.deviationDrafts[activeKey] = nextDraft;
+      }
+    }
+
+    function positionFloatingPopover(anchor, popover, options = {}) {
+      if (!anchor || !popover) {
+        return;
+      }
+      const widthPadding = Number(options.widthPadding || 12);
+      const anchorRect = anchor.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const maxLeft = Math.max(widthPadding, viewportWidth - popoverRect.width - widthPadding);
+      const idealLeft = anchorRect.right - popoverRect.width;
+      const left = Math.min(Math.max(widthPadding, idealLeft), maxLeft);
+      const top = Math.min(
+        Math.max(8, anchorRect.bottom + 8),
+        Math.max(8, viewportHeight - popoverRect.height - 8),
+      );
+      popover.style.left = `${Math.round(left)}px`;
+      popover.style.top = `${Math.round(top)}px`;
+    }
+
+    function positionDatePopover() {
+      if (!stickyDateButton || !stickyDatePopover) {
+        return;
+      }
+      const gap = 8;
+      const padding = 12;
+      const anchorRect = stickyDateButton.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      stickyDatePopover.style.left = "0px";
+      stickyDatePopover.style.top = "0px";
+      stickyDatePopover.style.maxHeight = `min(360px, calc(100vh - 24px))`;
+
+      const popoverRect = stickyDatePopover.getBoundingClientRect();
+      const popoverWidth = Math.min(popoverRect.width, viewportWidth - padding * 2);
+      const naturalHeight = popoverRect.height;
+      const availableBelow = viewportHeight - anchorRect.bottom - gap - padding;
+      const availableAbove = anchorRect.top - gap - padding;
+      const shouldOpenAbove = availableBelow < naturalHeight && availableAbove > availableBelow;
+      const availableHeight = Math.max(180, shouldOpenAbove ? availableAbove : availableBelow);
+      const maxHeight = Math.min(360, Math.max(180, availableHeight));
+
+      stickyDatePopover.style.maxHeight = `${Math.round(maxHeight)}px`;
+      const measuredHeight = Math.min(stickyDatePopover.getBoundingClientRect().height, maxHeight);
+      const left = Math.min(
+        Math.max(padding, anchorRect.left),
+        Math.max(padding, viewportWidth - popoverWidth - padding)
+      );
+      const top = shouldOpenAbove
+        ? Math.max(padding, anchorRect.top - measuredHeight - gap)
+        : Math.min(viewportHeight - measuredHeight - padding, anchorRect.bottom + gap);
+
+      stickyDatePopover.style.left = `${Math.round(left)}px`;
+      stickyDatePopover.style.top = `${Math.round(top)}px`;
+    }
+
+    function updateTimeframePopover() {
+      const targetTimeframe = state.timeframePopoverTarget || state.timeframe;
+      const options = INDEX_SCANNER_TIMEFRAME_RANGES[targetTimeframe] || [];
+      const targetRangeMonths = state.rangeMonthsByTimeframe[targetTimeframe] || options[0]?.months || state.rangeMonths;
+      if (timeframePopoverTitle) {
+        timeframePopoverTitle.textContent = `${indexScannerTimeframeLabel(targetTimeframe)} Range`;
+      }
+      if (timeframeOptions) {
+        timeframeOptions.innerHTML = options
+          .map((option) => `
+            <button
+              type="button"
+              class="index-timeframe-option${option.months === targetRangeMonths ? " is-active" : ""}"
+              data-timeframe-option="${targetTimeframe}"
+              data-range-months="${option.months}"
+            >${option.label}</button>
+          `)
+          .join("");
+        Array.from(timeframeOptions.querySelectorAll("button[data-timeframe-option]")).forEach((button) => {
+          button.addEventListener("click", async () => {
+            state.timeframe = String(button.dataset.timeframeOption || state.timeframe);
+            state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, button.dataset.rangeMonths, state.rangeMonths);
+            state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
+            state.timeframePopoverOpen = false;
+            state.timeframePopoverTarget = "";
+            updateTimeframeUI();
+            updateRangeChip();
+            updateTimeframePopover();
+            try {
+              errorBox.hidden = true;
+              list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+              state.overview = await loadOverview(state.selectedDate, state.timeframe);
+              renderTagOptions();
+            } catch (error) {
+              showError(errorBox, error.message);
+              return;
+            }
+            await render();
+          });
+        });
+      }
+      if (timeframePopover) {
+        const isOpen = state.timeframePopoverOpen && Boolean(state.timeframePopoverTarget);
+        timeframePopover.hidden = !isOpen;
+        timeframePopover.classList.toggle("is-open", isOpen);
+      }
+    }
+
+    updateTimeframeUI();
+    updateStickyTimeframeUI();
+    updateRangeChip();
+    updateTimeframePopover();
+    updateDeviation200Controls();
+    updateStickyDateUi();
+    updateStickyFiltersUi();
+    updateStickyBarVisibility();
     if (pickedLink) {
       pickedLink.href = "./picked.html";
     }
+    if (stickyPickedLink) {
+      stickyPickedLink.href = "./picked.html";
+    }
 
-    [sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, barsSelect, timeframeSelect].forEach((control) => {
+    [...new Set([sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
+      .forEach((control) => {
       control.addEventListener("change", async () => {
-        state.sort = sortSelect.value;
-        state.tag = tagSelect.value;
-        state.theme = themeSelect.value;
-        state.turnover = Number(turnoverSelect.value);
-        state.limit = Number(limitSelect.value);
-        state.bars = Number(barsSelect.value);
-        state.timeframe = timeframeSelect.value;
+        state.sort = stickySortSelect?.matches(":focus") ? stickySortSelect.value : sortSelect.value;
+        state.tag = stickyTagSelect?.matches(":focus") ? stickyTagSelect.value : tagSelect.value;
+        state.theme = stickyThemeSelect?.matches(":focus") ? stickyThemeSelect.value : themeSelect.value;
+        state.turnover = Number(stickyTurnoverSelect?.matches(":focus") ? stickyTurnoverSelect.value : turnoverSelect.value);
+        state.limit = Number(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect.value : limitSelect.value);
+        if (sortSelect) sortSelect.value = state.sort;
+        if (stickySortSelect) stickySortSelect.value = state.sort;
+        if (tagSelect) tagSelect.value = state.tag;
+        if (stickyTagSelect) stickyTagSelect.value = state.tag;
+        if (themeSelect) themeSelect.value = state.theme;
+        if (stickyThemeSelect) stickyThemeSelect.value = state.theme;
+        if (turnoverSelect) turnoverSelect.value = String(state.turnover);
+        if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(state.turnover);
+        if (limitSelect) limitSelect.value = String(state.limit);
+        if (stickyLimitSelect) stickyLimitSelect.value = String(state.limit);
+        const activeDeviationKey = getActiveDeviationSortKey(state.sort);
+        if (activeDeviationKey) {
+          state.deviationDrafts[activeDeviationKey] = { ...state.deviationFilters[activeDeviationKey] };
+        }
+        updateDeviation200Controls();
+        updateStickyFiltersUi();
         await render();
       });
     });
 
+    [stickyDevMinInput, stickyDevMaxInput].filter(Boolean).forEach((input) => {
+      input.addEventListener("input", () => {
+        syncStickyDeviationSliderUi("slider");
+      });
+    });
+
+    [stickyDevMinNumberInput, stickyDevMaxNumberInput].filter(Boolean).forEach((input) => {
+      input.addEventListener("input", () => {
+        syncStickyDeviationSliderUi("input");
+      });
+      input.addEventListener("change", () => {
+        syncStickyDeviationSliderUi("input");
+      });
+    });
+
+    stickyDevApplyButton?.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const activeKey = getActiveDeviationSortKey(state.sort);
+      if (!activeKey) {
+        return;
+      }
+      const nextFilter = buildDeviationFilterFromBounds(
+        stickyDevMinNumberInput?.value,
+        stickyDevMaxNumberInput?.value,
+      );
+      state.deviationDrafts[activeKey] = nextFilter;
+      state.deviationFilters[activeKey] = nextFilter;
+      setStickyDeviationControls(nextFilter);
+      console.debug('[Deviation Apply]', {
+        draftDevMin: stickyDevMinNumberInput?.value ?? '',
+        draftDevMax: stickyDevMaxNumberInput?.value ?? '',
+        appliedDevMin: nextFilter.min,
+        appliedDevMax: nextFilter.max,
+      });
+      updateDeviation200Controls();
+      updateStickyFiltersUi();
+      await render();
+      console.debug('[Deviation Apply Result]', {
+        updatedUrl: window.location.href,
+        filteredResultCount: state.visibleRecords?.length ?? 0,
+      });
+    });
+
+    stickyDevResetButton?.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const activeKey = getActiveDeviationSortKey(state.sort);
+      if (activeKey) {
+        state.deviationDrafts[activeKey] = { mode: "", min: "", max: "" };
+        state.deviationFilters[activeKey] = { mode: "", min: "", max: "" };
+      }
+      if (stickyDevMinNumberInput) stickyDevMinNumberInput.value = "";
+      if (stickyDevMaxNumberInput) stickyDevMaxNumberInput.value = "";
+      setStickyDeviationControls({ mode: "", min: "", max: "" });
+      updateDeviation200Controls();
+      updateStickyFiltersUi();
+      await render();
+    });
+
+    stickyFiltersButton?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.stickyFiltersOpen = !state.stickyFiltersOpen;
+      state.stickyDateOpen = false;
+      updateStickyFiltersUi();
+      updateStickyDateUi();
+    });
+
+    stickyFiltersPopover?.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    stickyDateButton?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.stickyDateOpen = !state.stickyDateOpen;
+      state.stickyFiltersOpen = false;
+      updateStickyDateUi();
+      updateStickyFiltersUi();
+    });
+
+    stickyDatePopover?.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener("click", (event) => {
+      if (state.timeframePopoverOpen && timeframePopover && timeframeGroup) {
+        if (!timeframePopover.contains(event.target) && !timeframeGroup.contains(event.target)) {
+          state.timeframePopoverOpen = false;
+          state.timeframePopoverTarget = "";
+          updateTimeframePopover();
+        }
+      }
+      if (state.stickyFiltersOpen && stickyFiltersPopover && stickyFiltersButton) {
+        if (!stickyFiltersPopover.contains(event.target) && !stickyFiltersButton.contains(event.target)) {
+          state.stickyFiltersOpen = false;
+          updateStickyFiltersUi();
+        }
+      }
+      if (state.stickyDateOpen && stickyDatePopover && stickyDateButton) {
+        if (!stickyDatePopover.contains(event.target) && !stickyDateButton.contains(event.target)) {
+          state.stickyDateOpen = false;
+          updateStickyDateUi();
+        }
+      }
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        if (state.timeframePopoverOpen) {
+          state.timeframePopoverOpen = false;
+          state.timeframePopoverTarget = "";
+          updateTimeframePopover();
+        }
+        if (state.stickyFiltersOpen) {
+          state.stickyFiltersOpen = false;
+          updateStickyFiltersUi();
+        }
+        if (state.stickyDateOpen) {
+          state.stickyDateOpen = false;
+          updateStickyDateUi();
+        }
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (state.stickyDateOpen) {
+        positionDatePopover();
+      }
+    });
+
+    window.addEventListener("scroll", () => {
+      if (state.stickyDateOpen) {
+        positionDatePopover();
+      }
+    }, { passive: true });
+
+    if (timeframeGroup) {
+      const LONG_PRESS_MS = 420;
+      timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
+        let longPressTimer = null;
+        let longPressTriggered = false;
+
+        const clearLongPressTimer = () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        };
+
+        const openTimeframePopover = () => {
+          state.timeframePopoverTarget = String(btn.dataset.value || state.timeframe);
+          state.timeframePopoverOpen = true;
+          updateTimeframePopover();
+        };
+
+        btn.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) {
+            return;
+          }
+          longPressTriggered = false;
+          clearLongPressTimer();
+          longPressTimer = setTimeout(() => {
+            longPressTriggered = true;
+            openTimeframePopover();
+          }, LONG_PRESS_MS);
+        });
+
+        ["pointerup", "pointerleave", "pointercancel"].forEach((eventName) => {
+          btn.addEventListener(eventName, clearLongPressTimer);
+        });
+
+        btn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          clearLongPressTimer();
+          const nextTimeframe = String(btn.dataset.value || state.timeframe);
+          if (longPressTriggered) {
+            longPressTriggered = false;
+            return;
+          }
+          if (state.timeframe === nextTimeframe && !state.timeframePopoverOpen) {
+            return;
+          }
+          state.timeframe = nextTimeframe;
+          state.rangeMonths = normalizeIndexScannerRangeMonths(
+            state.timeframe,
+            state.rangeMonthsByTimeframe[state.timeframe],
+            state.rangeMonths,
+          );
+          state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
+          state.timeframePopoverOpen = false;
+          state.timeframePopoverTarget = "";
+          updateTimeframeUI();
+          updateRangeChip();
+          updateTimeframePopover();
+          try {
+            errorBox.hidden = true;
+            list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+            state.overview = await loadOverview(state.selectedDate, state.timeframe);
+            renderTagOptions();
+          } catch (error) {
+            showError(errorBox, error.message);
+            return;
+          }
+          await render();
+        });
+      });
+    }
+
     if (resetPicksButton) {
       resetPicksButton.addEventListener("click", async () => {
+        resetScannerPicks(state);
+        await render();
+      });
+    }
+    if (stickyResetPicksButton) {
+      stickyResetPicksButton.addEventListener("click", async () => {
         resetScannerPicks(state);
         await render();
       });
@@ -986,22 +1775,44 @@
         await render();
       });
     }
+    if (stickySelectAllPicksButton) {
+      stickySelectAllPicksButton.addEventListener("click", async () => {
+        selectAllScannerPicks(state.visibleRecords, state);
+        await render();
+      });
+    }
+    refreshButton?.addEventListener("click", async () => {
+      state.isRefreshing = true;
+      updateHeaderStatus();
+      await runRefreshAction(refreshButton, errorBox, async () => {
+        state.manifest = state.pendingManifest || await loadManifest();
+        state.pendingManifest = null;
+        state.hasFreshUpdate = false;
+        await loadDate(state.selectedDate || state.manifest.latestDate);
+        await render();
+      });
+      state.isRefreshing = false;
+      triggerHeaderStatusFlash();
+      updateHeaderStatus();
+    });
 
     try {
       state.manifest = await loadManifest();
       state.themeOrder = await loadThemeOrder();
       await loadDate(params.get("date") || state.manifest.latestDate);
       await render();
+      startManifestPolling();
     } catch (error) {
       showError(errorBox, error.message);
     }
 
     async function loadDate(requestedDate) {
       state.selectedDate = resolveAvailableDate(requestedDate, state.manifest.availableDates);
-      state.overview = await loadOverview(state.selectedDate);
+      state.overview = await loadOverview(state.selectedDate, state.timeframe);
       state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
       renderTagOptions();
       renderDateControls();
+      renderCalendar();
     }
 
     function renderTagOptions() {
@@ -1016,13 +1827,19 @@
               !MARKET_TAGS.has(industry.toLowerCase())
           )
       )].sort();
-      tagSelect.innerHTML = ['<option value="">すべて</option>']
+      tagSelect.innerHTML = ['<option value="">All</option>']
         .concat(industries.map((industry) => `<option value="${escapeHtml(industry)}">${escapeHtml(industry)}</option>`))
         .join("");
+      if (stickyTagSelect) {
+        stickyTagSelect.innerHTML = tagSelect.innerHTML;
+      }
       if (state.tag && !industries.includes(state.tag)) {
         state.tag = "";
       }
       tagSelect.value = state.tag;
+      if (stickyTagSelect) {
+        stickyTagSelect.value = state.tag;
+      }
     }
 
     function renderThemeOptions() {
@@ -1042,17 +1859,247 @@
       );
       const themeOptions = ["", ...orderedThemes, ...extraThemes];
       themeSelect.innerHTML = themeOptions
-        .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "すべて")}</option>`)
+        .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "All")}</option>`)
         .join("");
+      if (stickyThemeSelect) {
+        stickyThemeSelect.innerHTML = themeSelect.innerHTML;
+      }
       if (state.theme && !availableThemes.has(state.theme)) {
         state.theme = "";
       }
       themeSelect.value = state.theme;
+      if (stickyThemeSelect) {
+        stickyThemeSelect.value = state.theme;
+      }
+    }
+
+    function updateIndexHeaderActions() {
+      if (!pickedLink) {
+        return;
+      }
+      const pickCount = Object.keys(state.picks || {}).length;
+      pickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+      if (stickyPickedLink) {
+        stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+      }
+    }
+
+    function updateHeaderStatus() {
+      if (!updatedStatus) {
+        return;
+      }
+      const currentSnapshot = state.manifest?.currentSnapshot || {};
+      const statusState = resolveHeaderStatusState(currentSnapshot?.generatedAt, {
+        snapshot: currentSnapshot,
+        hasFreshUpdate: state.hasFreshUpdate,
+        isRefreshing: state.isRefreshing,
+        flash: state.headerStatusFlashActive,
+      });
+      const timeParts = formatSnapshotGeneratedAtParts(currentSnapshot?.generatedAt);
+      updatedStatus.className = [
+        "index-header-status",
+        `index-header-status--${statusState.tone}`,
+        statusState.pending ? "index-header-status--pending" : "",
+        statusState.refreshing ? "index-header-status--refreshing" : "",
+        statusState.flash ? "index-header-status--flash" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      updatedStatus.setAttribute(
+        "title",
+        [
+          statusState.label,
+          statusState.marketPhase,
+          timeParts.full || "--",
+          statusState.pending ? "new data ready" : "",
+          statusState.refreshing ? "refreshing" : "",
+        ]
+          .filter(Boolean)
+          .join(" / ")
+      );
+      updatedStatus.innerHTML = `
+        <span class="index-header-status-dot" aria-hidden="true"></span>
+        <span class="index-header-status-body">
+          <span class="index-header-status-topline">
+            <span class="index-header-status-label">${escapeHtml(statusState.label)}</span>
+            <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
+          </span>
+          <span class="index-header-status-bottomline">
+            <span class="index-header-status-date">${escapeHtml(timeParts.date || "--/--")}</span>
+            <span class="index-header-status-time">
+              <span class="index-header-status-hm">${escapeHtml(timeParts.hm || "--:--")}</span>
+              <span class="index-header-status-seconds">${escapeHtml(timeParts.seconds || "")}</span>
+            </span>
+          </span>
+        </span>
+      `;
+    }
+
+    function resolveHeaderStatusState(generatedAt, options = {}) {
+      const hasFreshUpdate = Boolean(options.hasFreshUpdate);
+      const isRefreshing = Boolean(options.isRefreshing);
+      const flash = Boolean(options.flash);
+      const snapshot = options.snapshot || {};
+      const marketPhase = resolveHeaderMarketPhase();
+      const tone = resolveHeaderStatusTone(generatedAt, { hasFreshUpdate, isRefreshing });
+      return {
+        tone,
+        pending: hasFreshUpdate,
+        refreshing: isRefreshing,
+        flash,
+        label: resolveHeaderStatusLabel(snapshot, marketPhase),
+        marketPhase,
+      };
+    }
+
+    function resolveHeaderStatusLabel(snapshot, marketPhase) {
+      if (String(snapshot?.status || "").trim() === "finalized" || String(snapshot?.type || "").trim() === "daily") {
+        return "EOD";
+      }
+      if (marketPhase === "PRE") {
+        return "PRE";
+      }
+      if (marketPhase === "JP CLOSED" || marketPhase === "AFTER") {
+        return "CLOSED";
+      }
+      return "LIVE";
+    }
+
+    function resolveHeaderStatusTone(generatedAt, options = {}) {
+      if (options.isRefreshing) {
+        return "refreshing";
+      }
+      if (options.hasFreshUpdate) {
+        return "pending";
+      }
+      if (!generatedAt) {
+        return "neutral";
+      }
+      const parsed = parseSnapshotGeneratedAtToDate(generatedAt);
+      if (!parsed) {
+        return "neutral";
+      }
+      const ageMinutes = Math.max(0, (Date.now() - parsed.getTime()) / 60000);
+      if (ageMinutes <= 5) {
+        return "fresh";
+      }
+      if (ageMinutes <= 30) {
+        return "warm";
+      }
+      if (ageMinutes <= 60) {
+        return "stale";
+      }
+      return "critical";
+    }
+
+    function resolveHeaderMarketPhase() {
+      const now = new Date();
+      const day = now.getDay();
+      if (day === 0 || day === 6) {
+        return "JP CLOSED";
+      }
+      const minutes = now.getHours() * 60 + now.getMinutes();
+      if (minutes < 9 * 60) {
+        return "PRE";
+      }
+      if ((minutes >= 9 * 60 && minutes < 11 * 60 + 30) || (minutes >= 12 * 60 + 30 && minutes <= 15 * 60 + 30)) {
+        return "JP LIVE";
+      }
+      if (minutes > 15 * 60 + 30 && minutes <= 18 * 60) {
+        return "AFTER";
+      }
+      return "JP CLOSED";
+    }
+
+    function parseSnapshotGeneratedAtToDate(value) {
+      const raw = String(value || "").trim();
+      if (!raw) {
+        return null;
+      }
+      const parsed = new Date(raw);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function formatSnapshotGeneratedAtParts(value) {
+      const text = String(value || "").trim();
+      if (!text) {
+        return { full: "", date: "", hm: "", seconds: "" };
+      }
+      const date = new Date(text);
+      if (Number.isNaN(date.getTime())) {
+        return { full: text, date: "", hm: text, seconds: "" };
+      }
+      const pad = (number) => String(number).padStart(2, "0");
+      const datePart = `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
+      const hmPart = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      const secondsPart = `:${pad(date.getSeconds())}`;
+      return {
+        full: `${datePart} ${hmPart}${secondsPart}`,
+        date: datePart,
+        hm: hmPart,
+        seconds: secondsPart,
+      };
+    }
+
+    function triggerHeaderStatusFlash() {
+      if (state.headerStatusFlashTimer) {
+        window.clearTimeout(state.headerStatusFlashTimer);
+      }
+      state.headerStatusFlashActive = true;
+      updateHeaderStatus();
+      state.headerStatusFlashTimer = window.setTimeout(() => {
+        state.headerStatusFlashActive = false;
+        state.headerStatusFlashTimer = null;
+        updateHeaderStatus();
+      }, 1200);
+    }
+
+    function manifestRevisionKey(manifest) {
+      const currentSnapshot = manifest?.currentSnapshot || {};
+      return JSON.stringify({
+        latestDate: String(manifest?.latestDate || "").trim(),
+        snapshotDate: String(currentSnapshot?.date || "").trim(),
+        snapshotType: String(currentSnapshot?.type || "").trim(),
+        snapshotStatus: String(currentSnapshot?.status || "").trim(),
+        generatedAt: String(currentSnapshot?.generatedAt || "").trim(),
+      });
+    }
+
+    function isManifestNewer(nextManifest, currentManifest) {
+      return manifestRevisionKey(nextManifest) !== manifestRevisionKey(currentManifest);
+    }
+
+    async function checkForManifestUpdate() {
+      try {
+        const latestManifest = await loadManifest();
+        if (isManifestNewer(latestManifest, state.manifest)) {
+          state.pendingManifest = latestManifest;
+          state.hasFreshUpdate = true;
+        } else {
+          state.pendingManifest = null;
+          state.hasFreshUpdate = false;
+        }
+        updateHeaderStatus();
+      } catch (_error) {
+      }
+    }
+
+    function startManifestPolling() {
+      if (state.manifestPollId) {
+        clearInterval(state.manifestPollId);
+      }
+      state.manifestPollId = window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+          void checkForManifestUpdate();
+        }
+      }, 30000);
     }
 
     async function render() {
       errorBox.hidden = true;
       list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+      state.picks = loadScannerPicks();
+      updateIndexHeaderActions();
       renderTagOptions();
       renderThemeOptions();
       const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
@@ -1067,6 +2114,14 @@
         scannerBase = baseFiltered.filter((record) => getStopHighStatus(record) !== "none");
       } else if (state.sort === "new_high_20d") {
         scannerBase = baseFiltered.filter((record) => record.newHigh20d === true);
+      } else if (isDeviationSort(state.sort)) {
+        const deviationFilter = getActiveDeviationFilter(state);
+        scannerBase = baseFiltered.filter((record) => {
+          const deviationValue = getDeviationValueBySort(record, state.sort);
+          return deviationValue != null && matchesDeviationFilter(deviationValue, deviationFilter.mode, deviationFilter.min, deviationFilter.max);
+        });
+      } else if (state.sort === "trend_turn") {
+        scannerBase = baseFiltered.filter((record) => record.trendTurnCandidate === true);
       } else if (state.sort === "rebound_signal") {
         scannerBase = baseFiltered.filter((record) => String(record.signalCategory || "") !== "none");
       }
@@ -1079,21 +2134,39 @@
         state.theme,
         state.turnover,
         state.limit,
-        state.bars,
-        state.timeframe
+        state.rangeMonths,
+        state.timeframe,
+        state.deviationFilters
       );
-      renderCalendar();
-      meta.textContent = formatSnapshotBaseDate(state.selectedDate, state.manifest.currentSnapshot);
+      if (stickySortSelect) {
+        stickySortSelect.value = state.sort;
+      }
+      if (stickyLimitSelect) {
+        stickyLimitSelect.value = String(state.limit);
+      }
+      if (stickyTurnoverSelect) {
+        stickyTurnoverSelect.value = String(state.turnover);
+      }
+      updateStickyTimeframeUI();
+      updateRangeChip();
+      updateStickyFiltersUi();
+      updateHeaderStatus();
 
       if (!filtered.length) {
         if (selectAllPicksButton) {
           selectAllPicksButton.disabled = true;
+        }
+        if (stickySelectAllPicksButton) {
+          stickySelectAllPicksButton.disabled = true;
         }
         list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
         return;
       }
       if (selectAllPicksButton) {
         selectAllPicksButton.disabled = false;
+      }
+      if (stickySelectAllPicksButton) {
+        stickySelectAllPicksButton.disabled = false;
       }
 
       list.innerHTML = filtered
@@ -1110,36 +2183,114 @@
         });
       });
 
-      for (const record of filtered) {
+      const results = await mapWithConcurrency(filtered, CHART_FETCH_CONCURRENCY, async (record) => {
         try {
-          const payload = await loadTickerPayload(record.code);
-          renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.bars, {
-            timeframe: state.timeframe,
-            useBarCount: true,
-          });
-          const linksElement = document.getElementById(`scanLinks-${record.code}`);
-          if (linksElement) {
-            linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
-          }
+          return {
+            record,
+            status: "fulfilled",
+            value: await loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate }),
+          };
         } catch (error) {
-          showError(errorBox, `一部のチャート読込に失敗: ${error.message}`);
+          return { record, status: "rejected", reason: error };
         }
-      }
+      });
+
+      const baselineShape = results.find((result) => result.status === "fulfilled" && !result.value.validation.issues.length)?.value.shape || null;
+
+      results.forEach((result) => {
+        const record = result.record;
+        if (result.status === "rejected") {
+          renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
+          showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${result.reason?.message}`);
+          return;
+        }
+        const { payload, validation, shape, requestUrl, status, responseBody } = result.value;
+        if (validation.issues.length) {
+          console.debug("[ticker-chart:validation]", {
+            code: record.code,
+            requestUrl,
+            status,
+            responseBody: responseBody.slice(0, 1200),
+            parsedCandleCount: validation.parsedCandleCount,
+            issues: validation.issues,
+            warnings: validation.warnings,
+            shapeDiff: diffShapeAgainstBaseline(baselineShape, shape),
+          });
+          renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
+          showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
+          return;
+        }
+        renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
+          timeframe: state.timeframe,
+          useBarCount: false,
+        });
+        const linksElement = document.getElementById(`scanLinks-${record.code}`);
+        if (linksElement) {
+          linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+        }
+      });
     }
 
     function renderDateControls() {
-      dateMeta.textContent = `${state.selectedDate}基準 / ${state.manifest.availableDates.length}営業日保存 / 最新 ${state.manifest.latestDate}`;
+      updateStickyDateUi();
+    }
+
+    function updateDeviation200Controls() {
+      const activeKey = getActiveDeviationSortKey(state.sort);
+      const activeFilter = getActiveDeviationFilter(state);
+      const activeDraft = getActiveDeviationDraft(state);
+      const hasSettings = Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
+      const activeLabel = getDeviationSortLabel(activeKey);
+      if (dev200Button) {
+        dev200Button.hidden = !activeKey;
+        dev200Button.classList.toggle("is-active", hasSettings);
+        dev200Button.textContent = hasSettings ? "Advanced ON" : "Advanced ▼";
+        dev200Button.setAttribute("aria-expanded", activeKey && state.dev200PopoverOpen ? "true" : "false");
+      }
+      if (deviationPopoverTitle) {
+        deviationPopoverTitle.textContent = activeLabel || "Deviation";
+      }
+      if (dev200Popover) {
+        const isOpen = Boolean(activeKey) && state.dev200PopoverOpen;
+        dev200Popover.hidden = !isOpen;
+        dev200Popover.classList.toggle("is-open", isOpen);
+      }
+      if (dev200ModeSelect) {
+        dev200ModeSelect.value = activeFilter.mode || "gte";
+      }
+      if (dev200MinInput && dev200MinInput.value !== activeFilter.min) {
+        dev200MinInput.value = activeFilter.min;
+      }
+      if (dev200MaxInput && dev200MaxInput.value !== activeFilter.max) {
+        dev200MaxInput.value = activeFilter.max;
+      }
+      const activeMode = normalizeDeviationFilterInputMode(dev200ModeSelect?.value) || activeFilter.mode || "gte";
+      if (dev200MinInput) {
+        dev200MinInput.disabled = activeMode === "lte";
+      }
+      if (dev200MaxInput) {
+        dev200MaxInput.disabled = activeMode === "gte";
+      }
+      if (stickyAdvanced) {
+        stickyAdvanced.hidden = !activeKey;
+      }
+      if (stickyDeviationTitle) {
+        stickyDeviationTitle.textContent = activeLabel || "Deviation";
+      }
+      setStickyDeviationControls(activeDraft);
     }
 
     function renderCalendar() {
       const minMonth = startOfMonth(parseDate(state.manifest.availableDates[0]));
       const maxMonth = startOfMonth(parseDate(state.manifest.availableDates.at(-1)));
       renderMiniCalendar(
-        miniCalendar,
+        stickyMiniCalendar || miniCalendar,
         state.calendarMonth || startOfMonth(parseDate(state.selectedDate)),
         state.selectedDate,
         state.manifest.availableDates,
         async (nextDate) => {
+          state.stickyDateOpen = false;
+          updateStickyDateUi();
           await loadDate(nextDate);
           await render();
         },
@@ -1161,9 +2312,14 @@
 
   async function initPickedPage() {
     const count = document.getElementById("pickedCount");
+    const countBadge = document.getElementById("pickedCountBadge");
+    const setsBadge = document.getElementById("pickedSetsBadge");
+    const updatedBadge = document.getElementById("pickedUpdatedBadge");
     const exportMessage = document.getElementById("pickedExportMessage");
     const exportTradingViewButton = document.getElementById("pickedExportTradingViewButton");
     const exportHyperButton = document.getElementById("pickedExportHyperButton");
+    const headerExportButton = document.getElementById("pickedHeaderExportButton");
+    const headerSaveButton = document.getElementById("pickedHeaderSaveButton");
     const exportList = document.getElementById("pickedExportList");
     const registerAllButton = document.getElementById("pickedRegisterAllButton");
     const registerCount = document.getElementById("pickedRegisterCount");
@@ -1173,6 +2329,7 @@
     const registerNameError = document.getElementById("registerNameError");
     const registerNameOkButton = document.getElementById("registerNameOkButton");
     const registerNameCancelButton = document.getElementById("registerNameCancelButton");
+    const refreshButton = document.getElementById("pickedRefreshButton");
     const errorBox = document.getElementById("pickedError");
     const body = document.getElementById("pickedTableBody");
     const chartList = document.getElementById("pickedChartList");
@@ -1193,7 +2350,7 @@
       const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
       triggerExportDownloads([buildTradingViewExportEntry(picks)]);
       renderExportEntries(exportList, []);
-      exportMessage.textContent = "TradingView 用TXTをダウンロードしました。";
+      exportMessage.textContent = "TradingView TXT downloaded.";
     });
 
     exportHyperButton?.addEventListener("click", () => {
@@ -1201,17 +2358,33 @@
       const entries = buildHyperExportEntries(picks);
       triggerExportDownloads(entries);
       renderExportEntries(exportList, []);
-      exportMessage.textContent = `HYPER SBI 2 用CSVを${formatNumber(entries.length, 0)}件ダウンロードしました。`;
+      exportMessage.textContent = `HYPER SBI 2 CSV downloaded for ${formatNumber(picks.length, 0)} picks.`;
+    });
+
+    headerExportButton?.addEventListener("click", () => {
+      exportTradingViewButton?.click();
     });
 
     registerAllButton?.addEventListener("click", () => {
       const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
       if (!picks.length) {
-        showError(errorBox, "登録対象の選別銘柄がありません。");
+        showError(errorBox, "No picks available to save.");
         return;
       }
       errorBox.hidden = true;
       openRegisterNameModal();
+    });
+
+    headerSaveButton?.addEventListener("click", () => {
+      registerAllButton?.click();
+    });
+
+    refreshButton?.addEventListener("click", async () => {
+      await runRefreshAction(refreshButton, errorBox, async () => {
+        state.manifest = await loadManifest();
+        state.selectedDate = String(state.manifest.latestDate || "");
+        await render();
+      });
     });
 
     try {
@@ -1225,9 +2398,22 @@
     async function render() {
       const picks = sortedScannerPicks(loadScannerPicks());
       state.registered = loadRegisteredPicks();
-      count.textContent = `${formatNumber(picks.length, 0)}件`;
+      const pickCountText = formatNumber(picks.length, 0);
+      if (count) {
+        count.textContent = `${pickCountText}`;
+      }
+      if (countBadge) {
+        countBadge.textContent = `Count ${pickCountText}`;
+      }
       if (registerCount) {
-        registerCount.textContent = `${formatNumber(state.registered.length, 0)}件`;
+        registerCount.textContent = `${formatNumber(state.registered.length, 0)}`;
+      }
+      if (setsBadge) {
+        setsBadge.textContent = `Sets ${formatNumber(state.registered.length, 0)}`;
+      }
+      if (updatedBadge) {
+        const generatedAt = formatSnapshotGeneratedAt(state.manifest?.currentSnapshot?.generatedAt);
+        updatedBadge.textContent = generatedAt ? `Updated ${generatedAt}` : "Updated --";
       }
       errorBox.hidden = true;
       renderRegisteredPanel(state.registered);
@@ -1244,12 +2430,12 @@
       if (!picks.length) {
         body.innerHTML = '<tr><td colspan="5" class="empty-cell">選別銘柄はありません。トップ画面でチェックしてください。</td></tr>';
         if (chartList) {
-          chartList.innerHTML = '<div class="empty-cell picked-chart-empty">選別銘柄はありません。トップ画面でチェックしてください。</div>';
+          chartList.innerHTML = '<div class="empty-cell picked-chart-empty">No picks yet.</div>';
         }
         revokeExportEntries(state.exportEntries);
         state.exportEntries = [];
         renderExportEntries(exportList, []);
-        exportMessage.textContent = "選別銘柄がないため出力できません。";
+        exportMessage.textContent = "No picks available for export.";
         return;
       }
 
@@ -1257,7 +2443,7 @@
       await renderPickedCharts(picks);
 
       if (!state.exportEntries.length) {
-        exportMessage.textContent = "選別済み銘柄から TradingView 用TXTと HYPER SBI 2 用CSVを生成します。";
+        exportMessage.textContent = "Export the current picks as TradingView TXT or HYPER SBI 2 CSV.";
         exportList.innerHTML = "";
       }
     }
@@ -1268,7 +2454,7 @@
           (pick) => `
             <tr>
               <td>${escapeHtml(pick.code)}</td>
-              <td>${escapeHtml(pick.name)}</td>
+              <td>${renderTickerIdentity(pick.code, pick.name, { variant: "table", showCode: false })}</td>
               <td>${escapeHtml(pick.market)}</td>
               <td>${escapeHtml(formatPickedDateTime(pick.selectedAt))}</td>
               <td>
@@ -1284,7 +2470,7 @@
       Array.from(body.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
         button.addEventListener("click", async () => {
           removePickByCode(button.dataset.removePick);
-          exportMessage.textContent = "選別内容が変わりました。必要なら再作成してください。";
+          exportMessage.textContent = "Pick list changed. Re-export if needed.";
           await render();
         });
       });
@@ -1296,56 +2482,103 @@
       }
 
       const failures = [];
-      const loaded = (
-        await Promise.all(
-          picks.map(async (pick) => {
-            try {
-              const payload = await loadTickerPayload(pick.code);
-              const record = buildPickedRecordFromPayload(pick, payload, state.selectedDate);
-              if (!record) {
-                failures.push(`${pick.code}: 日付に一致する価格データなし`);
-                return null;
-              }
-              return { pick, payload, record };
-            } catch (error) {
-              failures.push(`${pick.code}: ${error.message}`);
-              return null;
-            }
-          })
-        )
-      ).filter(Boolean);
+      const loadedResults = await mapWithConcurrency(picks, CHART_FETCH_CONCURRENCY, async (pick) => {
+        try {
+          const inspected = await loadTickerPayloadWithDiagnostics(pick.code, { selectedDate: state.selectedDate });
+          const record = buildPickedRecordFromPayload(pick, inspected.payload, state.selectedDate);
+          if (!record) {
+            return { pick, status: "invalid", inspected, reason: "日付に一致する価格データなし" };
+          }
+          return { pick, status: "fulfilled", inspected, record };
+        } catch (error) {
+          return { pick, status: "rejected", reason: error.message || String(error) };
+        }
+      });
+      const baselineShape = loadedResults.find((result) => result.status === "fulfilled" && !result.inspected.validation.issues.length)?.inspected.shape || null;
+      const chartItems = loadedResults.map((result, index) => {
+        if (result.status === "fulfilled" && !result.inspected.validation.issues.length) {
+          return { kind: "success", index, record: result.record, inspected: result.inspected };
+        }
+        const code = result.pick.code;
+        if (result.status === "rejected") {
+          failures.push(`${code}: ${result.reason}`);
+          return {
+            kind: "failed",
+            index,
+            code,
+            name: result.pick.name,
+            message: result.reason,
+          };
+        }
+        const validationIssues = result.inspected.validation.issues.length
+          ? result.inspected.validation.issues.join(", ")
+          : result.reason;
+        console.debug("[ticker-chart:validation]", {
+          code,
+          requestUrl: result.inspected.requestUrl,
+          status: result.inspected.status,
+          responseBody: result.inspected.responseBody.slice(0, 1200),
+          parsedCandleCount: result.inspected.validation.parsedCandleCount,
+          issues: result.inspected.validation.issues,
+          warnings: result.inspected.validation.warnings,
+          shapeDiff: diffShapeAgainstBaseline(baselineShape, result.inspected.shape),
+        });
+        failures.push(`${code}: ${validationIssues}`);
+        return {
+          kind: "failed",
+          index,
+          code,
+          name: result.pick.name,
+          message: validationIssues,
+        };
+      });
 
-      if (!loaded.length) {
-        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">チャート表示可能な銘柄がありません。</div>';
+      if (!chartItems.length) {
+        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">No chart-ready picks found.</div>';
         if (failures.length) {
-          showError(errorBox, `チャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
+          showError(errorBox, `Chart load failed: ${failures.slice(0, 3).join(" / ")}`);
         }
         return;
       }
 
       if (failures.length) {
-        showError(errorBox, `一部のチャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
+        showError(errorBox, `Some charts failed to load: ${failures.slice(0, 3).join(" / ")}`);
       }
 
-      chartList.innerHTML = loaded
-        .map(({ record }, index) => renderPickedScannerItem(record, index, state))
+      chartList.innerHTML = chartItems
+        .map((entry) => {
+          if (entry.kind === "success") {
+            return renderPickedScannerItem(entry.record, entry.index, state);
+          }
+          return renderChartFetchFailedItem(entry.code, entry.name, entry.index, state, {
+            picked: true,
+            english: true,
+            message: entry.message,
+            linksMarkup: `<a class="picked-link-pill" href="${buildTickerUrl(entry.code, state.selectedDate, "")}">📈 Detail</a>`,
+            actionMarkup: `<button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(entry.code)}">✕ Remove</button>`,
+          });
+        })
         .join("");
 
-      loaded.forEach(({ payload, record }) => {
-        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, payload.ohlcv || [], state.selectedDate, state.bars, {
+      chartItems.forEach((entry) => {
+        if (entry.kind !== "success") {
+          return;
+        }
+        const { inspected, record } = entry;
+        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, inspected.payload.ohlcv || [], state.selectedDate, state.bars, {
           timeframe: state.timeframe,
           useBarCount: true,
         });
         const linksElement = document.getElementById(`pickedLinks-${record.code}`);
         if (linksElement) {
-          linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+          linksElement.innerHTML = renderPickedItemLinks(inspected.payload, record, state);
         }
       });
 
       Array.from(chartList.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
         button.addEventListener("click", async () => {
           removePickByCode(button.dataset.removePick);
-          exportMessage.textContent = "選別内容が変わりました。必要なら再作成してください。";
+          exportMessage.textContent = "Pick list changed. Re-export if needed.";
           await render();
         });
       });
@@ -1357,7 +2590,7 @@
         return;
       }
       if (!entries.length) {
-        registerList.innerHTML = '<div class="empty-cell">登録銘柄はありません。</div>';
+        registerList.innerHTML = '<div class="empty-cell">No saved sets.</div>';
         return;
       }
       registerList.innerHTML = entries
@@ -1382,7 +2615,7 @@
             return;
           }
           removeRegisteredSetById(id);
-          exportMessage.textContent = "登録セットを削除しました。";
+          exportMessage.textContent = "Saved set deleted.";
           await render();
         });
       });
@@ -1420,7 +2653,7 @@
       if (!input) {
         if (registerNameError) {
           registerNameError.hidden = false;
-          registerNameError.textContent = "登録名を入力してください。";
+          registerNameError.textContent = "Enter a set name.";
         }
         registerNameInput?.focus();
         return;
@@ -1429,7 +2662,7 @@
         const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
         const entry = registerAllPicks(picks, input);
         closeRegisterNameModal();
-        exportMessage.textContent = `登録しました: ${entry.name}`;
+        exportMessage.textContent = `Saved: ${entry.name}`;
         await render();
       } catch (error) {
         showError(errorBox, error.message);
@@ -1542,7 +2775,7 @@
           (item) => `
             <tr>
               <td>${escapeHtml(item.code)}</td>
-              <td>${escapeHtml(item.name || "-")}</td>
+              <td>${renderTickerIdentity(item.code, item.name || "-", { variant: "table", showCode: false })}</td>
               <td>${escapeHtml(item.market || "-")}</td>
               <td>${escapeHtml(formatPickedDateTime(item.selectedAt))}</td>
             </tr>
@@ -1568,7 +2801,7 @@
           const entries = buildHyperExportEntries(items);
           triggerExportDownloads(entries);
           renderExportEntries(exportList, []);
-          exportMessage.textContent = `HYPER SBI 2 用CSVを${formatNumber(entries.length, 0)}件ダウンロードしました。`;
+          exportMessage.textContent = `HYPER SBI 2 用CSVを${formatNumber(items.length, 0)}銘柄でダウンロードしました。`;
         });
       }
     }
@@ -1585,26 +2818,46 @@
       }
 
       const failures = [];
-      const loaded = (
-        await Promise.all(
-          items.map(async (item) => {
-            try {
-              const payload = await loadTickerPayload(item.code);
-              const record = buildPickedRecordFromPayload(item, payload, state.selectedDate);
-              if (!record) {
-                failures.push(`${item.code}: 日付に一致する価格データなし`);
-                return null;
-              }
-              return { item, payload, record };
-            } catch (error) {
-              failures.push(`${item.code}: ${error.message}`);
-              return null;
-            }
-          })
-        )
-      ).filter(Boolean);
+      const loadedResults = await mapWithConcurrency(items, CHART_FETCH_CONCURRENCY, async (item) => {
+        try {
+          const inspected = await loadTickerPayloadWithDiagnostics(item.code, { selectedDate: state.selectedDate });
+          const record = buildPickedRecordFromPayload(item, inspected.payload, state.selectedDate);
+          if (!record) {
+            return { item, status: "invalid", inspected, reason: "日付に一致する価格データなし" };
+          }
+          return { item, status: "fulfilled", inspected, record };
+        } catch (error) {
+          return { item, status: "rejected", reason: error.message || String(error) };
+        }
+      });
+      const baselineShape = loadedResults.find((result) => result.status === "fulfilled" && !result.inspected.validation.issues.length)?.inspected.shape || null;
+      const chartItems = loadedResults.map((result, index) => {
+        if (result.status === "fulfilled" && !result.inspected.validation.issues.length) {
+          return { kind: "success", index, record: result.record, inspected: result.inspected };
+        }
+        const code = result.item.code;
+        if (result.status === "rejected") {
+          failures.push(`${code}: ${result.reason}`);
+          return { kind: "failed", index, code, name: result.item.name, message: result.reason };
+        }
+        const validationIssues = result.inspected.validation.issues.length
+          ? result.inspected.validation.issues.join(", ")
+          : result.reason;
+        console.debug("[ticker-chart:validation]", {
+          code,
+          requestUrl: result.inspected.requestUrl,
+          status: result.inspected.status,
+          responseBody: result.inspected.responseBody.slice(0, 1200),
+          parsedCandleCount: result.inspected.validation.parsedCandleCount,
+          issues: result.inspected.validation.issues,
+          warnings: result.inspected.validation.warnings,
+          shapeDiff: diffShapeAgainstBaseline(baselineShape, result.inspected.shape),
+        });
+        failures.push(`${code}: ${validationIssues}`);
+        return { kind: "failed", index, code, name: result.item.name, message: validationIssues };
+      });
 
-      if (!loaded.length) {
+      if (!chartItems.length) {
         chartList.innerHTML = '<div class="empty-cell picked-chart-empty">チャート表示可能な銘柄がありません。</div>';
         if (failures.length) {
           showError(errorBox, `チャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
@@ -1616,20 +2869,34 @@
         showError(errorBox, `一部のチャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
       }
 
-      chartList.innerHTML = loaded.map(({ record }, index) => renderRegisteredScannerItem(record, index, state)).join("");
+      chartList.innerHTML = chartItems
+        .map((entry) => {
+          if (entry.kind === "success") {
+            return renderRegisteredScannerItem(entry.record, entry.index, state);
+          }
+          return renderChartFetchFailedItem(entry.code, entry.name, entry.index, state, {
+            message: entry.message,
+            linksMarkup: `<a href="${buildTickerUrl(entry.code, state.selectedDate, "")}">個別ページ</a>`,
+          });
+        })
+        .join("");
 
-      loaded.forEach(({ payload, record }) => {
+      chartItems.forEach((entry) => {
+        if (entry.kind !== "success") {
+          return;
+        }
+        const { inspected, record } = entry;
         renderScannerCompactChart(
           `registeredChart-${record.code}`,
           record.code,
-          payload.ohlcv || [],
+          inspected.payload.ohlcv || [],
           state.selectedDate,
           state.bars,
           { timeframe: state.timeframe, useBarCount: true }
         );
         const linksElement = document.getElementById(`registeredLinks-${record.code}`);
         if (linksElement) {
-          linksElement.innerHTML = renderScannerItemLinks(payload, record, { selectedDate: state.selectedDate, sort: "code" });
+          linksElement.innerHTML = renderScannerItemLinks(inspected.payload, record, { selectedDate: state.selectedDate, sort: "code" });
         }
       });
     }
@@ -1651,12 +2918,21 @@
       .filter(Boolean);
   }
 
-  function snapshotTypeLabel(snapshotType) {
+  function snapshotTypeLabel(snapshotType, snapshotStatus) {
+    if (snapshotStatus === "finalized") {
+      return "完了";
+    }
+    if (snapshotStatus === "stale" || snapshotType === "stale_after_close") {
+      return "暫定データ（引け後未確定）";
+    }
     if (snapshotType === "am") {
       return "前場";
     }
+    if (snapshotType === "yf_intraday") {
+      return "暫定データ";
+    }
     if (snapshotType === "daily") {
-      return "日通し";
+      return "完了";
     }
     return "";
   }
@@ -1667,12 +2943,91 @@
       return "";
     }
     const snapshotDate = String(snapshot?.date || "").trim();
-    const label = snapshotDate === date ? snapshotTypeLabel(String(snapshot?.type || "").trim()) : "";
-    return `基準日: ${date}${label ? ` / ${label}` : ""}`;
+    const label =
+      snapshotDate === date
+        ? snapshotTypeLabel(
+            String(snapshot?.type || "").trim(),
+            String(snapshot?.status || "").trim(),
+          )
+        : "";
+    const generatedAt = snapshotDate === date ? formatSnapshotGeneratedAt(snapshot?.generatedAt) : "";
+    return `基準日: ${date}${label ? ` / ${label}` : ""}${generatedAt ? ` / 最終更新: ${generatedAt}` : ""}`;
   }
 
-  async function loadOverview(date) {
-    return fetchJson(`./data/overview/${date}/market_pulse.json`);
+  function formatSnapshotGeneratedAt(value) {
+    const text = String(value || "").trim();
+    if (!text) {
+      return "";
+    }
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) {
+      return text;
+    }
+    return new Intl.DateTimeFormat("ja-JP", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+
+  function isSnapshotStatusVisible(selectedDate, snapshot) {
+    if (String(snapshot?.status || "").trim() === "finalized") {
+      return true;
+    }
+    return (
+      String(selectedDate || "").trim() !== "" &&
+      String(snapshot?.date || "").trim() === String(selectedDate || "").trim() &&
+      ["yf_intraday", "daily", "stale_after_close"].includes(String(snapshot?.type || "").trim())
+    );
+  }
+
+  function syncSnapshotStatusUi(badgeElement, metaElement, selectedDate, snapshot) {
+    const active = isSnapshotStatusVisible(selectedDate, snapshot);
+    if (badgeElement) {
+      const label = active
+        ? snapshotTypeLabel(
+            String(snapshot?.type || "").trim(),
+            String(snapshot?.status || "").trim(),
+          )
+        : "";
+      badgeElement.textContent = label;
+      badgeElement.hidden = !active || !label;
+    }
+    if (metaElement) {
+      metaElement.textContent = active
+        ? `最終更新: ${formatSnapshotGeneratedAt(snapshot?.generatedAt) || "-"}`
+        : "";
+      metaElement.hidden = !active;
+    }
+  }
+
+  async function runRefreshAction(button, errorBox, fn) {
+    if (!button) {
+      await fn();
+      return;
+    }
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "更新中...";
+    if (errorBox) {
+      errorBox.hidden = true;
+    }
+    try {
+      await fn();
+    } catch (_error) {
+      if (errorBox) {
+        showError(errorBox, "再読込に失敗しました。数秒後にもう一度お試しください。");
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
+  async function loadOverview(date, timeframe = "daily") {
+    const suffix = timeframe === "weekly" ? "_weekly" : timeframe === "monthly" ? "_monthly" : "";
+    return fetchJson(`./data/overview/${date}/market_pulse${suffix}.json`);
   }
 
   async function loadRanking(date, key) {
@@ -1841,7 +3196,7 @@
     if (!state || typeof state !== "object") {
       return null;
     }
-    const bars = state.bars != null ? Number(state.bars) : state.months != null ? indexScannerBarCountFromMonths(state.months) : 63;
+    const bars = state.rangeMonths != null ? Number(state.rangeMonths) : state.months != null ? Number(state.months) : 3;
     return {
       date: String(state.selectedDate || "").trim(),
       sort: String(state.sort || "").trim(),
@@ -1877,7 +3232,7 @@
       parts.push(`売買代金>=${turnoverLabel(turnover)}`);
     }
     const bars = Number(snapshot.bars || 63);
-    parts.push(indexScannerBarLabel(Number.isFinite(bars) ? bars : 63));
+    parts.push(indexScannerRangeLabel(String(snapshot.timeframe || "daily"), Number.isFinite(bars) ? bars : 3));
     parts.push(indexScannerTimeframeLabel(String(snapshot.timeframe || "daily")));
     return parts.join(" / ");
   }
@@ -2031,14 +3386,6 @@
     });
   }
 
-  function chunkScannerPicks(items, size = 50) {
-    const chunks = [];
-    for (let index = 0; index < items.length; index += size) {
-      chunks.push(items.slice(index, index + size));
-    }
-    return chunks;
-  }
-
   function toTradingViewSymbols(items) {
     return items
       .map((item) => String(item.code || "").trim())
@@ -2083,17 +3430,17 @@
   }
 
   function buildHyperExportEntries(items) {
-    return chunkScannerPicks(items, 50).map((chunk, index) => {
-      const blob = createDownloadBlob(toHyperSbi2Csv(chunk), "text/csv;charset=utf-8");
-      return {
-        key: `hyper-${index + 1}`,
+    const blob = createDownloadBlob(toHyperSbi2Csv(items), "text/csv;charset=utf-8");
+    return [
+      {
+        key: "hyper",
         label: "HYPER SBI 2",
-        fileName: `hyper_sbi2_codes_${String(index + 1).padStart(2, "0")}.csv`,
-        count: chunk.length,
+        fileName: "hyper_sbi2_codes.csv",
+        count: items.length,
         href: blob.url,
         revoke: blob.revoke,
-      };
-    });
+      },
+    ];
   }
 
   function revokeExportEntries(entries) {
@@ -2342,12 +3689,244 @@
     });
   }
 
-  async function fetchJson(path) {
-    const response = await fetch(path);
-    if (!response.ok) {
-      throw new Error(`JSON 読み込み失敗: ${path} (${response.status})`);
+  const _chartInstances = new Map();
+  const CHART_FETCH_CONCURRENCY = 8;
+
+  function getTickerDataUrl(code) {
+    return `./data/tickers/${code}.json`;
+  }
+
+  function summarizeTickerPayloadShape(payload) {
+    const ohlcv = Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
+    const sampleRow = ohlcv.find((row) => row && typeof row === "object") || null;
+    return {
+      topLevelKeys: Object.keys(payload || {}).sort(),
+      rowKeys: sampleRow ? Object.keys(sampleRow).sort() : [],
+      snapshotDate: payload?.snapshotDate || null,
+      snapshotType: payload?.snapshotType || null,
+      candleCount: ohlcv.length,
+    };
+  }
+
+  function diffShapeAgainstBaseline(baseline, current) {
+    if (!baseline) {
+      return null;
     }
-    return response.json();
+    return {
+      missingTopLevelKeys: baseline.topLevelKeys.filter((key) => !current.topLevelKeys.includes(key)),
+      extraTopLevelKeys: current.topLevelKeys.filter((key) => !baseline.topLevelKeys.includes(key)),
+      missingRowKeys: baseline.rowKeys.filter((key) => !current.rowKeys.includes(key)),
+      extraRowKeys: current.rowKeys.filter((key) => !baseline.rowKeys.includes(key)),
+    };
+  }
+
+  function validateTickerPayloadForChart(payload, selectedDate) {
+    const issues = [];
+    const warnings = [];
+    const ohlcv = Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
+    if (!ohlcv.length) {
+      issues.push("ohlcv missing or empty");
+      return { issues, warnings, parsedCandleCount: 0, invalidRowCount: 0, hasSelectedDate: false, selectedDateMissing: false };
+    }
+    const invalidRows = ohlcv.filter(
+      (row) => !row || row.date == null || row.open == null || row.high == null || row.low == null || row.close == null || row.volume == null
+    );
+    if (invalidRows.length) {
+      issues.push(`ohlcv contains ${invalidRows.length} invalid rows`);
+    }
+    const hasSelectedDate = ohlcv.some((row) => row?.date === selectedDate);
+    if (selectedDate && !hasSelectedDate) {
+      warnings.push(`selected date ${selectedDate} missing`);
+    }
+    return {
+      issues,
+      warnings,
+      parsedCandleCount: ohlcv.length,
+      invalidRowCount: invalidRows.length,
+      hasSelectedDate,
+      selectedDateMissing: Boolean(selectedDate && !hasSelectedDate),
+    };
+  }
+
+  async function loadTickerPayloadWithDiagnostics(code, options = {}) {
+    const requestUrl = getTickerDataUrl(code);
+    let response;
+    let responseBody = "";
+    try {
+      response = await fetch(requestUrl, { cache: "no-store" });
+      responseBody = await response.text();
+      console.debug("[ticker-chart:response]", {
+        code,
+        requestUrl,
+        status: response.status,
+        responseBody: responseBody.slice(0, 1200),
+      });
+      if (!response.ok) {
+        throw new Error(`JSON 読み込み失敗: ${requestUrl} (${response.status})`);
+      }
+      const payload = JSON.parse(responseBody);
+      const validation = validateTickerPayloadForChart(payload, options.selectedDate);
+      console.debug("[ticker-chart:payload]", {
+        code,
+        requestUrl,
+        status: response.status,
+        parsedCandleCount: validation.parsedCandleCount,
+        invalidRowCount: validation.invalidRowCount,
+        hasSelectedDate: validation.hasSelectedDate,
+        warnings: validation.warnings,
+        snapshotDate: payload?.snapshotDate ?? null,
+        snapshotType: payload?.snapshotType ?? null,
+      });
+      return {
+        code,
+        requestUrl,
+        status: response.status,
+        responseBody,
+        payload,
+        validation,
+        shape: summarizeTickerPayloadShape(payload),
+      };
+    } catch (error) {
+      console.debug("[ticker-chart:error]", {
+        code,
+        requestUrl,
+        status: response?.status ?? null,
+        responseBody: responseBody.slice(0, 1200),
+        parsedCandleCount: 0,
+        message: error.message,
+      });
+      throw error;
+    }
+  }
+
+  async function mapWithConcurrency(items, limit, iteratee) {
+    const results = new Array(items.length);
+    let cursor = 0;
+    async function worker() {
+      while (cursor < items.length) {
+        const currentIndex = cursor;
+        cursor += 1;
+        results[currentIndex] = await iteratee(items[currentIndex], currentIndex);
+      }
+    }
+    const workerCount = Math.max(1, Math.min(limit, items.length));
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return results;
+  }
+
+  function renderChartFailure(elementId, message) {
+    const element = document.getElementById(elementId);
+    if (!element) {
+      return;
+    }
+    if (_chartInstances.has(elementId)) {
+      try {
+        _chartInstances.get(elementId).remove();
+      } catch (_) {}
+      _chartInstances.delete(elementId);
+    }
+    element.innerHTML = `<div class="chart-inline-error">データ取得失敗<br /><span>${escapeHtml(message)}</span></div>`;
+  }
+
+  function renderChartStatus(elementId, title, message, statusClass = "") {
+    const element = document.getElementById(elementId);
+    if (!element) {
+      return;
+    }
+    if (_chartInstances.has(elementId)) {
+      try {
+        _chartInstances.get(elementId).remove();
+      } catch (_) {}
+      _chartInstances.delete(elementId);
+    }
+    const className = ["chart-inline-error", statusClass].filter(Boolean).join(" ");
+    element.innerHTML = `<div class="${className}">${escapeHtml(title)}<br /><span>${escapeHtml(message)}</span></div>`;
+  }
+
+  function renderChartFetchFailedItem(code, name, index, state, options = {}) {
+    const rank = index + 1;
+    const links = options.linksMarkup || "";
+    const actionMarkup = options.actionMarkup || "";
+    const failureMessage = String(options.message || "JSON を確認してください");
+    const detailHref = buildTickerUrl(code, state.selectedDate, "");
+    const tableLabels = options.english
+      ? {
+          rank: "Rank",
+          code: "Code",
+          close: "Price",
+          change: "Change",
+          volume: "Volume",
+          high: "High",
+          low: "Low",
+        }
+      : {
+          rank: "順位",
+          code: "コード",
+          close: "取引値",
+          change: "前日比",
+          volume: "出来高",
+          high: "高値",
+          low: "安値",
+        };
+    return `
+      <article class="scanner-item scanner-item--fetch-failed">
+        <div class="scanner-rank-table">
+          <table>
+            <thead>
+              <tr>
+                <th class="num scanner-col-rank">${tableLabels.rank}</th>
+                <th class="scanner-col-code">${tableLabels.code}</th>
+                <th class="num scanner-col-close">${tableLabels.close}</th>
+                <th class="num scanner-col-change">${tableLabels.change}</th>
+                <th class="num scanner-col-volume">${tableLabels.volume}</th>
+                <th class="num scanner-col-high">${tableLabels.high}</th>
+                <th class="num scanner-col-low">${tableLabels.low}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">${formatNumber(rank, 0)}</td>
+                <td class="scanner-name-cell">
+                  <div class="scanner-name-cell-inner">
+                    ${renderTickerIdentity(code, name, { href: detailHref, variant: "scanner" })}
+                  </div>
+                </td>
+                <td class="num">-</td>
+                <td class="num">-</td>
+                <td class="num">-</td>
+                <td class="num">-</td>
+                <td class="num">-</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="scanner-item-chart-wrap">
+          <div class="chart-inline-error">データ取得失敗<br /><span>${escapeHtml(failureMessage)}</span></div>
+        </div>
+        <div class="scanner-item-links${options.picked ? " scanner-item-links--picked" : ""}">
+          <div class="scanner-item-links-main${options.picked ? " scanner-item-links-main--picked" : ""}">${links}</div>
+          ${actionMarkup}
+        </div>
+      </article>
+    `;
+  }
+
+  async function fetchJson(path) {
+    try {
+      const response = await fetch(path, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`JSON 読み込み失敗: ${path} (${response.status})`);
+      }
+      return response.json();
+    } catch (error) {
+      if (typeof window !== "undefined" && window.location?.protocol === "file:") {
+        throw new Error("この画面は file:// では開けません。http://127.0.0.1:8010/index.html で開いてください。");
+      }
+      if (error instanceof TypeError && String(error.message || "").includes("Failed to fetch")) {
+        throw new Error("データ取得に失敗しました。http://127.0.0.1:8010/index.html で開いているか確認してください。");
+      }
+      throw error;
+    }
   }
 
   function compareRecords(left, right, key, direction) {
@@ -2549,9 +4128,9 @@
     return values.reduce((total, value) => total + value, 0) / values.length;
   }
 
-  function updatePeriodButtonState(container, selectedMonths) {
+  function updatePeriodButtonState(container, selectedMode) {
     Array.from(container.querySelectorAll(".period-button")).forEach((button) => {
-      button.classList.toggle("active", Number(button.dataset.months) === selectedMonths);
+      button.classList.toggle("active", button.dataset.chartMode === selectedMode);
     });
   }
 
@@ -2638,6 +4217,7 @@
     return `${Number(value).toFixed(2)}%`;
   }
 
+
   function formatSignedPercentHtml(value, options = {}) {
     const className = getChangeClass(value);
     const text = formatSignedPercent(value);
@@ -2689,7 +4269,7 @@
             return `
               <tr>
                 <td>${record.rank}</td>
-                <td><a href="${detailUrl}">${escapeHtml(record.code)} ${escapeHtml(record.name)}</a></td>
+                <td>${renderTickerIdentity(record.code, record.name, { href: detailUrl, variant: "ranking", compact: true })}</td>
                 <td class="${getChangeClass(record.changePercent)}">${formatSignedPercent(record.changePercent)}</td>
                 <td>${formatRankingValue(label, record)}</td>
               </tr>
@@ -2909,6 +4489,15 @@
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
     }
+    if (sortKey === "trend_turn") {
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(b.trendTurnScore, a.trendTurnScore) ||
+          compareNullableNumbers(b.trendTurnAboveMa75Ratio, a.trendTurnAboveMa75Ratio) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     if (sortKey === "rebound_signal") {
       const priority = {
         strong_rebound: 0,
@@ -2983,19 +4572,20 @@
 
   function scannerSortLabel(sortKey) {
     return {
-      gainers: "値上がり率順",
-      stop_high: "ストップ高",
-      losers: "値下がり率順",
-      volume: "出来高増加順",
-      code: "コード順",
-      new_high: "新高値順",
-      new_high_20d: "20日終値高値",
-      rebound_signal: "反発シグナル",
-      deviation25: "25日線乖離順",
-      deviation75: "75日線乖離順",
-      deviation200: "200日線乖離順",
-      lower_shadow: "下ひげ順",
-      watch_candidates: "監視候補順",
+      gainers: "Gainers",
+      stop_high: "Stop High",
+      losers: "Losers",
+      volume: "Volume",
+      code: "Code",
+      new_high: "New High",
+      new_high_20d: "20D Close High",
+      trend_turn: "ベース・リカバリー",
+      rebound_signal: "Rebound",
+      deviation25: "MA25 Dev",
+      deviation75: "MA75 Dev",
+      deviation200: "MA200 Dev",
+      lower_shadow: "Lower Shadow",
+      watch_candidates: "Watchlist",
     }[sortKey] || sortKey;
   }
 
@@ -3015,42 +4605,47 @@
   function turnoverLabel(value) {
     return {
       0: "0",
-      50000000: "5000万",
-      100000000: "1億",
-      500000000: "5億",
-      1000000000: "10億",
+      50000000: "50M",
+      100000000: "100M",
+      500000000: "500M",
+      1000000000: "1B",
     }[Number(value)] || "0";
   }
 
   function indexScannerPeriodLabel(months) {
-    return `${indexScannerBarCountFromMonths(months)}（${months}ヶ月）`;
+    return `${months}ヶ月`;
   }
 
-  function indexScannerBarCountFromMonths(months) {
-    return {
-      1: 21,
-      3: 63,
-      6: 126,
-      12: 252,
-    }[Number(months)] || 63;
+  function normalizeIndexScannerRangeMonths(timeframe, value, fallback = 3) {
+    const options = INDEX_SCANNER_TIMEFRAME_RANGES[timeframe] || INDEX_SCANNER_TIMEFRAME_RANGES.daily;
+    const numeric = Number(value);
+    if (options.some((option) => option.months === numeric)) {
+      return numeric;
+    }
+    return options.some((option) => option.months === Number(fallback)) ? Number(fallback) : options[0].months;
   }
 
-  function indexScannerBarLabel(bars) {
-    return `${bars}本`;
+  function indexScannerRangeLabel(timeframe, months) {
+    const option = (INDEX_SCANNER_TIMEFRAME_RANGES[timeframe] || []).find((item) => item.months === Number(months));
+    return option?.label || `${months}M`;
   }
 
   function indexScannerTimeframeLabel(timeframe) {
     return {
-      daily: "日足",
-      weekly: "週足",
-      monthly: "月足",
-    }[timeframe] || "日足";
+      daily: "Day",
+      weekly: "Week",
+      monthly: "Month",
+    }[timeframe] || "Day";
   }
 
   function renderMiniChart(elementId, rows, selectedDate, months) {
     const element = document.getElementById(elementId);
     if (!element || !window.LightweightCharts) {
       return;
+    }
+    if (_chartInstances.has(elementId)) {
+      try { _chartInstances.get(elementId).remove(); } catch (_) {}
+      _chartInstances.delete(elementId);
     }
     element.innerHTML = "";
     const selectedIndex = findSelectedIndex(rows, selectedDate);
@@ -3062,17 +4657,17 @@
     const visibleRows = rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 10);
     const chart = window.LightweightCharts.createChart(element, {
       height: 280,
-      layout: { background: { color: "#ffffff" }, textColor: "#5b6773" },
-      rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.3 } },
-      timeScale: { borderColor: "#d7dde5" },
-      grid: { vertLines: { color: "#eef2f7" }, horzLines: { color: "#eef2f7" } },
+      layout: { background: { color: "#111827" }, textColor: "#8899ae" },
+      rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.3 }, borderColor: "rgba(30, 58, 95, 0.4)" },
+      timeScale: { borderColor: "rgba(30, 58, 95, 0.4)" },
+      grid: { vertLines: { color: "rgba(30, 58, 95, 0.2)" }, horzLines: { color: "rgba(30, 58, 95, 0.2)" } },
     });
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#d9485f",
-      downColor: "#2b6cb0",
+      upColor: "#ef4444",
+      downColor: "#3b82f6",
       borderVisible: false,
-      wickUpColor: "#d9485f",
-      wickDownColor: "#2b6cb0",
+      wickUpColor: "#ef4444",
+      wickDownColor: "#3b82f6",
     });
     candleSeries.setData(
       visibleRows.map((row) => ({
@@ -3086,7 +4681,7 @@
     const volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
       priceScaleId: "",
-      color: "rgba(76, 99, 133, 0.35)",
+      color: "rgba(56, 97, 150, 0.3)",
     });
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.75, bottom: 0 },
@@ -3095,12 +4690,12 @@
       visibleRows.map((row) => ({
         time: row.date,
         value: row.volume,
-        color: row.close >= row.open ? "rgba(217, 72, 95, 0.35)" : "rgba(43, 108, 176, 0.35)",
+        color: row.close >= row.open ? "rgba(239, 68, 68, 0.35)" : "rgba(59, 130, 246, 0.35)",
       }))
     );
     [5, 25, 75].forEach((windowSize, index) => {
       const series = chart.addLineSeries({
-        color: ["#16a34a", "#f59e0b", "#6d28d9"][index],
+        color: ["#22c55e", "#f59e0b", "#a78bfa"][index],
         lineWidth: 1,
       });
       series.setData(
@@ -3163,15 +4758,15 @@
       <div class="picked-register-item">
         <div class="picked-register-item-head">
           <div>
-            <div class="picked-register-name">${escapeHtml(entry?.name || "名称なし")}</div>
+            <div class="picked-register-name">${escapeHtml(entry?.name || "Untitled")}</div>
             <div class="picked-register-meta">${escapeHtml(formatPickedDateTime(entry?.registeredAt))} / ${formatNumber(
               Number(entry?.count || 0),
               0
-            )}銘柄</div>
+            )} picks</div>
           </div>
           <div class="picked-register-item-actions">
-            <button type="button" class="row-button" data-open-registered-set="${escapeHtml(id)}">開く</button>
-            <button type="button" class="row-button picked-remove-button" data-remove-registered-set="${escapeHtml(id)}">削除</button>
+            <button type="button" class="row-button" data-open-registered-set="${escapeHtml(id)}">Open</button>
+            <button type="button" class="row-button picked-remove-button" data-remove-registered-set="${escapeHtml(id)}">Delete</button>
           </div>
         </div>
       </div>
@@ -3181,34 +4776,29 @@
   function renderPickedScannerItem(record, index, state) {
     const rank = index + 1;
     return `
-      <article class="scanner-item">
+      <article class="scanner-item picked-scanner-item">
         <div class="scanner-rank-table">
           <table>
             <thead>
               <tr>
-                <th class="num scanner-col-rank">順位</th>
-                <th class="scanner-col-code">コード</th>
-                <th class="scanner-col-name">名称</th>
-                <th class="num scanner-col-close">取引値</th>
-                <th class="num scanner-col-change">前日比</th>
-                <th class="num scanner-col-volume">出来高</th>
-                <th class="num scanner-col-high">高値</th>
-                <th class="num scanner-col-low">安値</th>
+                <th class="num scanner-col-rank">Rank</th>
+                <th class="scanner-col-code">Code</th>
+                <th class="num scanner-col-close">Price</th>
+                <th class="num scanner-col-change">Change</th>
+                <th class="num scanner-col-volume">Volume</th>
+                <th class="num scanner-col-high">High</th>
+                <th class="num scanner-col-low">Low</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td class="num">${formatNumber(rank, 0)}</td>
-                <td>${escapeHtml(record.code)}</td>
                 <td class="scanner-name-cell">
                   <div class="scanner-name-cell-inner">
-                    <a
-                      class="${scannerNameClass(record.name)}"
-                      href="${buildTickerUrl(record.code, state.selectedDate, "")}"
-                      title="${escapeHtml(record.name)}"
-                    >
-                      ${escapeHtml(record.name)}
-                    </a>
+                    ${renderTickerIdentity(record.code, record.name, {
+                      href: buildTickerUrl(record.code, state.selectedDate, ""),
+                      variant: "scanner",
+                    })}
                   </div>
                 </td>
                 <td class="scanner-trade-cell">
@@ -3230,11 +4820,11 @@
         <div class="scanner-item-chart-wrap">
           <div id="pickedChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
-        <div class="scanner-item-links">
-          <div id="pickedLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
-            <a href="${buildTickerUrl(record.code, state.selectedDate, "")}">個別ページ</a>
+        <div class="scanner-item-links scanner-item-links--picked">
+          <div id="pickedLinks-${escapeHtml(record.code)}" class="scanner-item-links-main scanner-item-links-main--picked">
+            <a class="picked-link-pill" href="${buildTickerUrl(record.code, state.selectedDate, "")}">📈 Detail</a>
           </div>
-          <button type="button" class="row-button picked-remove-button picked-card-remove" data-remove-pick="${escapeHtml(record.code)}">解除</button>
+          <button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(record.code)}">✕ Remove</button>
         </div>
       </article>
     `;
@@ -3250,7 +4840,6 @@
               <tr>
                 <th class="num scanner-col-rank">順位</th>
                 <th class="scanner-col-code">コード</th>
-                <th class="scanner-col-name">名称</th>
                 <th class="num scanner-col-close">取引値</th>
                 <th class="num scanner-col-change">前日比</th>
                 <th class="num scanner-col-volume">出来高</th>
@@ -3261,28 +4850,24 @@
             <tbody>
               <tr>
                 <td class="num">${formatNumber(rank, 0)}</td>
-                <td>${escapeHtml(record.code)}</td>
                 <td class="scanner-name-cell">
                   <div class="scanner-name-cell-inner">
-                    <a
-                      class="${scannerNameClass(record.name)}"
-                      href="${buildTickerUrl(record.code, state.selectedDate, "")}"
-                      title="${escapeHtml(record.name)}"
-                    >
-                      ${escapeHtml(record.name)}
-                    </a>
+                    ${renderTickerIdentity(record.code, record.name, {
+                      href: buildTickerUrl(record.code, state.selectedDate, ""),
+                      variant: "scanner",
+                    })}
                   </div>
                 </td>
                 <td class="scanner-trade-cell">
                   <div class="scanner-trade-split">
-                    <span class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
-                    <span class="scanner-trade-price">${formatNumber(record.close)}</span>
+                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
+                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
                   </div>
                 </td>
-                <td class="num">${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}</td>
-                <td class="num">${formatNumber(record.volume, 0)}</td>
-                <td class="num">${formatNumber(record.high)}</td>
-                <td class="num">${formatNumber(record.low)}</td>
+                <td id="scanChange-${escapeHtml(record.code)}" class="num">${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}</td>
+                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
+                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
+                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
               </tr>
             </tbody>
           </table>
@@ -3318,7 +4903,6 @@
               <tr>
                 <th class="num scanner-col-rank">順位</th>
                 <th class="scanner-col-code">コード</th>
-                <th class="scanner-col-name">名称</th>
                 <th class="num scanner-col-close">取引値</th>
                 <th class="num scanner-col-change">前日比</th>
                 <th class="num scanner-col-volume">出来高</th>
@@ -3329,16 +4913,13 @@
             <tbody>
               <tr>
                 <td class="num">${formatNumber(rank, 0)}</td>
-                <td>${escapeHtml(record.code)}${stopHighBadge}</td>
                 <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner">
-                    <a
-                      class="${scannerNameClass(record.name)}"
-                      href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}"
-                      title="${escapeHtml(record.name)}"
-                    >
-                      ${escapeHtml(record.name)}
-                    </a>
+                  <div class="scanner-name-cell-inner scanner-name-cell-inner--with-badge">
+                    ${renderTickerIdentity(record.code, record.name, {
+                      href: buildTickerUrl(record.code, state.selectedDate, rankingKey),
+                      variant: "scanner",
+                    })}
+                    ${stopHighBadge}
                   </div>
                 </td>
                 <td class="scanner-trade-cell">
@@ -3362,11 +4943,11 @@
         </div>
         <div class="scanner-item-links">
           <div id="scanLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
-            <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">個別ページ</a>
+            <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">Detail</a>
           </div>
           <label class="scanner-pick-toggle">
             <input type="checkbox" data-pick-code="${escapeHtml(record.code)}"${picked ? " checked" : ""} />
-            <span>選別</span>
+            <span>Pick</span>
           </label>
         </div>
       </article>
@@ -3377,7 +4958,7 @@
     const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
     const items = [
       {
-        label: "個別ページ",
+        label: "Detail",
         href: buildTickerUrl(record.code, state.selectedDate, rankingKey),
         local: true,
       },
@@ -3403,6 +4984,89 @@
           : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
       )
       .join('<span class="scanner-link-separator">|</span>');
+  }
+
+  function renderPickedItemLinks(payload, record, state) {
+    const items = [
+      {
+        label: "📈 Detail",
+        href: buildTickerUrl(record.code, state.selectedDate, ""),
+        local: true,
+      },
+    ];
+    const links = payload.links || {};
+    if (links.quote) {
+      items.push({ label: "↗ Yahoo", href: links.quote });
+    }
+    return items
+      .filter((item) => item.href)
+      .map((item) =>
+        item.local
+          ? `<a class="picked-link-pill" href="${item.href}">${escapeHtml(item.label)}</a>`
+          : `<a class="picked-link-pill" href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
+      )
+      .join("");
+  }
+
+  const TICKER_NAME_EXACT_ALIASES = new Map([
+    ["フジ・メディア・ホールディングス", "フジHD"],
+    ["トリドールホールディングス", "トリドールHD"],
+    ["三井倉庫ホールディングス", "三井倉庫HD"],
+    ["Ｆｉｎａｔｅｘｔホールディングス", "Finatext HD"],
+    ["日本電信電話", "NTT"],
+    ["東京電力ホールディングス", "東京電力HD"],
+    ["デリカフーズホールディングス", "デリカフーズHD"],
+    ["Ｇｒｅｅｎ　Ｅａｒｔｈ　Ｉｎｓｔｉｔｕｔｅ", "Green Earth Inst."],
+  ]);
+
+  const TICKER_NAME_REPLACEMENTS = [
+    [/ホールディングス/g, "HD"],
+    [/ホールディング/g, "HD"],
+    [/ＨＤ/g, "HD"],
+  ];
+
+  function abbreviateTickerName(name) {
+    const fullName = String(name || "").trim();
+    if (!fullName) {
+      return "";
+    }
+    const exactAlias = TICKER_NAME_EXACT_ALIASES.get(fullName);
+    if (exactAlias) {
+      return exactAlias;
+    }
+    return TICKER_NAME_REPLACEMENTS.reduce((current, [pattern, replacement]) => current.replace(pattern, replacement), fullName);
+  }
+
+  function renderTickerIdentity(code, name, options = {}) {
+    const codeText = String(code || "").trim();
+    const fullName = String(name || codeText || "-").trim() || "-";
+    const shortName = abbreviateTickerName(fullName) || fullName;
+    const variant = options.variant || "default";
+    const compact = Boolean(options.compact);
+    const overlay = Boolean(options.overlay);
+    const showCode = options.showCode !== false;
+    const href = options.href || "";
+    const title = escapeHtml(fullName);
+    const identityClasses = [
+      "tickerIdentity",
+      "ticker-identity",
+      `tickerIdentity--${variant}`,
+      compact ? "tickerCompact" : "",
+      overlay ? "tickerOverlay" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const nameClasses = ["tickerName", "ticker-name", compact ? "tickerName--compact" : ""].filter(Boolean).join(" ");
+    const nameMarkup = href
+      ? `<a class="${nameClasses}" href="${href}" title="${title}" data-full-name="${title}">${escapeHtml(shortName)}</a>`
+      : `<span class="${nameClasses}" title="${title}" data-full-name="${title}">${escapeHtml(shortName)}</span>`;
+    return `
+      <div class="${identityClasses}" data-full-name="${title}">
+        ${showCode ? `<span class="tickerCode ticker-code">${escapeHtml(codeText || "-")}</span>` : ""}
+        ${nameMarkup}
+        <span class="tickerTooltip ticker-tooltip" role="tooltip">${title}</span>
+      </div>
+    `;
   }
 
   function scannerNameClass(name) {
@@ -3486,12 +5150,25 @@
     if (!element || !window.LightweightCharts) {
       return;
     }
+    // 既存チャートインスタンスを正しく破棄してメモリを解放
+    const elementId = element.id || element;
+    if (_chartInstances.has(elementId)) {
+      try {
+        _chartInstances.get(elementId).remove();
+      } catch (_) {
+        // 破棄済みの場合は無視
+      }
+      _chartInstances.delete(elementId);
+    }
     element.innerHTML = "";
     const timeframe = options.timeframe || "daily";
     const useBarCount = Boolean(options.useBarCount);
     const chartRows = buildScannerChartRows(rows, timeframe);
     const selectedIndex = findSelectedChartIndex(chartRows, selectedDate, timeframe);
     if (selectedIndex < 0) {
+      if (elementId) {
+        renderChartFailure(elementId, "選択日に一致する価格データがありません");
+      }
       return;
     }
     const visibleRows = useBarCount
@@ -3501,7 +5178,21 @@
           extendToLatest: Boolean(options.extendToLatest),
         });
     if (!visibleRows.length) {
+      if (elementId) {
+        renderChartFailure(elementId, "表示期間に利用できる価格データがありません");
+      }
       return;
+    }
+    const anomaly = detectChartScaleAnomaly(visibleRows);
+    if (anomaly) {
+      console.warn("[chart-scale-anomaly]", {
+        code: options.code || null,
+        fromDate: anomaly.fromDate,
+        toDate: anomaly.toDate,
+        fromClose: anomaly.fromClose,
+        toClose: anomaly.toClose,
+        ratio: anomaly.ratio,
+      });
     }
     const baseRow = chartRows[selectedIndex];
     if (typeof options.onInitialRow === "function") {
@@ -3512,13 +5203,13 @@
     }
     const chart = window.LightweightCharts.createChart(element, {
       height: options.height || 173,
-      layout: { background: { color: "#ffffff" }, textColor: "#111111", fontSize: 8 },
+      layout: { background: { color: "#111827" }, textColor: "#8899ae", fontSize: 8 },
       rightPriceScale: {
-        borderColor: "#c8d4e3",
+        borderColor: "rgba(30, 58, 95, 0.4)",
         scaleMargins: { top: 0.05, bottom: 0.22 },
       },
       timeScale: {
-        borderColor: "#c8d4e3",
+        borderColor: "rgba(30, 58, 95, 0.4)",
         rightOffset: 0,
         barSpacing: 7,
         minBarSpacing: 5,
@@ -3529,22 +5220,28 @@
         secondsVisible: false,
         tickMarkFormatter: (time, tickMarkType) => formatScannerTickMark(time, tickMarkType),
       },
-      grid: { vertLines: { color: "#edf2f7" }, horzLines: { color: "#edf2f7" } },
+      grid: { vertLines: { color: "rgba(30, 58, 95, 0.2)" }, horzLines: { color: "rgba(30, 58, 95, 0.2)" } },
       crosshair: {
-        vertLine: { visible: false, labelVisible: false },
+        vertLine: {
+          visible: true,
+          labelVisible: false,
+          width: 1,
+          color: "rgba(203, 213, 225, 0.5)",
+        },
         horzLine: { visible: false, labelVisible: false },
       },
       handleScroll: false,
       handleScale: false,
     });
     const candleSeries = chart.addCandlestickSeries({
-      upColor: "#ef4a60",
-      downColor: "#2d6fb2",
+      upColor: "#ef4444",
+      downColor: "#3b82f6",
       borderVisible: true,
-      borderUpColor: "#ef4a60",
-      borderDownColor: "#2d6fb2",
-      wickUpColor: "#ef4a60",
-      wickDownColor: "#2d6fb2",
+      borderUpColor: "#ef4444",
+      borderDownColor: "#3b82f6",
+      wickUpColor: "#ef4444",
+      wickDownColor: "#3b82f6",
+      crosshairMarkerVisible: false,
     });
     candleSeries.setData(
       visibleRows.map((row) => ({
@@ -3553,24 +5250,27 @@
         high: row.high,
         low: row.low,
         close: row.close,
+        ...(row.date === baseRow.date
+          ? row.close >= row.open
+            ? {
+                color: "#fca5a5",
+                borderColor: "#fca5a5",
+                wickColor: "#fca5a5",
+              }
+            : {
+                color: "#93c5fd",
+                borderColor: "#93c5fd",
+                wickColor: "#93c5fd",
+              }
+          : {}),
       }))
     );
-    if (options.showMarker !== false) {
-      candleSeries.setMarkers([
-        {
-          time: baseRow.date,
-          position: "aboveBar",
-          color: "#6b7280",
-          shape: "circle",
-          text: options.markerText || selectedDate.slice(5),
-        },
-      ]);
-    }
-    const volumeColor = "rgba(110, 110, 110, 0.42)";
+    const volumeColor = "rgba(56, 97, 150, 0.35)";
     const volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
       priceScaleId: "",
       color: volumeColor,
+      crosshairMarkerVisible: false,
     });
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.84, bottom: 0 },
@@ -3584,9 +5284,9 @@
       }))
     );
     [
-      [5, "#d9485f"],
-      [25, "#2b6cb0"],
-      [75, "#2f855a"],
+      [5, "#ef4444"],
+      [25, "#3b82f6"],
+      [75, "#22c55e"],
       [200, "#f59e0b"],
     ].forEach(([windowSize, color]) => {
       const series = chart.addLineSeries({
@@ -3594,6 +5294,7 @@
         lineWidth: 1,
         lastValueVisible: false,
         priceLineVisible: false,
+        crosshairMarkerVisible: false,
       });
       series.setData(
         visibleRows
@@ -3619,6 +5320,10 @@
       from: -0.5,
       to: visibleCount - 1 + 3,
     });
+    // インスタンスを登録して次回の再描画時に正しく破棄できるようにする
+    if (element.id) {
+      _chartInstances.set(element.id, chart);
+    }
   }
 
   function renderScannerCompactChart(elementId, code, rows, selectedDate, rangeValue, options = {}) {
@@ -3628,24 +5333,34 @@
     }
     renderCompactStyleChart(element, rows, selectedDate, rangeValue, {
       ...options,
+      code,
       height: 173,
       onInitialRow: (row) => setScannerTableValues(code, row),
       onRowSelect: (row) => setScannerTableValues(code, row),
     });
   }
 
-  function renderTickerChart(element, rows, selectedIndex, months, chartMeta, onRowSelect) {
+  function renderTickerChart(element, rows, selectedIndex, modeKey, chartMeta, onRowSelect) {
     const selectedRow = rows[selectedIndex];
     if (!selectedRow) {
       return;
     }
-    renderCompactStyleChart(element, rows, selectedRow.date, months, {
+    const mode = getTickerChartMode(modeKey);
+    renderCompactStyleChart(element, rows, selectedRow.date, mode.rangeValue, {
       height: 346,
+      code: chartMeta?.dataset?.code || null,
       metaTarget: chartMeta,
-      markerText: selectedRow.date.slice(5),
       extendToLatest: true,
-      onInitialRow: onRowSelect,
-      onRowSelect,
+      timeframe: mode.timeframe,
+      useBarCount: mode.useBarCount,
+      onInitialRow: (chartRow) => {
+        const resolvedRow = resolveTickerChartSelectionRow(rows, chartRow, mode.timeframe);
+        onRowSelect?.(resolvedRow);
+      },
+      onRowSelect: (chartRow) => {
+        const resolvedRow = resolveTickerChartSelectionRow(rows, chartRow, mode.timeframe);
+        onRowSelect?.(resolvedRow);
+      },
     });
   }
 
@@ -3804,7 +5519,7 @@
     return activeType ? typeFilterLabel(activeType) : "値上がり率";
   }
 
-  function syncTickerUrl(code, date, rankingKey) {
+  function syncTickerUrl(code, date, rankingKey, chartMode = "3m") {
     const params = new URLSearchParams(window.location.search);
     params.set("code", code);
     params.set("date", date);
@@ -3813,7 +5528,26 @@
     } else {
       params.delete("from");
     }
+    params.set("chart", normalizeTickerChartMode(chartMode));
     history.replaceState({}, "", `./ticker.html?${params.toString()}`);
+  }
+
+  function normalizeTickerChartMode(value) {
+    return TICKER_CHART_MODES.some((mode) => mode.key === value) ? value : "3m";
+  }
+
+  function getTickerChartMode(modeKey) {
+    return TICKER_CHART_MODES.find((mode) => mode.key === normalizeTickerChartMode(modeKey)) || TICKER_CHART_MODES[1];
+  }
+
+  function resolveTickerChartSelectionRow(rows, chartRow, timeframe) {
+    if (!chartRow) {
+      return rows.at(-1) || null;
+    }
+    if (timeframe === "daily") {
+      return chartRow;
+    }
+    return rows.find((row) => row.date === chartRow.date) || rows.at(-1) || chartRow;
   }
 
   function syncScannerUrl(date, sort, tag, limit, months) {
@@ -3830,14 +5564,15 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, bars, timeframe) {
+  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, rangeMonths, timeframe, deviationFilters = {}) {
     const params = new URLSearchParams(window.location.search);
     params.set("date", date);
     params.set("sort", sort);
     params.set("limit", String(limit));
-    params.set("bars", String(bars));
+    params.set("range", String(rangeMonths));
     params.set("timeframe", timeframe);
     params.delete("months");
+    params.delete("bars");
     if (tag) {
       params.set("tag", tag);
     } else {
@@ -3849,8 +5584,122 @@
       params.delete("theme");
     }
     params.set("turnover", String(turnover));
+    DEVIATION_SORT_KEYS.forEach((key) => {
+      const shortKey = DEVIATION_URL_KEY_MAP[key];
+      const filter = deviationFilters[key] || { mode: "", min: "", max: "" };
+      if (filter.mode) {
+        params.set(`${shortKey}_mode`, filter.mode);
+      } else {
+        params.delete(`${shortKey}_mode`);
+      }
+      if (filter.min !== "") {
+        params.set(`${shortKey}_min`, String(filter.min));
+      } else {
+        params.delete(`${shortKey}_min`);
+      }
+      if (filter.max !== "") {
+        params.set(`${shortKey}_max`, String(filter.max));
+      } else {
+        params.delete(`${shortKey}_max`);
+      }
+    });
+    const activeDeviationKey = getActiveDeviationSortKey(sort);
+    const activeDeviationFilter = activeDeviationKey ? (deviationFilters[activeDeviationKey] || { mode: "", min: "", max: "" }) : { mode: "", min: "", max: "" };
+    if (activeDeviationFilter.min !== "") {
+      params.set('devMin', String(activeDeviationFilter.min));
+    } else {
+      params.delete('devMin');
+    }
+    if (activeDeviationFilter.max !== "") {
+      params.set('devMax', String(activeDeviationFilter.max));
+    } else {
+      params.delete('devMax');
+    }
     params.delete("condition");
     history.replaceState({}, "", `./index.html?${params.toString()}`);
+  }
+
+  function normalizeDeviationFilterInputMode(value) {
+    return ["gte", "lte", "between"].includes(String(value || "").trim()) ? String(value || "").trim() : "";
+  }
+
+  const DEVIATION_SORT_KEYS = ["deviation25", "deviation75", "deviation200"];
+  const DEVIATION_URL_KEY_MAP = { deviation25: "dev25", deviation75: "dev75", deviation200: "dev200" };
+
+  function isDeviationSort(sortKey) {
+    return DEVIATION_SORT_KEYS.includes(sortKey);
+  }
+
+  function getActiveDeviationSortKey(sortKey) {
+    return isDeviationSort(sortKey) ? sortKey : "";
+  }
+
+  function getActiveDeviationFilter(state) {
+    const activeKey = getActiveDeviationSortKey(state.sort);
+    if (!activeKey) {
+      return { mode: "", min: "", max: "" };
+    }
+    return state.deviationFilters[activeKey] || { mode: "", min: "", max: "" };
+  }
+
+  function getActiveDeviationDraft(state) {
+    const activeKey = getActiveDeviationSortKey(state.sort);
+    if (!activeKey) {
+      return { mode: "", min: "", max: "" };
+    }
+    return state.deviationDrafts[activeKey] || { mode: "", min: "", max: "" };
+  }
+
+  function getDeviationValueBySort(record, sortKey) {
+    if (sortKey === "deviation25") return record.distanceToMa25;
+    if (sortKey === "deviation75") return record.distanceToMa75;
+    if (sortKey === "deviation200") return record.distanceToMa200;
+    return null;
+  }
+
+  function getDeviationSortLabel(sortKey) {
+    if (sortKey === "deviation25") return "MA25 Deviation";
+    if (sortKey === "deviation75") return "MA75 Deviation";
+    if (sortKey === "deviation200") return "MA200 Deviation";
+    return "";
+  }
+
+  function normalizeDeviationFilterValue(value) {
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) {
+      return "";
+    }
+    const numeric = Number(trimmed);
+    return Number.isFinite(numeric) ? String(numeric) : "";
+  }
+
+  function matchesDeviationFilter(deviationValue, mode, minValue, maxValue) {
+    if (deviationValue == null) {
+      return false;
+    }
+    const value = Number(deviationValue);
+    if (!Number.isFinite(value)) {
+      return false;
+    }
+    const normalizedMode = normalizeDeviationFilterInputMode(mode);
+    if (!normalizedMode) {
+      return true;
+    }
+    const min = minValue === "" ? null : Number(minValue);
+    const max = maxValue === "" ? null : Number(maxValue);
+    if (normalizedMode === "gte") {
+      return min == null ? true : value >= min;
+    }
+    if (normalizedMode === "lte") {
+      return max == null ? true : value <= max;
+    }
+    if (min != null && value < min) {
+      return false;
+    }
+    if (max != null && value > max) {
+      return false;
+    }
+    return min != null || max != null;
   }
 
   function selectRowsByMonths(rows, selectedDate, months, options = {}) {
@@ -3879,6 +5728,27 @@
       return enrichAggregatedRows(aggregateRowsByPeriod(rows, monthBucketKey));
     }
     return rows;
+  }
+
+  function detectChartScaleAnomaly(rows) {
+    for (let index = 1; index < rows.length; index += 1) {
+      const previousClose = Number(rows[index - 1]?.close || 0);
+      const currentClose = Number(rows[index]?.close || 0);
+      if (!(previousClose > 0 && currentClose > 0)) {
+        continue;
+      }
+      const ratio = currentClose / previousClose;
+      if (ratio >= 6 || ratio <= 1 / 6) {
+        return {
+          fromDate: rows[index - 1].date,
+          toDate: rows[index].date,
+          fromClose: previousClose,
+          toClose: currentClose,
+          ratio: Number(ratio.toFixed(4)),
+        };
+      }
+    }
+    return null;
   }
 
   function aggregateRowsByPeriod(rows, bucketKeyFn) {
@@ -4008,6 +5878,7 @@
       volume: "volume_spike",
       new_high: "new_high",
       new_high_20d: "",
+      trend_turn: "trend_turn",
       rebound_signal: "rebound_signal",
       deviation25: "deviation25",
       deviation75: "deviation75",

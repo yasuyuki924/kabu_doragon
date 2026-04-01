@@ -4,60 +4,61 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ローカル株分析ボード | 選別銘柄一覧</title>
-    <link rel="stylesheet" href="./assets/style.css" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.68" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="picked">
     <main class="container">
       <header class="page-header">
-        <div>
-          <p class="eyebrow"><a href="./index.html">← トップに戻る</a></p>
-          <h1>選別銘柄一覧</h1>
-          <p class="subtle">トップ画面でチェックした銘柄を確認</p>
+        <div class="picked-header-toolbar">
+          <a class="action-button secondary picked-header-action" href="./index.html">Back</a>
+          <span class="picked-header-title">Picks</span>
+          <span id="pickedCountBadge" class="picked-kpi-badge">Count 0</span>
+          <span id="pickedSetsBadge" class="picked-kpi-badge">Sets 0</span>
+          <span id="pickedUpdatedBadge" class="picked-kpi-badge picked-kpi-badge--muted">Updated --</span>
+        </div>
+        <div class="picked-header-actions">
+          <button id="pickedRefreshButton" class="action-button secondary picked-header-action" type="button">Refresh</button>
+          <button id="pickedHeaderExportButton" class="action-button secondary picked-header-action" type="button">Export</button>
+          <button id="pickedHeaderSaveButton" class="action-button picked-header-action" type="button">Save Set</button>
         </div>
       </header>
 
       <section class="panel">
-        <div class="picked-meta">
-          <span class="meta">保存件数</span>
-          <strong id="pickedCount">0件</strong>
+        <div class="picked-actions-grid">
+          <section id="pickedExportPanel" class="picked-action-panel">
+            <div class="picked-action-panel-head">
+              <h2>Export</h2>
+            </div>
+            <p id="pickedExportMessage" class="subtle picked-export-note"></p>
+            <div class="picked-export-actions">
+              <button id="pickedExportTradingViewButton" class="action-button" type="button">TradingView TXT</button>
+              <button id="pickedExportHyperButton" class="action-button secondary" type="button">HYPER SBI 2 CSV</button>
+            </div>
+            <div id="pickedExportList" class="picked-export-list"></div>
+          </section>
+          <section id="pickedRegisterPanel" class="picked-action-panel picked-action-panel--saved">
+            <div class="picked-action-panel-head">
+              <h2>Saved Sets</h2>
+              <span id="pickedRegisterCount" class="picked-action-count">0</span>
+            </div>
+            <div class="picked-register-actions">
+              <button id="pickedRegisterAllButton" class="action-button secondary" type="button">Save Current</button>
+            </div>
+            <div id="pickedRegisterList" class="picked-register-list"></div>
+          </section>
         </div>
-        <section id="pickedExportPanel" class="picked-export-panel">
-          <div class="section-head">
-            <h2>ダウンロード</h2>
-          </div>
-          <p id="pickedExportMessage" class="subtle picked-export-note"></p>
-          <div class="picked-export-actions">
-            <button id="pickedExportTradingViewButton" class="action-button" type="button">TradingView用を作成</button>
-            <button id="pickedExportHyperButton" class="action-button secondary" type="button">HYPER SBI 2用CSVを作成</button>
-          </div>
-          <div id="pickedExportList" class="picked-export-list"></div>
-        </section>
-        <section id="pickedRegisterPanel" class="picked-register-panel">
-          <div class="section-head">
-            <h2>登録銘柄</h2>
-          </div>
-          <p class="subtle picked-export-note">選別時のフィルター条件を紐づけて保存します。</p>
-          <div class="picked-register-actions">
-            <button id="pickedRegisterAllButton" class="action-button secondary" type="button">全て登録</button>
-          </div>
-          <div class="picked-meta">
-            <span class="meta">登録セット数</span>
-            <strong id="pickedRegisterCount">0件</strong>
-          </div>
-          <div id="pickedRegisterList" class="picked-register-list"></div>
-        </section>
         <div id="pickedError" class="status-box error" hidden></div>
         <div id="pickedChartList" class="scanner-list picked-chart-list"></div>
-        <div class="table-wrap picked-table-wrap">
+        <div class="table-wrap picked-table-wrap" hidden>
           <table>
             <thead>
               <tr>
-                <th>コード</th>
-                <th>銘柄名</th>
-                <th>市場</th>
-                <th>選別日時</th>
-                <th>操作</th>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Market</th>
+                <th>Picked At</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody id="pickedTableBody">
@@ -86,6 +87,6 @@
       </div>
     </div>
 
-    <script src="./assets/app.js"></script>
+    <script src="./assets/app.js?v=1.4.68"></script>
   </body>
 </html>

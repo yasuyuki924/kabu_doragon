@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -593,13 +594,96 @@ def build_cumulative_adjustment_map(
     return cumulative_map
 
 
+def resolve_corporate_action_effective_dates(
+    rows: list[dict[str, float | int | str]],
+    events: list[dict[str, float | str]],
+    *,
+    code: str = "",
+    auto_correct: bool = False,
+) -> list[dict[str, float | str]]:
+    if not auto_correct or not rows or not events:
+        return events
+
+    resolved_events: list[dict[str, float | str]] = []
+    dates = [str(row["date"]) for row in rows]
+    closes = [float(row["close"]) for row in rows]
+
+    for event in events:
+        effective_date = str(event.get("effectiveDate") or "").strip()
+        factor = coerce_float(event.get("factor"))
+        adj_factor = coerce_float(event.get("adjFactor"))
+        if not effective_date or factor in {None, 0}:
+            resolved_events.append(event)
+            continue
+        if adj_factor in {None, 0}:
+            adj_factor = round(1.0 / factor, 10)
+        if adj_factor <= 0:
+            resolved_events.append(event)
+            continue
+
+        anchor_index = next((index for index, value in enumerate(dates) if value >= effective_date), len(rows) - 1)
+        search_start = max(1, anchor_index - 8)
+        search_end = min(len(rows) - 1, anchor_index + 2)
+        best_index: int | None = None
+        best_score: float | None = None
+
+        for index in range(search_start, search_end + 1):
+            previous_close = closes[index - 1]
+            current_close = closes[index]
+            if previous_close <= 0 or current_close <= 0:
+                continue
+            observed_ratio = current_close / previous_close
+            score = abs(math.log(observed_ratio / adj_factor))
+            if score > math.log(1.6):
+                continue
+            if best_score is None or score < best_score or (score == best_score and abs(index - anchor_index) < abs((best_index or index) - anchor_index)):
+                best_index = index
+                best_score = score
+
+        if best_index is not None:
+            observed_date = dates[best_index]
+            if observed_date != effective_date:
+                prev_close = closes[best_index - 1]
+                curr_close = closes[best_index]
+                print(
+                    "[corp-action] adjusted effective date",
+                    json.dumps(
+                        {
+                            "code": code or str(event.get("code") or ""),
+                            "originalEffectiveDate": effective_date,
+                            "resolvedEffectiveDate": observed_date,
+                            "factor": factor,
+                            "adjFactor": adj_factor,
+                            "prevClose": prev_close,
+                            "currClose": curr_close,
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+                event = {**event, "effectiveDate": observed_date}
+
+        resolved_events.append(event)
+
+    resolved_events.sort(key=lambda item: str(item.get("effectiveDate") or ""))
+    return resolved_events
+
+
 def apply_corporate_actions(
     rows: list[dict[str, float | int | str]],
     events: list[dict[str, float | str]],
+    *,
+    code: str = "",
+    auto_correct_effective_dates: bool = False,
 ) -> list[dict[str, float | int | str]]:
     if not rows:
         return []
-    cumulative_map = build_cumulative_adjustment_map(rows, events)
+    resolved_events = resolve_corporate_action_effective_dates(
+        rows,
+        events,
+        code=code,
+        auto_correct=auto_correct_effective_dates,
+    )
+    cumulative_map = build_cumulative_adjustment_map(rows, resolved_events)
     adjusted_rows: list[dict[str, float | int | str]] = []
     for row in rows:
         factor = cumulative_map.get(str(row["date"]), 1.0)
@@ -1342,8 +1426,19 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
         raise ValueError("No components matched the selected universe/segments.")
 
     theme_lookup = build_theme_lookup(load_theme_map(paths.theme_map_json))
-    watchlist = build_watchlist(components, args.universe, theme_lookup)
-    paths.watchlist_json.write_text(json.dumps(watchlist, ensure_ascii=False, indent=2), encoding="utf-8")
+    sync_watchlist = build_watchlist(components, args.universe, theme_lookup)
+    persisted_watchlist = sync_watchlist
+    if selected_codes:
+        persisted_components = select_components(
+            master_records,
+            universe=args.universe,
+            selected_segments=selected_segments,
+            max_tickers=0,
+            codes=[],
+            nikkei_codes=nikkei_codes,
+        )
+        persisted_watchlist = build_watchlist(persisted_components, args.universe, theme_lookup)
+    paths.watchlist_json.write_text(json.dumps(persisted_watchlist, ensure_ascii=False, indent=2), encoding="utf-8")
 
     state = load_sync_state(paths.sync_state_json)
     start_date, end_date = compute_sync_window(
@@ -1378,13 +1473,13 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
             client,
             api_version,
             paths,
-            [item["ticker"] for item in watchlist],
+            [item["ticker"] for item in sync_watchlist],
             start_date,
             end_date,
             args.chunk_days,
         )
 
-    write_summary(paths, watchlist, args.universe)
+    write_summary(paths, persisted_watchlist, args.universe)
     if args.am_snapshot or not args.skip_price_download:
         write_update_state(
             paths.update_state_json,
