@@ -1497,7 +1497,7 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
             segments=selected_segments,
             last_successful_date=latest_date or state.get("lastSuccessfulDate"),
         )
-    print(f"done ({len(watchlist)} tickers)")
+    print(f"done ({len(sync_watchlist)} tickers)")
     return 0
 
 

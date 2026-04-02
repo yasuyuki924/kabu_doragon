@@ -43,6 +43,11 @@
               <option value="new_high_20d">20D Close High</option>
               <option value="trend_turn">ベース・リカバリー</option>
               <option value="rebound_signal">反発</option>
+              <option value="strategy_minervini">Minervini</option>
+              <option value="strategy_stage2">Stage 2</option>
+              <option value="strategy_turtle">Turtle</option>
+              <option value="strategy_canslim">CAN SLIM</option>
+              <option value="strategy_rsi2">RSI(2)</option>
               <option value="deviation25">25日乖離</option>
               <option value="deviation75">75日乖離</option>
               <option value="deviation200">200日乖離</option>
@@ -79,6 +84,12 @@
                         <option value="100000000">100M</option>
                         <option value="500000000">500M</option>
                         <option value="1000000000">1B</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Strategy</span>
+                      <select id="indexStickyStrategy">
+                        <option value="">All</option>
                       </select>
                     </label>
                   </div>
@@ -140,6 +151,11 @@
       </section>
     </main>
 
-    <script src="./assets/app.js?v=1.4.68"></script>
+    <script src="./assets/app_config.js?v=1.4.74"></script>
+    <script src="./assets/app_utils.js?v=1.4.74"></script>
+    <script src="./assets/app_data.js?v=1.4.74"></script>
+    <script src="./assets/page_index_scanner_status.js?v=1.4.74"></script>
+    <script src="./assets/page_index_scanner.js?v=1.4.74"></script>
+    <script src="./assets/app.js?v=1.4.74"></script>
   </body>
 </html>

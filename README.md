@@ -76,6 +76,54 @@
 - Finder で [`/Users/okamoto/kabu_doragon/open_kabu_doragon.command`](/Users/okamoto/kabu_doragon/open_kabu_doragon.command) をダブルクリック
 - 自動でローカルサーバーを起動し、[http://127.0.0.1:8010/index.html](http://127.0.0.1:8010/index.html) を既定ブラウザで開きます
 
+毎回サクッと開きたい場合:
+
+- `open_kabu_doragon.command` を Dock やデスクトップに置いておくと、1回のクリックで起動できます
+- さらに常駐化したい場合は [`/Users/okamoto/kabu_doragon/launchd/com.okamoto.kabu_doragon_http_server.plist`](/Users/okamoto/kabu_doragon/launchd/com.okamoto.kabu_doragon_http_server.plist) を `~/Library/LaunchAgents/` に配置して読み込むと、ログイン中は `http://127.0.0.1:8010/index.html` をすぐ開けます
+
+## 構成整理メモ
+
+2026-04 の第一段階リファクタリングでは、既存の実行入口を維持したまま内部責務を `src/` に分離しています。
+
+- `scripts/`
+  - 既存の実行入口を維持する薄いラッパー層
+- `src/app/`
+  - 日次パイプライン制御、共有ビュー用のデータ解決、manifest 生成
+- `src/data_source/`
+  - watchlist / theme / OHLCV / snapshot / daily cache の読み書き
+- `src/indicators/`
+  - 移動平均、RCI、WTD/MTD、日足 enrichment
+- `src/screening/`
+  - ランキング用スコアリング、overview 集計
+- `src/common/`
+  - パス、JSON I/O、日付・コード共通処理
+- `src/exports/`
+  - JSON 出力の薄い exporter 層
+
+互換性のため [`/Users/okamoto/kabu_doragon/scripts/common.py`](/Users/okamoto/kabu_doragon/scripts/common.py) は残してあり、既存の `from common import ...` は当面そのまま動く前提です。
+
+### 今回の整理で意図的に据え置いたもの
+
+- `assets/app.js`
+  - 5,000 行超のため、UI 挙動を壊さないことを優先して今回は未分割
+- `data/` 配下の既存生成物
+  - 現行 UI の表示前提になっているため、第一段階では配置変更せず
+- `scripts/build_*.py`
+  - 入口は維持しつつ、重複ロジックだけ先に `src/` へ退避
+
+### Git 管理の方針
+
+第一段階では、まず以下を `.gitignore` に寄せています。
+
+- `logs/`
+- `.tmp/`
+- `output/`
+- `data/intraday/*.json`
+- `data/update_state.json`
+- `data/current_snapshot_state.json`
+
+`data/tickers/` や `data/rankings/` などの大きい生成物は、既存運用との互換性を優先してまだ tracked のままです。完全に Git を軽くする次段階では、生成先を `output/` へ逃がすか、配布用データと再生成データを分離するのが安全です。
+
 手動で起動する場合:
 
 ```bash
@@ -171,6 +219,10 @@ JQUANTS_API_REFRESH_TOKEN=
 
 運用ルール:
 
+- 標準運用は Yahoo Finance です
+- J-Quants は旧運用の互換経路として残しています
+- J-Quants を解約する場合は、旧 launchd ジョブを停止してからにしてください
+
 - 推奨は `JQUANTS_API_KEY` を入れる方法です
 - `JQUANTS_API_KEY` があればそれを優先します
 - API キーがない場合だけ、`JQUANTS_API_REFRESH_TOKEN` または `MAIL_ADDRESS + PASSWORD` を使います
@@ -184,6 +236,8 @@ J-Quants のプラン差:
 このプロジェクトは最新日次更新が目的なので、`Light` を前提にしています。
 
 ### J-Quants で価格データを取得する場合
+
+この経路は旧運用です。通常は使いません。
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
@@ -207,6 +261,8 @@ cd "/Users/okamoto/kabu_doragon"
 ```
 
 ### J-Quants で JSON を再生成する場合
+
+この経路も旧運用です。通常の build は Yahoo Finance 前提で `--provider yfinance` または既定値を使ってください。
 
 ```bash
 cd "/Users/okamoto/kabu_doragon"
@@ -421,6 +477,20 @@ cd "/Users/okamoto/kabu_doragon"
 - `data/intraday/am_snapshot.json` には `coverage.requested` と `coverage.succeeded` が入ります
 - `requested` の `95%` 以上が成功した回だけ前場 snapshot を active にします
 - それ未満の回は前場原本だけ残し、画面は前回状態を維持します
+
+J-Quants を解約する場合:
+
+```bash
+launchctl disable gui/$(id -u)/com.okamoto.kabu_doragon_am_update
+launchctl disable gui/$(id -u)/com.okamoto.kabu_doragon_close_retry
+```
+
+必要ならあわせて unload します。
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.okamoto.kabu_doragon_am_update.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.okamoto.kabu_doragon_close_retry.plist
+```
 
 ## データ構造
 

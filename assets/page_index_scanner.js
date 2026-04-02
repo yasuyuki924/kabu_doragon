@@ -1,0 +1,1240 @@
+(function () {
+  async function initIndexScannerPage(deps) {
+    with (deps) {
+        const {
+          formatSnapshotGeneratedAtParts,
+          isManifestNewer,
+          resolveHeaderStatusState,
+        } = window.KabuPageIndexScannerStatus;
+        const sortSelect = document.getElementById("indexSort");
+        const stickyBar = document.getElementById("indexStickyBar");
+        const stickyPickedLink = document.getElementById("indexStickyPickedLink");
+        const stickyRefreshButton = document.getElementById("indexStickyRefreshButton");
+        const stickyDateButton = document.getElementById("indexStickyDateButton");
+        const stickyDatePopover = document.getElementById("indexStickyDatePopover");
+        const stickyTimeframeGroup = document.getElementById("indexStickyTimeframe");
+        const stickySortSelect = document.getElementById("indexStickySort");
+        const stickyLimitSelect = document.getElementById("indexStickyLimit");
+        const stickySelectAllPicksButton = document.getElementById("indexStickySelectAllButton");
+        const stickyResetPicksButton = document.getElementById("indexStickyResetPicksButton");
+        const stickyFiltersButton = document.getElementById("indexStickyFiltersButton");
+        const stickyFiltersPopover = document.getElementById("indexStickyFiltersPopover");
+        const stickyMiniCalendar = document.getElementById("indexStickyMiniCalendar");
+        const stickyTagSelect = document.getElementById("indexStickyTag");
+        const stickyThemeSelect = document.getElementById("indexStickyTheme");
+        const stickyTurnoverSelect = document.getElementById("indexStickyTurnover");
+        const stickyStrategySelect = document.getElementById("indexStickyStrategy");
+        const stickyAdvanced = document.getElementById("indexStickyAdvanced");
+        const stickyDeviationTitle = document.getElementById("indexStickyDeviationTitle");
+        const stickyDevMinInput = document.getElementById("indexStickyDev200Min");
+        const stickyDevMaxInput = document.getElementById("indexStickyDev200Max");
+        const stickyDevMinNumberInput = document.getElementById("indexStickyDev200MinNumber");
+        const stickyDevMaxNumberInput = document.getElementById("indexStickyDev200MaxNumber");
+        const stickyDevRangeFill = document.getElementById("indexStickyDev200RangeFill");
+        const stickyDevApplyButton = document.getElementById("indexStickyDev200Apply");
+        const stickyDevResetButton = document.getElementById("indexStickyDev200Reset");
+        const dev200Button = document.getElementById("indexDev200Button");
+        const dev200Popover = document.getElementById("indexDev200Popover");
+        const deviationPopoverTitle = document.getElementById("indexDeviationPopoverTitle");
+        const dev200ModeSelect = document.getElementById("indexDev200Mode");
+        const dev200MinInput = document.getElementById("indexDev200Min");
+        const dev200MaxInput = document.getElementById("indexDev200Max");
+        const dev200ApplyButton = document.getElementById("indexDev200Apply");
+        const dev200ResetButton = document.getElementById("indexDev200Reset");
+        const tagSelect = document.getElementById("indexTag") || stickyTagSelect;
+        const themeSelect = document.getElementById("indexTheme") || stickyThemeSelect;
+        const turnoverSelect = document.getElementById("indexTurnover") || stickyTurnoverSelect;
+        const limitSelect = document.getElementById("indexLimit");
+        const timeframeGroup = document.getElementById("indexTimeframe");
+        const timeframePopover = document.getElementById("indexTimeframePopover");
+        const timeframePopoverTitle = document.getElementById("indexTimeframePopoverTitle");
+        const timeframeOptions = document.getElementById("indexTimeframeOptions");
+        const rangeChip = document.getElementById("indexRangeChip");
+        const pickedLink = document.getElementById("indexPickedLink");
+        const updatedStatus = document.getElementById("indexUpdatedStatus");
+        const refreshButton = document.getElementById("indexRefreshButton");
+        const selectAllPicksButton = document.getElementById("indexSelectAllButton");
+        const resetPicksButton = document.getElementById("indexResetPicksButton");
+        const miniCalendar = document.getElementById("indexMiniCalendar") || stickyMiniCalendar;
+        const errorBox = document.getElementById("indexError");
+        const list = document.getElementById("indexList");
+      
+        const state = {
+          manifest: null,
+          overview: null,
+          sort: "gainers",
+          tag: "",
+          theme: "",
+          turnover: 0,
+          limit: 100,
+          timeframe: "daily",
+          rangeMonths: 3,
+          rangeMonthsByTimeframe: {
+            daily: 3,
+            weekly: 12,
+            monthly: 36,
+          },
+          timeframePopoverOpen: false,
+          timeframePopoverTarget: "",
+          deviationFilters: {
+            deviation25: { mode: "", min: "", max: "" },
+            deviation75: { mode: "", min: "", max: "" },
+            deviation200: { mode: "", min: "", max: "" },
+          },
+          deviationDrafts: {
+            deviation25: { mode: "", min: "", max: "" },
+            deviation75: { mode: "", min: "", max: "" },
+            deviation200: { mode: "", min: "", max: "" },
+          },
+          pendingManifest: null,
+          hasFreshUpdate: false,
+          isRefreshing: false,
+          headerStatusFlashTimer: null,
+          headerStatusFlashActive: false,
+          manifestPollId: null,
+          dev200PopoverOpen: false,
+          stickyDateOpen: false,
+          stickyFiltersOpen: false,
+          selectedDate: "",
+          calendarMonth: null,
+          picks: {},
+          themeOrder: [],
+          visibleRecords: [],
+          selectedStrategies: [],
+        };
+      
+        if (stickyDatePopover && stickyDatePopover.parentElement !== document.body) {
+          document.body.appendChild(stickyDatePopover);
+        }
+        if (stickyFiltersPopover && stickyBar && stickyFiltersPopover.parentElement !== stickyBar.parentElement) {
+          stickyBar.insertAdjacentElement("afterend", stickyFiltersPopover);
+        }
+      
+        const params = new URLSearchParams(window.location.search);
+        state.sort = params.get("sort") || state.sort;
+        state.tag = params.get("tag") || "";
+        state.theme = params.get("theme") || "";
+        state.selectedStrategies = params.get("strategy") ? [params.get("strategy")] : [];
+        state.turnover = INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
+          ? Number(params.get("turnover"))
+          : 0;
+        state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
+        state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
+        state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
+        state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
+        state.deviationFilters.deviation25 = {
+          mode: normalizeDeviationFilterInputMode(params.get("dev25_mode")),
+          min: normalizeDeviationFilterValue(params.get("dev25_min")),
+          max: normalizeDeviationFilterValue(params.get("dev25_max")),
+        };
+        state.deviationFilters.deviation75 = {
+          mode: normalizeDeviationFilterInputMode(params.get("dev75_mode")),
+          min: normalizeDeviationFilterValue(params.get("dev75_min")),
+          max: normalizeDeviationFilterValue(params.get("dev75_max")),
+        };
+        state.deviationFilters.deviation200 = {
+          mode: normalizeDeviationFilterInputMode(params.get("dev200_mode")),
+          min: normalizeDeviationFilterValue(params.get("dev200_min")),
+          max: normalizeDeviationFilterValue(params.get("dev200_max")),
+        };
+        const genericDevMin = normalizeDeviationFilterValue(params.get("devMin"));
+        const genericDevMax = normalizeDeviationFilterValue(params.get("devMax"));
+        const activeDeviationKeyFromUrl = getActiveDeviationSortKey(state.sort);
+        if (activeDeviationKeyFromUrl && (genericDevMin !== "" || genericDevMax !== "")) {
+          state.deviationFilters[activeDeviationKeyFromUrl] = buildDeviationFilterFromBounds(genericDevMin, genericDevMax);
+        }
+        state.deviationDrafts = {
+          deviation25: { ...state.deviationFilters.deviation25 },
+          deviation75: { ...state.deviationFilters.deviation75 },
+          deviation200: { ...state.deviationFilters.deviation200 },
+        };
+        state.picks = loadScannerPicks();
+        if (sortSelect) {
+          sortSelect.value = state.sort;
+        }
+        themeSelect.value = state.theme;
+        turnoverSelect.value = String(state.turnover);
+        limitSelect.value = String(state.limit);
+        if (stickySortSelect) {
+          stickySortSelect.value = state.sort;
+        }
+        if (stickyLimitSelect) {
+          stickyLimitSelect.value = String(state.limit);
+        }
+        if (stickyTurnoverSelect) {
+          stickyTurnoverSelect.value = String(state.turnover);
+        }
+        if (stickyStrategySelect) {
+          stickyStrategySelect.innerHTML = STRATEGY_CONFIG.map(
+            (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
+          ).join("");
+          stickyStrategySelect.value = state.selectedStrategies[0] || "";
+        }
+        const initialDeviationFilter = getActiveDeviationFilter(state);
+        if (dev200ModeSelect) {
+          dev200ModeSelect.value = initialDeviationFilter.mode || "gte";
+        }
+        if (dev200MinInput) {
+          dev200MinInput.value = initialDeviationFilter.min;
+        }
+        if (dev200MaxInput) {
+          dev200MaxInput.value = initialDeviationFilter.max;
+        }
+        if (stickyDevMinInput) {
+          stickyDevMinInput.value = initialDeviationFilter.min || "-20";
+        }
+        if (stickyDevMaxInput) {
+          stickyDevMaxInput.value = initialDeviationFilter.max || "20";
+        }
+      
+        function updateTimeframeUI() {
+          if (!timeframeGroup) {
+            return;
+          }
+          timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
+            const isActive = btn.dataset.value === state.timeframe;
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+          });
+        }
+      
+        function updateRangeChip() {
+          if (!rangeChip) {
+            return;
+          }
+          rangeChip.textContent = "";
+        }
+      
+        function updateStickyTimeframeUI() {
+          if (!stickyTimeframeGroup) {
+            return;
+          }
+          stickyTimeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
+            const isActive = btn.dataset.value === state.timeframe;
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+          });
+        }
+      
+        function updateStickyBarVisibility() {
+          if (!stickyBar) {
+            return;
+          }
+          stickyBar.hidden = false;
+        }
+      
+        function updateStickyHeaderActions() {
+          if (!stickyPickedLink) {
+            return;
+          }
+          const pickCount = Object.keys(state.picks || {}).length;
+          stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+        }
+      
+        function updateStickyFiltersUi() {
+          const activeKey = getActiveDeviationSortKey(state.sort);
+          const activeFilter = getActiveDeviationFilter(state);
+          const activeDraft = getActiveDeviationDraft(state);
+          const hasFilterSettings =
+            Boolean(state.tag) || Boolean(state.theme) || Number(state.turnover || 0) > 0 || Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
+          if (stickyFiltersButton) {
+            const deviationSummary = activeKey ? formatDeviationFilterSummary(activeFilter) : "";
+            stickyFiltersButton.textContent = deviationSummary || (hasFilterSettings ? "Filters ON" : "Filters");
+            stickyFiltersButton.setAttribute("aria-expanded", state.stickyFiltersOpen ? "true" : "false");
+            stickyFiltersButton.classList.toggle("is-active", state.stickyFiltersOpen || hasFilterSettings);
+          }
+          if (stickyFiltersPopover) {
+            stickyFiltersPopover.hidden = !state.stickyFiltersOpen;
+            stickyFiltersPopover.classList.toggle("is-open", state.stickyFiltersOpen);
+          }
+          if (stickyTagSelect) {
+            stickyTagSelect.value = state.tag;
+          }
+          if (stickyThemeSelect) {
+            stickyThemeSelect.value = state.theme;
+          }
+          if (stickyTurnoverSelect) {
+            stickyTurnoverSelect.value = String(state.turnover);
+          }
+          if (stickyStrategySelect) {
+            stickyStrategySelect.value = state.selectedStrategies[0] || "";
+          }
+          if (stickyAdvanced) {
+            stickyAdvanced.hidden = !activeKey;
+          }
+          if (stickyDeviationTitle) {
+            stickyDeviationTitle.textContent = activeKey ? getDeviationSortLabel(activeKey) : "Deviation";
+          }
+          setStickyDeviationControls(activeDraft);
+        }
+      
+        function updateStickyDateUi() {
+          if (stickyDateButton) {
+            const label = state.selectedDate ? state.selectedDate.replace(/-/g, ".") : "";
+            stickyDateButton.textContent = label ? `Date ${label} ▼` : "Date ▼";
+            stickyDateButton.setAttribute("aria-expanded", state.stickyDateOpen ? "true" : "false");
+          }
+          if (stickyDatePopover) {
+            stickyDatePopover.hidden = !state.stickyDateOpen;
+            stickyDatePopover.classList.toggle("is-open", state.stickyDateOpen);
+            if (state.stickyDateOpen) {
+              requestAnimationFrame(positionDatePopover);
+            } else {
+              stickyDatePopover.style.left = "";
+              stickyDatePopover.style.top = "";
+              stickyDatePopover.style.maxHeight = "";
+            }
+          }
+        }
+      
+        function buildDeviationFilterFromBounds(minValue, maxValue) {
+          const min = normalizeDeviationFilterValue(minValue);
+          const max = normalizeDeviationFilterValue(maxValue);
+          if (min === "" && max === "") {
+            return { mode: "", min: "", max: "" };
+          }
+          if (min !== "" && max !== "") {
+            const minNum = Number(min);
+            const maxNum = Number(max);
+            if (Number.isFinite(minNum) && Number.isFinite(maxNum) && minNum > maxNum) {
+              return { mode: "between", min: String(maxNum), max: String(minNum) };
+            }
+            return { mode: "between", min, max };
+          }
+          if (min !== "") {
+            return { mode: "gte", min, max: "" };
+          }
+          return { mode: "lte", min: "", max };
+        }
+      
+        function formatDeviationFilterSummary(filter) {
+          if (!filter || (!filter.mode && filter.min === "" && filter.max === "")) {
+            return "";
+          }
+          if (filter.min !== "" && filter.max !== "") {
+            return `Dev ${formatDeviationPercent(filter.min)} ~ ${formatDeviationPercent(filter.max)}`;
+          }
+          if (filter.min !== "") {
+            return `Dev >= ${formatDeviationPercent(filter.min)}`;
+          }
+          if (filter.max !== "") {
+            return `Dev <= ${formatDeviationPercent(filter.max)}`;
+          }
+          return "";
+        }
+      
+        function setStickyDeviationControls(filter) {
+          const min = filter?.min ?? "";
+          const max = filter?.max ?? "";
+          if (stickyDevMinInput) {
+            stickyDevMinInput.value = min === "" ? "-20" : String(min);
+          }
+          if (stickyDevMaxInput) {
+            stickyDevMaxInput.value = max === "" ? "20" : String(max);
+          }
+          if (stickyDevMinNumberInput) {
+            stickyDevMinNumberInput.value = min === "" ? "" : Number(min).toFixed(1);
+          }
+          if (stickyDevMaxNumberInput) {
+            stickyDevMaxNumberInput.value = max === "" ? "" : Number(max).toFixed(1);
+          }
+          syncStickyDeviationSliderUi("state");
+        }
+      
+        function formatDeviationPercent(value) {
+          const numeric = Number(value || 0);
+          const text = Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1);
+          return `${numeric > 0 ? "+" : ""}${text}%`;
+        }
+      
+        function clampDeviationSliderValue(value, fallback = 0) {
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) {
+            return fallback;
+          }
+          return Math.max(-20, Math.min(20, Math.round(numeric * 10) / 10));
+        }
+      
+        function syncStickyDeviationSliderUi(source = "slider") {
+          if (!stickyDevMinInput || !stickyDevMaxInput) {
+            return;
+          }
+          let minValue = -20;
+          let maxValue = 20;
+          let minDraftValue = stickyDevMinNumberInput?.value?.trim?.() ?? "";
+          let maxDraftValue = stickyDevMaxNumberInput?.value?.trim?.() ?? "";
+      
+          if (source === "slider") {
+            minValue = clampDeviationSliderValue(stickyDevMinInput.value, -20);
+            maxValue = clampDeviationSliderValue(stickyDevMaxInput.value, 20);
+            if (minValue > maxValue) {
+              if (document.activeElement === stickyDevMinInput) {
+                maxValue = minValue;
+              } else {
+                minValue = maxValue;
+              }
+            }
+            stickyDevMinInput.value = String(minValue);
+            stickyDevMaxInput.value = String(maxValue);
+            minDraftValue = minValue.toFixed(1);
+            maxDraftValue = maxValue.toFixed(1);
+            if (stickyDevMinNumberInput) {
+              stickyDevMinNumberInput.value = minDraftValue;
+            }
+            if (stickyDevMaxNumberInput) {
+              stickyDevMaxNumberInput.value = maxDraftValue;
+            }
+          } else {
+            minValue = minDraftValue === "" ? -20 : clampDeviationSliderValue(minDraftValue, -20);
+            maxValue = maxDraftValue === "" ? 20 : clampDeviationSliderValue(maxDraftValue, 20);
+            if (minValue > maxValue) {
+              if (document.activeElement === stickyDevMinInput || document.activeElement === stickyDevMinNumberInput) {
+                maxValue = minValue;
+                if (maxDraftValue !== "") {
+                  maxDraftValue = maxValue.toFixed(1);
+                }
+              } else {
+                minValue = maxValue;
+                if (minDraftValue !== "") {
+                  minDraftValue = minValue.toFixed(1);
+                }
+              }
+            }
+            stickyDevMinInput.value = String(minValue);
+            stickyDevMaxInput.value = String(maxValue);
+            if (source === "input") {
+              if (stickyDevMinNumberInput && minDraftValue !== "") {
+                stickyDevMinNumberInput.value = Number(minDraftValue).toFixed(1);
+              }
+              if (stickyDevMaxNumberInput && maxDraftValue !== "") {
+                stickyDevMaxNumberInput.value = Number(maxDraftValue).toFixed(1);
+              }
+            }
+          }
+          const percent = (value) => ((value + 20) / 40) * 100;
+          if (stickyDevRangeFill) {
+            stickyDevRangeFill.style.left = `${percent(minValue)}%`;
+            stickyDevRangeFill.style.width = `${Math.max(0, percent(maxValue) - percent(minValue))}%`;
+          }
+          const activeKey = getActiveDeviationSortKey(state.sort);
+          if (activeKey && source !== "state") {
+            const nextDraft = buildDeviationFilterFromBounds(
+              minDraftValue,
+              maxDraftValue,
+            );
+            state.deviationDrafts[activeKey] = nextDraft;
+          }
+        }
+      
+        function positionFloatingPopover(anchor, popover, options = {}) {
+          if (!anchor || !popover) {
+            return;
+          }
+          const widthPadding = Number(options.widthPadding || 12);
+          const anchorRect = anchor.getBoundingClientRect();
+          const popoverRect = popover.getBoundingClientRect();
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+          const maxLeft = Math.max(widthPadding, viewportWidth - popoverRect.width - widthPadding);
+          const idealLeft = anchorRect.right - popoverRect.width;
+          const left = Math.min(Math.max(widthPadding, idealLeft), maxLeft);
+          const top = Math.min(
+            Math.max(8, anchorRect.bottom + 8),
+            Math.max(8, viewportHeight - popoverRect.height - 8),
+          );
+          popover.style.left = `${Math.round(left)}px`;
+          popover.style.top = `${Math.round(top)}px`;
+        }
+      
+        function positionDatePopover() {
+          if (!stickyDateButton || !stickyDatePopover) {
+            return;
+          }
+          const gap = 8;
+          const padding = 12;
+          const anchorRect = stickyDateButton.getBoundingClientRect();
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+      
+          stickyDatePopover.style.left = "0px";
+          stickyDatePopover.style.top = "0px";
+          stickyDatePopover.style.maxHeight = `min(360px, calc(100vh - 24px))`;
+      
+          const popoverRect = stickyDatePopover.getBoundingClientRect();
+          const popoverWidth = Math.min(popoverRect.width, viewportWidth - padding * 2);
+          const naturalHeight = popoverRect.height;
+          const availableBelow = viewportHeight - anchorRect.bottom - gap - padding;
+          const availableAbove = anchorRect.top - gap - padding;
+          const shouldOpenAbove = availableBelow < naturalHeight && availableAbove > availableBelow;
+          const availableHeight = Math.max(180, shouldOpenAbove ? availableAbove : availableBelow);
+          const maxHeight = Math.min(360, Math.max(180, availableHeight));
+      
+          stickyDatePopover.style.maxHeight = `${Math.round(maxHeight)}px`;
+          const measuredHeight = Math.min(stickyDatePopover.getBoundingClientRect().height, maxHeight);
+          const left = Math.min(
+            Math.max(padding, anchorRect.left),
+            Math.max(padding, viewportWidth - popoverWidth - padding)
+          );
+          const top = shouldOpenAbove
+            ? Math.max(padding, anchorRect.top - measuredHeight - gap)
+            : Math.min(viewportHeight - measuredHeight - padding, anchorRect.bottom + gap);
+      
+          stickyDatePopover.style.left = `${Math.round(left)}px`;
+          stickyDatePopover.style.top = `${Math.round(top)}px`;
+        }
+      
+        function updateTimeframePopover() {
+          const targetTimeframe = state.timeframePopoverTarget || state.timeframe;
+          const options = INDEX_SCANNER_TIMEFRAME_RANGES[targetTimeframe] || [];
+          const targetRangeMonths = state.rangeMonthsByTimeframe[targetTimeframe] || options[0]?.months || state.rangeMonths;
+          if (timeframePopoverTitle) {
+            timeframePopoverTitle.textContent = `${indexScannerTimeframeLabel(targetTimeframe)} Range`;
+          }
+          if (timeframeOptions) {
+            timeframeOptions.innerHTML = options
+              .map((option) => `
+                <button
+                  type="button"
+                  class="index-timeframe-option${option.months === targetRangeMonths ? " is-active" : ""}"
+                  data-timeframe-option="${targetTimeframe}"
+                  data-range-months="${option.months}"
+                >${option.label}</button>
+              `)
+              .join("");
+            Array.from(timeframeOptions.querySelectorAll("button[data-timeframe-option]")).forEach((button) => {
+              button.addEventListener("click", async () => {
+                state.timeframe = String(button.dataset.timeframeOption || state.timeframe);
+                state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, button.dataset.rangeMonths, state.rangeMonths);
+                state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
+                state.timeframePopoverOpen = false;
+                state.timeframePopoverTarget = "";
+                updateTimeframeUI();
+                updateRangeChip();
+                updateTimeframePopover();
+                try {
+                  errorBox.hidden = true;
+                  list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+                  state.overview = await loadOverview(state.selectedDate, state.timeframe);
+                  renderTagOptions();
+                } catch (error) {
+                  showError(errorBox, error.message);
+                  return;
+                }
+                await render();
+              });
+            });
+          }
+          if (timeframePopover) {
+            const isOpen = state.timeframePopoverOpen && Boolean(state.timeframePopoverTarget);
+            timeframePopover.hidden = !isOpen;
+            timeframePopover.classList.toggle("is-open", isOpen);
+          }
+        }
+      
+        updateTimeframeUI();
+        updateStickyTimeframeUI();
+        updateRangeChip();
+        updateTimeframePopover();
+        updateDeviation200Controls();
+        updateStickyDateUi();
+        updateStickyFiltersUi();
+        updateStickyBarVisibility();
+        if (pickedLink) {
+          pickedLink.href = "./picked.html";
+        }
+        if (stickyPickedLink) {
+          stickyPickedLink.href = "./picked.html";
+        }
+      
+        [...new Set([sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
+          .forEach((control) => {
+          control.addEventListener("change", async () => {
+            state.sort = stickySortSelect?.matches(":focus") ? stickySortSelect.value : sortSelect.value;
+            state.tag = stickyTagSelect?.matches(":focus") ? stickyTagSelect.value : tagSelect.value;
+            state.theme = stickyThemeSelect?.matches(":focus") ? stickyThemeSelect.value : themeSelect.value;
+            state.turnover = Number(stickyTurnoverSelect?.matches(":focus") ? stickyTurnoverSelect.value : turnoverSelect.value);
+            state.limit = Number(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect.value : limitSelect.value);
+            if (sortSelect) sortSelect.value = state.sort;
+            if (stickySortSelect) stickySortSelect.value = state.sort;
+            if (tagSelect) tagSelect.value = state.tag;
+            if (stickyTagSelect) stickyTagSelect.value = state.tag;
+            if (themeSelect) themeSelect.value = state.theme;
+            if (stickyThemeSelect) stickyThemeSelect.value = state.theme;
+            if (turnoverSelect) turnoverSelect.value = String(state.turnover);
+            if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(state.turnover);
+            if (limitSelect) limitSelect.value = String(state.limit);
+            if (stickyLimitSelect) stickyLimitSelect.value = String(state.limit);
+            const activeDeviationKey = getActiveDeviationSortKey(state.sort);
+            if (activeDeviationKey) {
+              state.deviationDrafts[activeDeviationKey] = { ...state.deviationFilters[activeDeviationKey] };
+            }
+            updateDeviation200Controls();
+            updateStickyFiltersUi();
+            await render();
+          });
+        });
+      
+        [stickyDevMinInput, stickyDevMaxInput].filter(Boolean).forEach((input) => {
+          input.addEventListener("input", () => {
+            syncStickyDeviationSliderUi("slider");
+          });
+        });
+      
+        [stickyDevMinNumberInput, stickyDevMaxNumberInput].filter(Boolean).forEach((input) => {
+          input.addEventListener("input", () => {
+            syncStickyDeviationSliderUi("input");
+          });
+          input.addEventListener("change", () => {
+            syncStickyDeviationSliderUi("input");
+          });
+        });
+      
+        stickyDevApplyButton?.addEventListener("click", async (event) => {
+          event.preventDefault();
+          const activeKey = getActiveDeviationSortKey(state.sort);
+          if (!activeKey) {
+            return;
+          }
+          const nextFilter = buildDeviationFilterFromBounds(
+            stickyDevMinNumberInput?.value,
+            stickyDevMaxNumberInput?.value,
+          );
+          state.deviationDrafts[activeKey] = nextFilter;
+          state.deviationFilters[activeKey] = nextFilter;
+          setStickyDeviationControls(nextFilter);
+          console.debug('[Deviation Apply]', {
+            draftDevMin: stickyDevMinNumberInput?.value ?? '',
+            draftDevMax: stickyDevMaxNumberInput?.value ?? '',
+            appliedDevMin: nextFilter.min,
+            appliedDevMax: nextFilter.max,
+          });
+          updateDeviation200Controls();
+          updateStickyFiltersUi();
+          await render();
+          console.debug('[Deviation Apply Result]', {
+            updatedUrl: window.location.href,
+            filteredResultCount: state.visibleRecords?.length ?? 0,
+          });
+        });
+      
+        stickyDevResetButton?.addEventListener("click", async (event) => {
+          event.preventDefault();
+          const activeKey = getActiveDeviationSortKey(state.sort);
+          if (activeKey) {
+            state.deviationDrafts[activeKey] = { mode: "", min: "", max: "" };
+            state.deviationFilters[activeKey] = { mode: "", min: "", max: "" };
+          }
+          if (stickyDevMinNumberInput) stickyDevMinNumberInput.value = "";
+          if (stickyDevMaxNumberInput) stickyDevMaxNumberInput.value = "";
+          setStickyDeviationControls({ mode: "", min: "", max: "" });
+          updateDeviation200Controls();
+          updateStickyFiltersUi();
+          await render();
+        });
+      
+        stickyFiltersButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          state.stickyFiltersOpen = !state.stickyFiltersOpen;
+          state.stickyDateOpen = false;
+          updateStickyFiltersUi();
+          updateStickyDateUi();
+        });
+      
+        stickyFiltersPopover?.addEventListener("click", (event) => {
+          event.stopPropagation();
+        });
+      
+        stickyDateButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          state.stickyDateOpen = !state.stickyDateOpen;
+          state.stickyFiltersOpen = false;
+          updateStickyDateUi();
+          updateStickyFiltersUi();
+        });
+      
+        stickyDatePopover?.addEventListener("click", (event) => {
+          event.stopPropagation();
+        });
+      
+        document.addEventListener("click", (event) => {
+          if (state.timeframePopoverOpen && timeframePopover && timeframeGroup) {
+            if (!timeframePopover.contains(event.target) && !timeframeGroup.contains(event.target)) {
+              state.timeframePopoverOpen = false;
+              state.timeframePopoverTarget = "";
+              updateTimeframePopover();
+            }
+          }
+          if (state.stickyFiltersOpen && stickyFiltersPopover && stickyFiltersButton) {
+            if (!stickyFiltersPopover.contains(event.target) && !stickyFiltersButton.contains(event.target)) {
+              state.stickyFiltersOpen = false;
+              updateStickyFiltersUi();
+            }
+          }
+          if (state.stickyDateOpen && stickyDatePopover && stickyDateButton) {
+            if (!stickyDatePopover.contains(event.target) && !stickyDateButton.contains(event.target)) {
+              state.stickyDateOpen = false;
+              updateStickyDateUi();
+            }
+          }
+        });
+      
+        window.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            if (state.timeframePopoverOpen) {
+              state.timeframePopoverOpen = false;
+              state.timeframePopoverTarget = "";
+              updateTimeframePopover();
+            }
+            if (state.stickyFiltersOpen) {
+              state.stickyFiltersOpen = false;
+              updateStickyFiltersUi();
+            }
+            if (state.stickyDateOpen) {
+              state.stickyDateOpen = false;
+              updateStickyDateUi();
+            }
+          }
+        });
+      
+        window.addEventListener("resize", () => {
+          if (state.stickyDateOpen) {
+            positionDatePopover();
+          }
+        });
+      
+        window.addEventListener("scroll", () => {
+          if (state.stickyDateOpen) {
+            positionDatePopover();
+          }
+        }, { passive: true });
+      
+        if (timeframeGroup) {
+          const LONG_PRESS_MS = 420;
+          timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
+            let longPressTimer = null;
+            let longPressTriggered = false;
+      
+            const clearLongPressTimer = () => {
+              if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+              }
+            };
+      
+            const openTimeframePopover = () => {
+              state.timeframePopoverTarget = String(btn.dataset.value || state.timeframe);
+              state.timeframePopoverOpen = true;
+              updateTimeframePopover();
+            };
+      
+            btn.addEventListener("pointerdown", (event) => {
+              if (event.button !== 0) {
+                return;
+              }
+              longPressTriggered = false;
+              clearLongPressTimer();
+              longPressTimer = setTimeout(() => {
+                longPressTriggered = true;
+                openTimeframePopover();
+              }, LONG_PRESS_MS);
+            });
+      
+            ["pointerup", "pointerleave", "pointercancel"].forEach((eventName) => {
+              btn.addEventListener(eventName, clearLongPressTimer);
+            });
+      
+            btn.addEventListener("click", async (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              clearLongPressTimer();
+              const nextTimeframe = String(btn.dataset.value || state.timeframe);
+              if (longPressTriggered) {
+                longPressTriggered = false;
+                return;
+              }
+              if (state.timeframe === nextTimeframe && !state.timeframePopoverOpen) {
+                return;
+              }
+              state.timeframe = nextTimeframe;
+              state.rangeMonths = normalizeIndexScannerRangeMonths(
+                state.timeframe,
+                state.rangeMonthsByTimeframe[state.timeframe],
+                state.rangeMonths,
+              );
+              state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
+              state.timeframePopoverOpen = false;
+              state.timeframePopoverTarget = "";
+              updateTimeframeUI();
+              updateRangeChip();
+              updateTimeframePopover();
+              try {
+                errorBox.hidden = true;
+                list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+                state.overview = await loadOverview(state.selectedDate, state.timeframe);
+                renderTagOptions();
+              } catch (error) {
+                showError(errorBox, error.message);
+                return;
+              }
+              await render();
+            });
+          });
+        }
+      
+        if (resetPicksButton) {
+          resetPicksButton.addEventListener("click", async () => {
+            resetScannerPicks(state);
+            await render();
+          });
+        }
+        if (stickyResetPicksButton) {
+          stickyResetPicksButton.addEventListener("click", async () => {
+            resetScannerPicks(state);
+            await render();
+          });
+        }
+        if (selectAllPicksButton) {
+          selectAllPicksButton.addEventListener("click", async () => {
+            selectAllScannerPicks(state.visibleRecords, state);
+            await render();
+          });
+        }
+        if (stickySelectAllPicksButton) {
+          stickySelectAllPicksButton.addEventListener("click", async () => {
+            selectAllScannerPicks(state.visibleRecords, state);
+            await render();
+          });
+        }
+        refreshButton?.addEventListener("click", async () => {
+          state.isRefreshing = true;
+          updateHeaderStatus();
+          await runRefreshAction(refreshButton, errorBox, async () => {
+            state.manifest = state.pendingManifest || await loadManifest();
+            state.pendingManifest = null;
+            state.hasFreshUpdate = false;
+            await loadDate(state.selectedDate || state.manifest.latestDate);
+            await render();
+          });
+          state.isRefreshing = false;
+          triggerHeaderStatusFlash();
+          updateHeaderStatus();
+        });
+      
+        try {
+          state.manifest = await loadManifest();
+          state.themeOrder = await loadThemeOrder();
+          await loadDate(params.get("date") || state.manifest.latestDate);
+          await render();
+          startManifestPolling();
+        } catch (error) {
+          showError(errorBox, error.message);
+        }
+      
+        async function loadDate(requestedDate) {
+          state.selectedDate = resolveAvailableDate(requestedDate, state.manifest.availableDates);
+          state.overview = await loadOverview(state.selectedDate, state.timeframe);
+          state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
+          renderTagOptions();
+          renderDateControls();
+          renderCalendar();
+        }
+      
+        function renderTagOptions() {
+          const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
+          const industries = [...new Set(
+            turnoverRecords
+              .map((record) => String(record.industry || "").trim())
+              .filter(
+                (industry) =>
+                  industry &&
+                  !TSE_MARKETS.has(industry) &&
+                  !MARKET_TAGS.has(industry.toLowerCase())
+              )
+          )].sort();
+          tagSelect.innerHTML = ['<option value="">All</option>']
+            .concat(industries.map((industry) => `<option value="${escapeHtml(industry)}">${escapeHtml(industry)}</option>`))
+            .join("");
+          if (stickyTagSelect) {
+            stickyTagSelect.innerHTML = tagSelect.innerHTML;
+          }
+          if (state.tag && !industries.includes(state.tag)) {
+            state.tag = "";
+          }
+          tagSelect.value = state.tag;
+          if (stickyTagSelect) {
+            stickyTagSelect.value = state.tag;
+          }
+        }
+      
+        function renderThemeOptions() {
+          const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
+          const availableThemes = new Set();
+          turnoverRecords.forEach((record) => {
+            (record.themes || []).forEach((theme) => {
+              const label = String(theme || "").trim();
+              if (label) {
+                availableThemes.add(label);
+              }
+            });
+          });
+          const orderedThemes = state.themeOrder.filter((theme) => availableThemes.has(theme));
+          const extraThemes = [...availableThemes].filter((theme) => !state.themeOrder.includes(theme)).sort((left, right) =>
+            left.localeCompare(right, "ja", { sensitivity: "base" })
+          );
+          const themeOptions = ["", ...orderedThemes, ...extraThemes];
+          themeSelect.innerHTML = themeOptions
+            .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "All")}</option>`)
+            .join("");
+          if (stickyThemeSelect) {
+            stickyThemeSelect.innerHTML = themeSelect.innerHTML;
+          }
+          if (state.theme && !availableThemes.has(state.theme)) {
+            state.theme = "";
+          }
+          themeSelect.value = state.theme;
+          if (stickyThemeSelect) {
+            stickyThemeSelect.value = state.theme;
+          }
+        }
+      
+        function updateIndexHeaderActions() {
+          if (!pickedLink) {
+            return;
+          }
+          const pickCount = Object.keys(state.picks || {}).length;
+          pickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+          if (stickyPickedLink) {
+            stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+          }
+        }
+      
+        function updateHeaderStatus() {
+          if (!updatedStatus) {
+            return;
+          }
+          const currentSnapshot = state.manifest?.currentSnapshot || {};
+          const statusState = resolveHeaderStatusState(currentSnapshot?.generatedAt, {
+            snapshot: currentSnapshot,
+            hasFreshUpdate: state.hasFreshUpdate,
+            isRefreshing: state.isRefreshing,
+            flash: state.headerStatusFlashActive,
+            isJapaneseHoliday,
+          });
+          const timeParts = formatSnapshotGeneratedAtParts(currentSnapshot?.generatedAt);
+          updatedStatus.className = [
+            "index-header-status",
+            `index-header-status--${statusState.tone}`,
+            statusState.pending ? "index-header-status--pending" : "",
+            statusState.refreshing ? "index-header-status--refreshing" : "",
+            statusState.flash ? "index-header-status--flash" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          updatedStatus.setAttribute(
+            "title",
+            [
+              statusState.label,
+              statusState.marketPhase,
+              timeParts.full || "--",
+              statusState.pending ? "new data ready" : "",
+              statusState.refreshing ? "refreshing" : "",
+            ]
+              .filter(Boolean)
+              .join(" / ")
+          );
+          updatedStatus.innerHTML = `
+            <span class="index-header-status-dot" aria-hidden="true"></span>
+            <span class="index-header-status-body">
+              <span class="index-header-status-topline">
+                <span class="index-header-status-label">${escapeHtml(statusState.label)}</span>
+                <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
+              </span>
+              <span class="index-header-status-bottomline">
+                <span class="index-header-status-date">${escapeHtml(timeParts.date || "--/--")}</span>
+                <span class="index-header-status-time">
+                  <span class="index-header-status-hm">${escapeHtml(timeParts.hm || "--:--")}</span>
+                  <span class="index-header-status-seconds">${escapeHtml(timeParts.seconds || "")}</span>
+                </span>
+              </span>
+            </span>
+          `;
+        }
+      
+        function triggerHeaderStatusFlash() {
+          if (state.headerStatusFlashTimer) {
+            window.clearTimeout(state.headerStatusFlashTimer);
+          }
+          state.headerStatusFlashActive = true;
+          updateHeaderStatus();
+          state.headerStatusFlashTimer = window.setTimeout(() => {
+            state.headerStatusFlashActive = false;
+            state.headerStatusFlashTimer = null;
+            updateHeaderStatus();
+          }, 1200);
+        }
+      
+        async function checkForManifestUpdate() {
+          try {
+            const latestManifest = await loadManifest();
+            if (isManifestNewer(latestManifest, state.manifest)) {
+              state.pendingManifest = latestManifest;
+              state.hasFreshUpdate = true;
+            } else {
+              state.pendingManifest = null;
+              state.hasFreshUpdate = false;
+            }
+            updateHeaderStatus();
+          } catch (_error) {
+          }
+        }
+      
+        function startManifestPolling() {
+          if (state.manifestPollId) {
+            clearInterval(state.manifestPollId);
+          }
+          state.manifestPollId = window.setInterval(() => {
+            if (document.visibilityState === "visible") {
+              void checkForManifestUpdate();
+            }
+          }, 30000);
+        }
+      
+        async function render() {
+          errorBox.hidden = true;
+          list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+          state.picks = loadScannerPicks();
+          updateIndexHeaderActions();
+          renderTagOptions();
+          renderThemeOptions();
+          const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
+          const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
+          const baseFiltered = priceFilteredRecords.filter(
+            (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
+          );
+          let scannerBase = state.selectedStrategies.length
+            ? baseFiltered.filter((record) => state.selectedStrategies.every((strategyId) => (record.strategyMatches || []).includes(strategyId)))
+            : baseFiltered;
+          if (state.sort === "lower_shadow") {
+            scannerBase = scannerBase.filter(isLowerShadowCandidate);
+          } else if (state.sort === "stop_high") {
+            scannerBase = scannerBase.filter((record) => getStopHighStatus(record) !== "none");
+          } else if (state.sort === "new_high_20d") {
+            scannerBase = scannerBase.filter((record) => record.newHigh20d === true);
+          } else if (isDeviationSort(state.sort)) {
+            const deviationFilter = getActiveDeviationFilter(state);
+            scannerBase = scannerBase.filter((record) => {
+              const deviationValue = getDeviationValueBySort(record, state.sort);
+              return deviationValue != null && matchesDeviationFilter(deviationValue, deviationFilter.mode, deviationFilter.min, deviationFilter.max);
+            });
+          } else if (state.sort === "trend_turn") {
+            scannerBase = scannerBase.filter((record) => record.trendTurnCandidate === true);
+          } else if (state.sort === "rebound_signal") {
+            scannerBase = scannerBase.filter((record) => String(record.signalCategory || "") !== "none");
+          } else if (state.sort === "strategy_minervini") {
+            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("minervini_trend_template"));
+          } else if (state.sort === "strategy_stage2") {
+            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("stan_weinstein_stage2"));
+          } else if (state.sort === "strategy_turtle") {
+            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("turtle_donchian_breakout"));
+          } else if (state.sort === "strategy_canslim") {
+            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("can_slim"));
+          } else if (state.sort === "strategy_rsi2") {
+            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
+          }
+          const filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
+          state.visibleRecords = filtered;
+          syncIndexScannerUrl(
+            state.selectedDate,
+            state.sort,
+            state.tag,
+            state.theme,
+            state.turnover,
+            state.limit,
+            state.rangeMonths,
+            state.timeframe,
+            state.deviationFilters,
+            state.selectedStrategies
+          );
+          if (stickySortSelect) {
+            stickySortSelect.value = state.sort;
+          }
+          if (stickyLimitSelect) {
+            stickyLimitSelect.value = String(state.limit);
+          }
+          if (stickyTurnoverSelect) {
+            stickyTurnoverSelect.value = String(state.turnover);
+          }
+          updateStickyTimeframeUI();
+          updateRangeChip();
+          updateStickyFiltersUi();
+          updateHeaderStatus();
+      
+          if (!filtered.length) {
+            if (selectAllPicksButton) {
+              selectAllPicksButton.disabled = true;
+            }
+            if (stickySelectAllPicksButton) {
+              stickySelectAllPicksButton.disabled = true;
+            }
+            list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
+            return;
+          }
+          if (selectAllPicksButton) {
+            selectAllPicksButton.disabled = false;
+          }
+          if (stickySelectAllPicksButton) {
+            stickySelectAllPicksButton.disabled = false;
+          }
+      
+          list.innerHTML = filtered
+            .map((record, index) => renderScannerItem(record, index, state))
+            .join("");
+      
+          filtered.forEach((record) => {
+            const checkbox = list.querySelector(`input[data-pick-code="${record.code}"]`);
+            if (!checkbox) {
+              return;
+            }
+            checkbox.addEventListener("change", () => {
+              toggleScannerPick(record, checkbox.checked, state);
+            });
+          });
+      
+          const results = await mapWithConcurrency(filtered, CHART_FETCH_CONCURRENCY, async (record) => {
+            try {
+              return {
+                record,
+                status: "fulfilled",
+                value: await loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate }),
+              };
+            } catch (error) {
+              return { record, status: "rejected", reason: error };
+            }
+          });
+      
+          const baselineShape = results.find((result) => result.status === "fulfilled" && !result.value.validation.issues.length)?.value.shape || null;
+      
+          results.forEach((result) => {
+            const record = result.record;
+            if (result.status === "rejected") {
+              renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
+              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${result.reason?.message}`);
+              return;
+            }
+            const { payload, validation, shape, requestUrl, status, responseBody } = result.value;
+            if (validation.issues.length) {
+              console.debug("[ticker-chart:validation]", {
+                code: record.code,
+                requestUrl,
+                status,
+                responseBody: responseBody.slice(0, 1200),
+                parsedCandleCount: validation.parsedCandleCount,
+                issues: validation.issues,
+                warnings: validation.warnings,
+                shapeDiff: diffShapeAgainstBaseline(baselineShape, shape),
+              });
+              renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
+              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
+              return;
+            }
+            renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
+              timeframe: state.timeframe,
+              useBarCount: false,
+            });
+            const linksElement = document.getElementById(`scanLinks-${record.code}`);
+            if (linksElement) {
+              linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+            }
+          });
+        }
+
+        stickyStrategySelect?.addEventListener("change", () => {
+          state.selectedStrategies = stickyStrategySelect.value ? [stickyStrategySelect.value] : [];
+          render();
+        });
+      
+        function renderDateControls() {
+          updateStickyDateUi();
+        }
+      
+        function updateDeviation200Controls() {
+          const activeKey = getActiveDeviationSortKey(state.sort);
+          const activeFilter = getActiveDeviationFilter(state);
+          const activeDraft = getActiveDeviationDraft(state);
+          const hasSettings = Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
+          const activeLabel = getDeviationSortLabel(activeKey);
+          if (dev200Button) {
+            dev200Button.hidden = !activeKey;
+            dev200Button.classList.toggle("is-active", hasSettings);
+            dev200Button.textContent = hasSettings ? "Advanced ON" : "Advanced ▼";
+            dev200Button.setAttribute("aria-expanded", activeKey && state.dev200PopoverOpen ? "true" : "false");
+          }
+          if (deviationPopoverTitle) {
+            deviationPopoverTitle.textContent = activeLabel || "Deviation";
+          }
+          if (dev200Popover) {
+            const isOpen = Boolean(activeKey) && state.dev200PopoverOpen;
+            dev200Popover.hidden = !isOpen;
+            dev200Popover.classList.toggle("is-open", isOpen);
+          }
+          if (dev200ModeSelect) {
+            dev200ModeSelect.value = activeFilter.mode || "gte";
+          }
+          if (dev200MinInput && dev200MinInput.value !== activeFilter.min) {
+            dev200MinInput.value = activeFilter.min;
+          }
+          if (dev200MaxInput && dev200MaxInput.value !== activeFilter.max) {
+            dev200MaxInput.value = activeFilter.max;
+          }
+          const activeMode = normalizeDeviationFilterInputMode(dev200ModeSelect?.value) || activeFilter.mode || "gte";
+          if (dev200MinInput) {
+            dev200MinInput.disabled = activeMode === "lte";
+          }
+          if (dev200MaxInput) {
+            dev200MaxInput.disabled = activeMode === "gte";
+          }
+          if (stickyAdvanced) {
+            stickyAdvanced.hidden = !activeKey;
+          }
+          if (stickyDeviationTitle) {
+            stickyDeviationTitle.textContent = activeLabel || "Deviation";
+          }
+          setStickyDeviationControls(activeDraft);
+        }
+      
+        function renderCalendar() {
+          const minMonth = startOfMonth(parseDate(state.manifest.availableDates[0]));
+          const maxMonth = startOfMonth(parseDate(state.manifest.availableDates.at(-1)));
+          renderMiniCalendar(
+            stickyMiniCalendar || miniCalendar,
+            state.calendarMonth || startOfMonth(parseDate(state.selectedDate)),
+            state.selectedDate,
+            state.manifest.availableDates,
+            async (nextDate) => {
+              state.stickyDateOpen = false;
+              updateStickyDateUi();
+              await loadDate(nextDate);
+              await render();
+            },
+            {
+              minMonth,
+              maxMonth,
+              onPrevMonth: () => {
+                state.calendarMonth = addCalendarMonths(state.calendarMonth, -1);
+                renderCalendar();
+              },
+              onNextMonth: () => {
+                state.calendarMonth = addCalendarMonths(state.calendarMonth, 1);
+                renderCalendar();
+              },
+            }
+          );
+        }
+      }
+      
+  }
+
+  window.KabuPageIndexScanner = Object.freeze({ initIndexScannerPage });
+})();

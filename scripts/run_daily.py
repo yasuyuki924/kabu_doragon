@@ -2,17 +2,14 @@
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
-import sys
 from pathlib import Path
-from time import perf_counter
-
-from common import discover_available_dates
-
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-UPDATE_STATE_JSON = ROOT / "data" / "update_state.json"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.app.daily_runner import build_daily_pipeline  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,115 +31,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_step(*args: str) -> float:
-    cmd = [sys.executable, *args]
-    start = perf_counter()
-    subprocess.run(cmd, check=True, cwd=ROOT)
-    return perf_counter() - start
-
-
-def load_update_state() -> dict[str, object]:
-    if not UPDATE_STATE_JSON.exists():
-        return {}
-    return json.loads(UPDATE_STATE_JSON.read_text(encoding="utf-8"))
-
-
 def main() -> int:
-    args = parse_args()
-    total_start = perf_counter()
-    codes_mode = bool(args.codes)
-
-    if not args.skip_fetch:
-        fetch_args = [
-            "scripts/fetch_prices.py",
-            "--provider",
-            args.provider,
-            "--universe",
-            "tse",
-            "--segments",
-            "prime,standard,growth",
-            "--history-years",
-            str(args.history_years),
-        ]
-        if args.full_refresh:
-            fetch_args.append("--full-refresh")
-        if args.codes:
-            fetch_args.extend(["--codes", args.codes])
-        fetch_elapsed = run_step(*fetch_args)
-        print(f"timing fetch={fetch_elapsed:.1f}s")
-
-    incremental_dates: list[str] = []
-    adjusted_date_from: str | None = None
-    if not args.full_rebuild and not args.codes:
-        update_state = load_update_state()
-        incremental_dates = [str(item).strip() for item in update_state.get("updatedDates") or [] if str(item).strip()]
-        adjusted_date_from = str(update_state.get("adjustedDateFrom") or "").strip() or None
-
-    ticker_args = ["scripts/build_ticker_data.py"]
-    if args.codes:
-        ticker_args.extend(["--codes", args.codes])
-    elif args.full_rebuild:
-        ticker_args.extend(["--all", "--cache-recent-months", "3"])
-    else:
-        ticker_args.append("--use-update-state")
-    if args.limit > 0:
-        ticker_args.extend(["--limit", str(args.limit)])
-    ticker_elapsed = run_step(*ticker_args)
-    print(f"timing tickers={ticker_elapsed:.1f}s")
-
-    ranking_args = ["scripts/build_rankings.py"]
-    overview_args = ["scripts/build_market_overview.py"]
-    if args.full_rebuild or args.codes:
-        if args.full_rebuild and not args.codes:
-            recent_dates = discover_available_dates()
-            recent_count = len(recent_dates)
-            recent_end_date = recent_dates[-1] if recent_dates else None
-            ranking_args.extend(["--days", str(recent_count)])
-            overview_args.extend(["--days", str(recent_count)])
-            if recent_end_date:
-                ranking_args.extend(["--end-date", recent_end_date])
-                overview_args.extend(["--end-date", recent_end_date])
-        else:
-            ranking_args.extend(["--days", str(args.days)])
-            overview_args.extend(["--days", str(args.days)])
-    elif adjusted_date_from:
-        ranking_args.extend(["--from-date", adjusted_date_from])
-        overview_args.extend(["--from-date", adjusted_date_from])
-    elif incremental_dates:
-        ranking_args.extend(["--dates", ",".join(incremental_dates)])
-        overview_args.extend(["--dates", ",".join(incremental_dates)])
-    else:
-        ranking_args.extend(["--days", str(args.days)])
-        overview_args.extend(["--days", str(args.days)])
-    if args.codes:
-        ranking_args.extend(["--codes", args.codes])
-        overview_args.extend(["--codes", args.codes])
-    if args.end_date and not (args.full_rebuild and not args.codes):
-        ranking_args.extend(["--end-date", args.end_date])
-        overview_args.extend(["--end-date", args.end_date])
-
-    should_refresh_shared_views = False
-    if args.full_rebuild:
-        should_refresh_shared_views = True
-    elif codes_mode:
-        should_refresh_shared_views = bool(args.include_shared_views)
-        if not should_refresh_shared_views:
-            print("timing rankings=0.0s (skipped: --codes safe mode)")
-            print("timing overview=0.0s (skipped: --codes safe mode)")
-    elif incremental_dates or adjusted_date_from:
-        should_refresh_shared_views = True
-
-    if should_refresh_shared_views:
-        rankings_elapsed = run_step(*ranking_args)
-        print(f"timing rankings={rankings_elapsed:.1f}s")
-        overview_elapsed = run_step(*overview_args)
-        print(f"timing overview={overview_elapsed:.1f}s")
-    else:
-        if not codes_mode:
-            print("timing rankings=0.0s (skipped)")
-            print("timing overview=0.0s (skipped)")
-    print(f"timing total={perf_counter() - total_start:.1f}s")
-    return 0
+    return build_daily_pipeline(parse_args())
 
 
 if __name__ == "__main__":

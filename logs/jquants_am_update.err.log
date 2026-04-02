@@ -30,3 +30,23 @@
 [2026-03-27 12:32:29] ERROR: AM post-check failed with exit 0
 [2026-03-31 12:07:49] ERROR: AM post-check failed with exit 0
 [2026-03-31 12:32:39] ERROR: AM post-check failed with exit 0
+Traceback (most recent call last):
+  File "/Users/okamoto/kabu_doragon/src/jquants_provider.py", line 1509, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/Users/okamoto/kabu_doragon/src/jquants_provider.py", line 1505, in main
+    return run_sync(parse_args())
+  File "/Users/okamoto/kabu_doragon/src/jquants_provider.py", line 1500, in run_sync
+    print(f"done ({len(watchlist)} tickers)")
+                       ^^^^^^^^^
+NameError: name 'watchlist' is not defined
+Traceback (most recent call last):
+  File "/Users/okamoto/kabu_doragon/src/jquants_provider.py", line 1509, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/Users/okamoto/kabu_doragon/src/jquants_provider.py", line 1505, in main
+    return run_sync(parse_args())
+  File "/Users/okamoto/kabu_doragon/src/jquants_provider.py", line 1500, in run_sync
+    print(f"done ({len(watchlist)} tickers)")
+                       ^^^^^^^^^
+NameError: name 'watchlist' is not defined

@@ -1,99 +1,187 @@
 (function () {
-  const MANIFEST_PATH = "./data/manifest.json";
-  const THEME_MAP_PATH = "./data/theme_map.json";
-  const WATCHLIST_PATH = "./data/watchlist.json";
-  const WATCHLIST_STORAGE_KEY = "local-stock-dashboard.watchlist.v6";
-  const SCANNER_PICKS_STORAGE_KEY = "local-stock-dashboard.scanner-picks.v1";
-  const REGISTERED_STORAGE_KEY = "local-stock-dashboard.registered-picks.v1";
-  const NOTE_STORAGE_PREFIX = "local-stock-dashboard.note.";
-  const PERIOD_MONTHS = [1, 2, 3, 4, 5, 6];
-  const TICKER_CHART_MODES = [
-    { key: "1m", label: "1ヶ月", timeframe: "daily", rangeValue: 1, useBarCount: false },
-    { key: "3m", label: "3ヶ月", timeframe: "daily", rangeValue: 3, useBarCount: false },
-    { key: "6m", label: "6ヶ月", timeframe: "daily", rangeValue: 6, useBarCount: false },
-    { key: "weekly", label: "週足", timeframe: "weekly", rangeValue: 30, useBarCount: true },
-    { key: "monthly", label: "月足", timeframe: "monthly", rangeValue: 24, useBarCount: true },
-  ];
-  const RANKING_CONFIG = [
-    { key: "gainers", label: "値上がり率" },
-    { key: "losers", label: "値下がり率" },
-    { key: "volume_spike", label: "出来高増加" },
-    { key: "new_high", label: "新高値" },
-    { key: "deviation25", label: "25日線乖離" },
-    { key: "deviation75", label: "75日線乖離" },
-    { key: "deviation200", label: "200日線乖離" },
-    { key: "lower_shadow", label: "下ひげ" },
-    { key: "rebound_signal", label: "反発シグナル" },
-    { key: "watch_candidates", label: "監視候補" },
-  ];
-  const TSE_MARKETS = new Set(["TSE", "プライム", "スタンダード", "グロース"]);
-  const MARKET_TAGS = new Set(["tse", "prime", "standard", "growth"]);
-  const TYPE_FILTERS = [
-    { key: "", label: "全銘柄" },
-    { key: "gainers", label: "値上がり率" },
-    { key: "losers", label: "値下がり率" },
-    { key: "new_high", label: "新高値" },
-    { key: "deviation25", label: "25日線乖離" },
-    { key: "deviation75", label: "75日線乖離" },
-    { key: "deviation200", label: "200日線乖離" },
-  ];
-  const INDEX_SCANNER_LIMITS = [50, 100, 200];
-  const INDEX_SCANNER_MONTHS = [1, 3, 6, 12];
-    const INDEX_SCANNER_TIMEFRAMES = ["daily", "weekly", "monthly"];
-  const INDEX_SCANNER_TIMEFRAME_RANGES = {
-    daily: [
-      { months: 1, label: "1M" },
-      { months: 3, label: "3M" },
-      { months: 6, label: "6M" },
-    ],
-    weekly: [
-      { months: 12, label: "1Y" },
-      { months: 36, label: "3Y" },
-    ],
-    monthly: [
-      { months: 36, label: "3Y" },
-      { months: 60, label: "5Y" },
-    ],
-  };
-  const INDEX_SCANNER_TURNOVER_OPTIONS = [0, 50000000, 100000000, 500000000, 1000000000];
-  const INDEX_SCANNER_MIN_CLOSE = 50;
-  const STOP_HIGH_EPSILON = 0.5;
-  const JPX_PRICE_LIMIT_TABLE = [
-    [100, 30],
-    [200, 50],
-    [500, 80],
-    [700, 100],
-    [1000, 150],
-    [1500, 300],
-    [2000, 400],
-    [3000, 500],
-    [5000, 700],
-    [7000, 1000],
-    [10000, 1500],
-    [15000, 3000],
-    [20000, 4000],
-    [30000, 5000],
-    [50000, 7000],
-    [70000, 10000],
-    [100000, 15000],
-    [150000, 30000],
-    [200000, 40000],
-    [300000, 50000],
-    [500000, 70000],
-    [700000, 100000],
-    [1000000, 150000],
-    [1500000, 300000],
-    [2000000, 400000],
-    [3000000, 500000],
-    [5000000, 700000],
-    [7000000, 1000000],
-    [10000000, 1500000],
-    [15000000, 3000000],
-    [20000000, 4000000],
-    [30000000, 5000000],
-    [50000000, 7000000],
-    [Infinity, 10000000],
-  ];
+  const {
+    MANIFEST_PATH,
+    THEME_MAP_PATH,
+    WATCHLIST_PATH,
+    WATCHLIST_STORAGE_KEY,
+    SCANNER_PICKS_STORAGE_KEY,
+    REGISTERED_STORAGE_KEY,
+    NOTE_STORAGE_PREFIX,
+    PERIOD_MONTHS,
+    TICKER_CHART_MODES,
+    RANKING_CONFIG,
+    STRATEGY_CONFIG,
+    TSE_MARKETS,
+    MARKET_TAGS,
+    TYPE_FILTERS,
+    INDEX_SCANNER_LIMITS,
+    INDEX_SCANNER_MONTHS,
+    INDEX_SCANNER_TIMEFRAMES,
+    INDEX_SCANNER_TIMEFRAME_RANGES,
+    INDEX_SCANNER_TURNOVER_OPTIONS,
+    INDEX_SCANNER_MIN_CLOSE,
+    STOP_HIGH_EPSILON,
+    JPX_PRICE_LIMIT_TABLE,
+    TICKER_NAME_EXACT_ALIASES,
+    TICKER_NAME_REPLACEMENTS,
+    DEVIATION_SORT_KEYS,
+    DEVIATION_URL_KEY_MAP,
+  } = window.KabuAppConfig;
+  const {
+    addCalendarMonths,
+    addMonths,
+    escapeHtml,
+    fetchJson,
+    formatDateKey,
+    formatNumber,
+    formatPercent,
+    formatRatio,
+    formatSignedNumber,
+    formatSignedPercent,
+    parseDate,
+    roundNumber,
+    startOfMonth,
+  } = window.KabuAppUtils;
+  const {
+    loadManifestData,
+    loadOverviewData,
+    loadRankingData,
+    loadThemeOrderData,
+    loadTickerPayloadData,
+    readJsonStorage,
+    writeJsonStorage,
+  } = window.KabuAppData;
+
+
+  function buildPageDeps() {
+    return {
+      CHART_FETCH_CONCURRENCY,
+      INDEX_SCANNER_LIMITS,
+      INDEX_SCANNER_MIN_CLOSE,
+      INDEX_SCANNER_MONTHS,
+      INDEX_SCANNER_TIMEFRAMES,
+      INDEX_SCANNER_TIMEFRAME_RANGES,
+      INDEX_SCANNER_TURNOVER_OPTIONS,
+      STRATEGY_CONFIG,
+      MARKET_TAGS,
+      TSE_MARKETS,
+      NOTE_STORAGE_PREFIX,
+      STOP_HIGH_EPSILON,
+      TICKER_CHART_MODES,
+      addCalendarMonths,
+      addMonths,
+      buildFilterSnapshotFromState,
+      buildHyperExportEntries,
+      buildPickedRecordFromPayload,
+      buildRegisteredDisplayName,
+      buildRegisteredItemFromPick,
+      buildScannerPickPayload,
+      buildTickerUrl,
+      buildTradingViewExportEntry,
+      dedupeScannerPicks,
+      diffShapeAgainstBaseline,
+      escapeHtml,
+      findSelectedIndex,
+      filterByMinimumClose,
+      filterByTurnover,
+      formatNumber,
+      formatPercent,
+      formatPickedDateTime,
+      formatRatio,
+      formatScannerTradeDate,
+      formatSignedNumber,
+      formatSignedPercent,
+      formatSignedPercentHtml,
+      formatSnapshotBaseDate,
+      formatSnapshotGeneratedAt,
+      getActiveDeviationDraft,
+      getActiveDeviationFilter,
+      getActiveDeviationSortKey,
+      getDeviationSortLabel,
+      getDeviationValueBySort,
+      getSignedValueClass,
+      getRegisteredSetById,
+      getStopHighStatus,
+      indexScannerRangeLabel,
+      indexScannerTimeframeLabel,
+      isJapaneseHoliday,
+      isDeviationSort,
+      isLowerShadowCandidate,
+      loadManifest,
+      loadOverview,
+      loadRanking,
+      loadRegisteredPicks,
+      loadScannerPicks,
+      loadThemeOrder,
+      loadTickerNote,
+      loadTickerPayload,
+      loadTickerPayloadWithDiagnostics,
+      mapWithConcurrency,
+      matchesDeviationFilter,
+      normalizeDeviationFilterInputMode,
+      normalizeDeviationFilterValue,
+      normalizeIndexScannerRangeMonths,
+      normalizeTickerChartMode,
+      parseDate,
+      rankingLabel,
+      readJsonStorage,
+      registerAllPicks,
+      removePickByCode,
+      removeRegisteredSetById,
+      renderChartFetchFailedItem,
+      renderExportEntries,
+      renderMiniCalendar,
+      renderPickedItemLinks,
+      renderPickedScannerItem,
+      renderRegisteredScannerItem,
+      renderRegisteredSetRow,
+      renderScannerCompactChart,
+      renderScannerItem,
+      renderScannerItemLinks,
+      renderStrategyBadges,
+      renderStrategyReasons,
+      strategyLabel,
+      renderTickerChart,
+      renderTickerIdentity,
+      resetScannerPicks,
+      resolveAvailableDate,
+      resolvePickerDate,
+      resolveRegisteredSelectedDate,
+      runRefreshAction,
+      saveRegisteredPicks,
+      saveScannerPicks,
+      scannerSortLabel,
+      selectAllScannerPicks,
+      showError,
+      sortScannerRecords,
+      sortedScannerPicks,
+      startOfMonth,
+      syncIndexScannerUrl,
+      syncSnapshotStatusUi,
+      syncTickerUrl,
+      toggleScannerPick,
+      triggerExportDownloads,
+      turnoverLabel,
+      updatePeriodButtonState,
+      writeJsonStorage,
+    };
+  }
+
+  function initTickerPage() {
+    return window.KabuPageTicker.initTickerPage(buildPageDeps());
+  }
+
+  function initPickedPage() {
+    return window.KabuPagePicked.initPickedPage(buildPageDeps());
+  }
+
+  function initRegisteredPage() {
+    return window.KabuPageRegistered.initRegisteredPage(buildPageDeps());
+  }
+
+  function initIndexScannerPage() {
+    return window.KabuPageIndexScanner.initIndexScannerPage(buildPageDeps());
+  }
 
   document.addEventListener("DOMContentLoaded", () => {
     const page = document.body.dataset.page;
@@ -498,306 +586,6 @@
     }
   }
 
-  async function initTickerPage() {
-    const tickerTitle = document.getElementById("tickerTitle");
-    const tickerMeta = document.getElementById("tickerMeta");
-    const chartMeta = document.getElementById("chartMeta");
-    const refreshButton = document.getElementById("tickerRefreshButton");
-    const refreshMeta = document.getElementById("tickerRefreshMeta");
-    const snapshotBadge = document.getElementById("tickerSnapshotBadge");
-    const externalLinks = document.getElementById("externalLinks");
-    const errorBox = document.getElementById("detailErrorBox");
-    const periodButtons = document.getElementById("periodButtons");
-    const tickerDatePicker = document.getElementById("tickerDatePicker");
-    const tickerRankMeta = document.getElementById("tickerRankMeta");
-    const chartEl = document.getElementById("chart");
-    const noteArea = document.getElementById("tickerNote");
-    const noteStatus = document.getElementById("noteStatus");
-    const saveNoteButton = document.getElementById("saveNoteButton");
-    const clearNoteButton = document.getElementById("clearNoteButton");
-    const summaryDate = document.getElementById("summaryDate");
-    const summaryRank = document.getElementById("summaryRank");
-    const summaryClose = document.getElementById("summaryClose");
-    const summaryChange = document.getElementById("summaryChange");
-    const summaryOpen = document.getElementById("summaryOpen");
-    const summaryRange = document.getElementById("summaryRange");
-    const summaryVolume = document.getElementById("summaryVolume");
-    const profileMeta = document.getElementById("profileMeta");
-    const profileMarket = document.getElementById("profileMarket");
-    const profileSector = document.getElementById("profileSector");
-    const profileIndustry = document.getElementById("profileIndustry");
-    const profileTags = document.getElementById("profileTags");
-    const techDistanceMa25 = document.getElementById("techDistanceMa25");
-    const techDistanceMa75 = document.getElementById("techDistanceMa75");
-    const techDistanceMa200 = document.getElementById("techDistanceMa200");
-    const techVolumeRatio = document.getElementById("techVolumeRatio");
-    const techRciSummary = document.getElementById("techRciSummary");
-    const techRangePosition = document.getElementById("techRangePosition");
-    const tickerCardRank = document.getElementById("tickerCardRank");
-    const tickerCardCode = document.getElementById("tickerCardCode");
-    const tickerCardTradeDate = document.getElementById("tickerCardTradeDate");
-    const tickerCardTradePrice = document.getElementById("tickerCardTradePrice");
-    const tickerCardChange = document.getElementById("tickerCardChange");
-    const tickerCardVolume = document.getElementById("tickerCardVolume");
-    const tickerCardHigh = document.getElementById("tickerCardHigh");
-    const tickerCardLow = document.getElementById("tickerCardLow");
-    const tickerCardLinks = document.getElementById("tickerCardLinks");
-    const backLink = document.querySelector(".eyebrow a");
-
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code") || params.get("t");
-    const rankingKey = params.get("from") || "";
-    if (!code) {
-      showError(errorBox, "URL パラメータ code がありません。例: ticker.html?code=3133&date=2026-02-10");
-      return;
-    }
-
-    const state = {
-      manifest: null,
-      payload: null,
-      rankingKey,
-      rankingItem: null,
-      selectedChartMode: normalizeTickerChartMode(params.get("chart") || "3m"),
-      selectedDate: "",
-    };
-
-    periodButtons.innerHTML = TICKER_CHART_MODES.map(
-      (mode) =>
-        `<button class="period-button${mode.key === state.selectedChartMode ? " active" : ""}" data-chart-mode="${mode.key}">${mode.label}</button>`
-    ).join("");
-
-    Array.from(periodButtons.querySelectorAll(".period-button")).forEach((button) => {
-      button.addEventListener("click", () => {
-        state.selectedChartMode = normalizeTickerChartMode(button.dataset.chartMode);
-        updatePeriodButtonState(periodButtons, state.selectedChartMode);
-        renderTicker();
-      });
-    });
-
-    noteArea.value = loadTickerNote(code);
-    noteStatus.textContent = noteArea.value ? "保存済み" : "未保存";
-
-    saveNoteButton.addEventListener("click", () => {
-      localStorage.setItem(`${NOTE_STORAGE_PREFIX}${code}`, noteArea.value);
-      noteStatus.textContent = "保存済み";
-    });
-
-    clearNoteButton.addEventListener("click", () => {
-      noteArea.value = "";
-      localStorage.removeItem(`${NOTE_STORAGE_PREFIX}${code}`);
-      noteStatus.textContent = "未保存";
-    });
-
-    noteArea.addEventListener("input", () => {
-      noteStatus.textContent = "未保存";
-    });
-
-    tickerDatePicker.addEventListener("change", async () => {
-      state.selectedDate = resolvePickerDate(
-        tickerDatePicker.value,
-        state.payload.ohlcv.map((row) => row.date),
-        state.selectedDate
-      );
-      await refreshRankContext();
-      renderTicker();
-    });
-
-    refreshButton?.addEventListener("click", async () => {
-      await runRefreshAction(refreshButton, errorBox, async () => {
-        state.manifest = await loadManifest();
-        state.payload = await loadTickerPayload(code);
-        const availableDates = state.payload.ohlcv.map((row) => row.date);
-        state.selectedDate = resolveAvailableDate(state.selectedDate || state.manifest.latestDate, availableDates);
-        tickerDatePicker.min = availableDates[0];
-        tickerDatePicker.max = availableDates.at(-1);
-        await refreshRankContext();
-        renderTicker();
-      });
-    });
-
-    try {
-      state.manifest = await loadManifest();
-      state.payload = await loadTickerPayload(code);
-      const availableDates = state.payload.ohlcv.map((row) => row.date);
-      state.selectedDate = resolveAvailableDate(params.get("date") || state.manifest.latestDate, availableDates);
-      tickerDatePicker.min = availableDates[0];
-      tickerDatePicker.max = availableDates.at(-1);
-      await refreshRankContext();
-      renderTicker();
-    } catch (error) {
-      showError(errorBox, error.message);
-    }
-
-    async function refreshRankContext() {
-      state.rankingItem = null;
-      if (!state.rankingKey) {
-        return;
-      }
-      try {
-        const ranking = await loadRanking(state.selectedDate, state.rankingKey);
-        state.rankingItem = (ranking.items || []).find((item) => String(item.code) === String(code)) || null;
-      } catch (_error) {
-        state.rankingItem = null;
-      }
-    }
-
-    function setTickerCardValues(row) {
-      if (tickerCardTradeDate) {
-        tickerCardTradeDate.textContent = formatScannerTradeDate(row.date);
-      }
-      if (tickerCardTradePrice) {
-        tickerCardTradePrice.textContent = formatNumber(row.close);
-      }
-      if (tickerCardChange) {
-        tickerCardChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent)}`;
-      }
-      if (tickerCardVolume) {
-        tickerCardVolume.textContent = formatNumber(row.volume, 0);
-      }
-      if (tickerCardHigh) {
-        tickerCardHigh.textContent = formatNumber(row.high);
-      }
-      if (tickerCardLow) {
-        tickerCardLow.textContent = formatNumber(row.low);
-      }
-    }
-
-    function setTickerSummaryValues(row) {
-      summaryDate.textContent = row.date || "-";
-      summaryClose.textContent = formatNumber(row.close);
-      summaryChange.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent, {
-        withParens: true,
-      })}`;
-      summaryChange.className = "summary-value";
-      summaryOpen.textContent = formatNumber(row.open);
-      summaryRange.textContent = `${formatNumber(row.high)} / ${formatNumber(row.low)}`;
-      summaryVolume.textContent = formatNumber(row.volume, 0);
-      techDistanceMa25.textContent = formatSignedPercent(row.distanceToMa25);
-      techDistanceMa75.textContent = formatSignedPercent(row.distanceToMa75);
-      techDistanceMa200.textContent = formatSignedPercent(row.distanceToMa200);
-      techVolumeRatio.textContent = formatRatio(row.volumeRatio25);
-      techRciSummary.textContent = [row.rci12, row.rci24, row.rci48]
-        .map((value) => (value == null ? "-" : Number(value).toFixed(1)))
-        .join(" / ");
-      techRangePosition.textContent = formatPercent(row.rangePosition52w);
-      [techDistanceMa25, techDistanceMa75, techDistanceMa200, techRangePosition].forEach((element) => {
-        element.classList.remove("rise", "fall");
-      });
-      [
-        [techDistanceMa25, row.distanceToMa25],
-        [techDistanceMa75, row.distanceToMa75],
-        [techDistanceMa200, row.distanceToMa200],
-        [techRangePosition, row.rangePosition52w],
-      ].forEach(([element, value]) => {
-        const className = getSignedValueClass(value);
-        if (className) {
-          element.classList.add(className);
-        }
-      });
-    }
-
-    function renderTicker() {
-      const rows = state.payload.ohlcv || [];
-      const selectedIndex = findSelectedIndex(rows, state.selectedDate);
-      if (selectedIndex < 0) {
-        showError(errorBox, `${code} の ${state.selectedDate} 時点データがありません。`);
-        return;
-      }
-      const row = rows[selectedIndex];
-      const latestRow = rows.at(-1) || row;
-      state.selectedDate = row.date;
-      tickerDatePicker.value = row.date;
-      syncTickerUrl(code, state.selectedDate, state.rankingKey, state.selectedChartMode);
-      if (backLink) {
-        backLink.href = `./index.html?date=${encodeURIComponent(state.selectedDate)}`;
-      }
-
-      tickerTitle.textContent = `${code} ${state.payload.name}`.trim();
-      tickerMeta.textContent = [
-        state.payload.market || "市場未設定",
-        formatSnapshotBaseDate(
-          state.selectedDate,
-          state.payload.snapshotDate === state.selectedDate
-            ? resolveTickerSnapshot(state)
-            : null
-        ),
-        state.payload.tags?.length ? `タグ: ${state.payload.tags.join(", ")}` : null,
-      ]
-        .filter(Boolean)
-        .join(" / ");
-      syncSnapshotStatusUi(snapshotBadge, refreshMeta, state.selectedDate, resolveTickerSnapshot(state));
-
-      summaryRank.textContent = state.rankingItem ? `${state.rankingItem.rank}位` : "-";
-      if (tickerCardRank) {
-        tickerCardRank.textContent = state.rankingItem ? `${state.rankingItem.rank}` : "-";
-      }
-      if (tickerCardCode) {
-        tickerCardCode.innerHTML = renderTickerIdentity(code, state.payload.name || code, {
-          href: buildTickerUrl(code, state.selectedDate, state.rankingKey),
-          variant: "detail",
-        });
-      }
-      setTickerSummaryValues(row);
-      setTickerCardValues(latestRow);
-      tickerRankMeta.textContent = state.rankingItem
-        ? `${rankingLabel(state.rankingKey)} / ${state.rankingItem.rank}位`
-        : state.rankingKey
-          ? `${rankingLabel(state.rankingKey)} / 圏外`
-          : "ランキング指定なし";
-
-      profileMeta.textContent = `${formatNumber(rows.length, 0)}本のローソク足 / ${state.selectedDate}`;
-      profileMarket.textContent = state.payload.market || "-";
-      profileSector.textContent = state.payload.sector || "-";
-      profileIndustry.textContent = state.payload.industry || "-";
-      profileTags.textContent = state.payload.tags?.length ? state.payload.tags.join(", ") : "-";
-
-      externalLinks.innerHTML = Object.entries(state.payload.links || {})
-        .filter(([, href]) => href)
-        .map(
-          ([label, href]) =>
-            `<a class="link-pill" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`
-        )
-        .join("");
-      if (tickerCardLinks) {
-        const detailItems = [
-          { label: "銘柄一覧", href: `./index.html?date=${encodeURIComponent(state.selectedDate)}`, local: true },
-          { label: "Yahoo", href: state.payload.links?.quote || "" },
-        ];
-        tickerCardLinks.innerHTML = detailItems
-          .filter((item) => item.href)
-          .map((item) =>
-            item.local
-              ? `<a href="${item.href}">${escapeHtml(item.label)}</a>`
-              : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
-          )
-          .join('<span class="scanner-link-separator">|</span>');
-      }
-
-      renderTickerChart(chartEl, rows, selectedIndex, state.selectedChartMode, chartMeta, (chartRow) => {
-        setTickerSummaryValues(chartRow);
-        setTickerCardValues(chartRow);
-      });
-    }
-
-    function resolveTickerSnapshot(currentState) {
-      if (currentState.payload?.snapshotDate !== currentState.selectedDate || !currentState.payload?.snapshotType) {
-        return null;
-      }
-      const currentSnapshot = currentState.manifest?.currentSnapshot;
-      if (
-        currentSnapshot &&
-        currentSnapshot.date === currentState.payload.snapshotDate &&
-        currentSnapshot.type === currentState.payload.snapshotType
-      ) {
-        return currentSnapshot;
-      }
-      return {
-        date: currentState.payload.snapshotDate,
-        type: currentState.payload.snapshotType,
-        generatedAt: null,
-      };
-    }
-  }
 
   async function initScannerPage() {
     const sortSelect = document.getElementById("scannerSort");
@@ -991,1931 +779,15 @@
     }
   }
 
-  async function initIndexScannerPage() {
-    const sortSelect = document.getElementById("indexSort");
-    const stickyBar = document.getElementById("indexStickyBar");
-    const stickyPickedLink = document.getElementById("indexStickyPickedLink");
-    const stickyRefreshButton = document.getElementById("indexStickyRefreshButton");
-    const stickyDateButton = document.getElementById("indexStickyDateButton");
-    const stickyDatePopover = document.getElementById("indexStickyDatePopover");
-    const stickyTimeframeGroup = document.getElementById("indexStickyTimeframe");
-    const stickySortSelect = document.getElementById("indexStickySort");
-    const stickyLimitSelect = document.getElementById("indexStickyLimit");
-    const stickySelectAllPicksButton = document.getElementById("indexStickySelectAllButton");
-    const stickyResetPicksButton = document.getElementById("indexStickyResetPicksButton");
-    const stickyFiltersButton = document.getElementById("indexStickyFiltersButton");
-    const stickyFiltersPopover = document.getElementById("indexStickyFiltersPopover");
-    const stickyMiniCalendar = document.getElementById("indexStickyMiniCalendar");
-    const stickyTagSelect = document.getElementById("indexStickyTag");
-    const stickyThemeSelect = document.getElementById("indexStickyTheme");
-    const stickyTurnoverSelect = document.getElementById("indexStickyTurnover");
-    const stickyAdvanced = document.getElementById("indexStickyAdvanced");
-    const stickyDeviationTitle = document.getElementById("indexStickyDeviationTitle");
-    const stickyDevMinInput = document.getElementById("indexStickyDev200Min");
-    const stickyDevMaxInput = document.getElementById("indexStickyDev200Max");
-    const stickyDevMinNumberInput = document.getElementById("indexStickyDev200MinNumber");
-    const stickyDevMaxNumberInput = document.getElementById("indexStickyDev200MaxNumber");
-    const stickyDevRangeFill = document.getElementById("indexStickyDev200RangeFill");
-    const stickyDevApplyButton = document.getElementById("indexStickyDev200Apply");
-    const stickyDevResetButton = document.getElementById("indexStickyDev200Reset");
-    const dev200Button = document.getElementById("indexDev200Button");
-    const dev200Popover = document.getElementById("indexDev200Popover");
-    const deviationPopoverTitle = document.getElementById("indexDeviationPopoverTitle");
-    const dev200ModeSelect = document.getElementById("indexDev200Mode");
-    const dev200MinInput = document.getElementById("indexDev200Min");
-    const dev200MaxInput = document.getElementById("indexDev200Max");
-    const dev200ApplyButton = document.getElementById("indexDev200Apply");
-    const dev200ResetButton = document.getElementById("indexDev200Reset");
-    const tagSelect = document.getElementById("indexTag") || stickyTagSelect;
-    const themeSelect = document.getElementById("indexTheme") || stickyThemeSelect;
-    const turnoverSelect = document.getElementById("indexTurnover") || stickyTurnoverSelect;
-    const limitSelect = document.getElementById("indexLimit");
-    const timeframeGroup = document.getElementById("indexTimeframe");
-    const timeframePopover = document.getElementById("indexTimeframePopover");
-    const timeframePopoverTitle = document.getElementById("indexTimeframePopoverTitle");
-    const timeframeOptions = document.getElementById("indexTimeframeOptions");
-    const rangeChip = document.getElementById("indexRangeChip");
-    const pickedLink = document.getElementById("indexPickedLink");
-    const updatedStatus = document.getElementById("indexUpdatedStatus");
-    const refreshButton = document.getElementById("indexRefreshButton");
-    const selectAllPicksButton = document.getElementById("indexSelectAllButton");
-    const resetPicksButton = document.getElementById("indexResetPicksButton");
-    const miniCalendar = document.getElementById("indexMiniCalendar") || stickyMiniCalendar;
-    const errorBox = document.getElementById("indexError");
-    const list = document.getElementById("indexList");
 
-    const state = {
-      manifest: null,
-      overview: null,
-      sort: "gainers",
-      tag: "",
-      theme: "",
-      turnover: 0,
-      limit: 100,
-      timeframe: "daily",
-      rangeMonths: 3,
-      rangeMonthsByTimeframe: {
-        daily: 3,
-        weekly: 12,
-        monthly: 36,
-      },
-      timeframePopoverOpen: false,
-      timeframePopoverTarget: "",
-      deviationFilters: {
-        deviation25: { mode: "", min: "", max: "" },
-        deviation75: { mode: "", min: "", max: "" },
-        deviation200: { mode: "", min: "", max: "" },
-      },
-      deviationDrafts: {
-        deviation25: { mode: "", min: "", max: "" },
-        deviation75: { mode: "", min: "", max: "" },
-        deviation200: { mode: "", min: "", max: "" },
-      },
-      pendingManifest: null,
-      hasFreshUpdate: false,
-      isRefreshing: false,
-      headerStatusFlashTimer: null,
-      headerStatusFlashActive: false,
-      manifestPollId: null,
-      dev200PopoverOpen: false,
-      stickyDateOpen: false,
-      stickyFiltersOpen: false,
-      selectedDate: "",
-      calendarMonth: null,
-      picks: {},
-      themeOrder: [],
-      visibleRecords: [],
-    };
 
-    if (stickyDatePopover && stickyDatePopover.parentElement !== document.body) {
-      document.body.appendChild(stickyDatePopover);
-    }
-    if (stickyFiltersPopover && stickyBar && stickyFiltersPopover.parentElement !== stickyBar.parentElement) {
-      stickyBar.insertAdjacentElement("afterend", stickyFiltersPopover);
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    state.sort = params.get("sort") || state.sort;
-    state.tag = params.get("tag") || "";
-    state.theme = params.get("theme") || "";
-    state.turnover = INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
-      ? Number(params.get("turnover"))
-      : 0;
-    state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
-    state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
-    state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
-    state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
-    state.deviationFilters.deviation25 = {
-      mode: normalizeDeviationFilterInputMode(params.get("dev25_mode")),
-      min: normalizeDeviationFilterValue(params.get("dev25_min")),
-      max: normalizeDeviationFilterValue(params.get("dev25_max")),
-    };
-    state.deviationFilters.deviation75 = {
-      mode: normalizeDeviationFilterInputMode(params.get("dev75_mode")),
-      min: normalizeDeviationFilterValue(params.get("dev75_min")),
-      max: normalizeDeviationFilterValue(params.get("dev75_max")),
-    };
-    state.deviationFilters.deviation200 = {
-      mode: normalizeDeviationFilterInputMode(params.get("dev200_mode")),
-      min: normalizeDeviationFilterValue(params.get("dev200_min")),
-      max: normalizeDeviationFilterValue(params.get("dev200_max")),
-    };
-    const genericDevMin = normalizeDeviationFilterValue(params.get("devMin"));
-    const genericDevMax = normalizeDeviationFilterValue(params.get("devMax"));
-    const activeDeviationKeyFromUrl = getActiveDeviationSortKey(state.sort);
-    if (activeDeviationKeyFromUrl && (genericDevMin !== "" || genericDevMax !== "")) {
-      state.deviationFilters[activeDeviationKeyFromUrl] = buildDeviationFilterFromBounds(genericDevMin, genericDevMax);
-    }
-    state.deviationDrafts = {
-      deviation25: { ...state.deviationFilters.deviation25 },
-      deviation75: { ...state.deviationFilters.deviation75 },
-      deviation200: { ...state.deviationFilters.deviation200 },
-    };
-    state.picks = loadScannerPicks();
-    if (sortSelect) {
-      sortSelect.value = state.sort;
-    }
-    themeSelect.value = state.theme;
-    turnoverSelect.value = String(state.turnover);
-    limitSelect.value = String(state.limit);
-    if (stickySortSelect) {
-      stickySortSelect.value = state.sort;
-    }
-    if (stickyLimitSelect) {
-      stickyLimitSelect.value = String(state.limit);
-    }
-    if (stickyTurnoverSelect) {
-      stickyTurnoverSelect.value = String(state.turnover);
-    }
-    const initialDeviationFilter = getActiveDeviationFilter(state);
-    if (dev200ModeSelect) {
-      dev200ModeSelect.value = initialDeviationFilter.mode || "gte";
-    }
-    if (dev200MinInput) {
-      dev200MinInput.value = initialDeviationFilter.min;
-    }
-    if (dev200MaxInput) {
-      dev200MaxInput.value = initialDeviationFilter.max;
-    }
-    if (stickyDevMinInput) {
-      stickyDevMinInput.value = initialDeviationFilter.min || "-20";
-    }
-    if (stickyDevMaxInput) {
-      stickyDevMaxInput.value = initialDeviationFilter.max || "20";
-    }
-
-    function updateTimeframeUI() {
-      if (!timeframeGroup) {
-        return;
-      }
-      timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
-        const isActive = btn.dataset.value === state.timeframe;
-        btn.classList.toggle("active", isActive);
-        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-      });
-    }
-
-    function updateRangeChip() {
-      if (!rangeChip) {
-        return;
-      }
-      rangeChip.textContent = "";
-    }
-
-    function updateStickyTimeframeUI() {
-      if (!stickyTimeframeGroup) {
-        return;
-      }
-      stickyTimeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
-        const isActive = btn.dataset.value === state.timeframe;
-        btn.classList.toggle("active", isActive);
-        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-      });
-    }
-
-    function updateStickyBarVisibility() {
-      if (!stickyBar) {
-        return;
-      }
-      stickyBar.hidden = false;
-    }
-
-    function updateStickyHeaderActions() {
-      if (!stickyPickedLink) {
-        return;
-      }
-      const pickCount = Object.keys(state.picks || {}).length;
-      stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
-    }
-
-    function updateStickyFiltersUi() {
-      const activeKey = getActiveDeviationSortKey(state.sort);
-      const activeFilter = getActiveDeviationFilter(state);
-      const activeDraft = getActiveDeviationDraft(state);
-      const hasFilterSettings =
-        Boolean(state.tag) || Boolean(state.theme) || Number(state.turnover || 0) > 0 || Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
-      if (stickyFiltersButton) {
-        const deviationSummary = activeKey ? formatDeviationFilterSummary(activeFilter) : "";
-        stickyFiltersButton.textContent = deviationSummary || (hasFilterSettings ? "Filters ON" : "Filters");
-        stickyFiltersButton.setAttribute("aria-expanded", state.stickyFiltersOpen ? "true" : "false");
-        stickyFiltersButton.classList.toggle("is-active", state.stickyFiltersOpen || hasFilterSettings);
-      }
-      if (stickyFiltersPopover) {
-        stickyFiltersPopover.hidden = !state.stickyFiltersOpen;
-        stickyFiltersPopover.classList.toggle("is-open", state.stickyFiltersOpen);
-      }
-      if (stickyTagSelect) {
-        stickyTagSelect.value = state.tag;
-      }
-      if (stickyThemeSelect) {
-        stickyThemeSelect.value = state.theme;
-      }
-      if (stickyTurnoverSelect) {
-        stickyTurnoverSelect.value = String(state.turnover);
-      }
-      if (stickyAdvanced) {
-        stickyAdvanced.hidden = !activeKey;
-      }
-      if (stickyDeviationTitle) {
-        stickyDeviationTitle.textContent = activeKey ? getDeviationSortLabel(activeKey) : "Deviation";
-      }
-      setStickyDeviationControls(activeDraft);
-    }
-
-    function updateStickyDateUi() {
-      if (stickyDateButton) {
-        const label = state.selectedDate ? state.selectedDate.replace(/-/g, ".") : "";
-        stickyDateButton.textContent = label ? `Date ${label} ▼` : "Date ▼";
-        stickyDateButton.setAttribute("aria-expanded", state.stickyDateOpen ? "true" : "false");
-      }
-      if (stickyDatePopover) {
-        stickyDatePopover.hidden = !state.stickyDateOpen;
-        stickyDatePopover.classList.toggle("is-open", state.stickyDateOpen);
-        if (state.stickyDateOpen) {
-          requestAnimationFrame(positionDatePopover);
-        } else {
-          stickyDatePopover.style.left = "";
-          stickyDatePopover.style.top = "";
-          stickyDatePopover.style.maxHeight = "";
-        }
-      }
-    }
-
-    function buildDeviationFilterFromBounds(minValue, maxValue) {
-      const min = normalizeDeviationFilterValue(minValue);
-      const max = normalizeDeviationFilterValue(maxValue);
-      if (min === "" && max === "") {
-        return { mode: "", min: "", max: "" };
-      }
-      if (min !== "" && max !== "") {
-        const minNum = Number(min);
-        const maxNum = Number(max);
-        if (Number.isFinite(minNum) && Number.isFinite(maxNum) && minNum > maxNum) {
-          return { mode: "between", min: String(maxNum), max: String(minNum) };
-        }
-        return { mode: "between", min, max };
-      }
-      if (min !== "") {
-        return { mode: "gte", min, max: "" };
-      }
-      return { mode: "lte", min: "", max };
-    }
-
-    function formatDeviationFilterSummary(filter) {
-      if (!filter || (!filter.mode && filter.min === "" && filter.max === "")) {
-        return "";
-      }
-      if (filter.min !== "" && filter.max !== "") {
-        return `Dev ${formatDeviationPercent(filter.min)} ~ ${formatDeviationPercent(filter.max)}`;
-      }
-      if (filter.min !== "") {
-        return `Dev >= ${formatDeviationPercent(filter.min)}`;
-      }
-      if (filter.max !== "") {
-        return `Dev <= ${formatDeviationPercent(filter.max)}`;
-      }
-      return "";
-    }
-
-    function setStickyDeviationControls(filter) {
-      const min = filter?.min ?? "";
-      const max = filter?.max ?? "";
-      if (stickyDevMinInput) {
-        stickyDevMinInput.value = min === "" ? "-20" : String(min);
-      }
-      if (stickyDevMaxInput) {
-        stickyDevMaxInput.value = max === "" ? "20" : String(max);
-      }
-      if (stickyDevMinNumberInput) {
-        stickyDevMinNumberInput.value = min === "" ? "" : Number(min).toFixed(1);
-      }
-      if (stickyDevMaxNumberInput) {
-        stickyDevMaxNumberInput.value = max === "" ? "" : Number(max).toFixed(1);
-      }
-      syncStickyDeviationSliderUi("state");
-    }
-
-    function formatDeviationPercent(value) {
-      const numeric = Number(value || 0);
-      const text = Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1);
-      return `${numeric > 0 ? "+" : ""}${text}%`;
-    }
-
-    function clampDeviationSliderValue(value, fallback = 0) {
-      const numeric = Number(value);
-      if (!Number.isFinite(numeric)) {
-        return fallback;
-      }
-      return Math.max(-20, Math.min(20, Math.round(numeric * 10) / 10));
-    }
-
-    function syncStickyDeviationSliderUi(source = "slider") {
-      if (!stickyDevMinInput || !stickyDevMaxInput) {
-        return;
-      }
-      let minValue = -20;
-      let maxValue = 20;
-      let minDraftValue = stickyDevMinNumberInput?.value?.trim?.() ?? "";
-      let maxDraftValue = stickyDevMaxNumberInput?.value?.trim?.() ?? "";
-
-      if (source === "slider") {
-        minValue = clampDeviationSliderValue(stickyDevMinInput.value, -20);
-        maxValue = clampDeviationSliderValue(stickyDevMaxInput.value, 20);
-        if (minValue > maxValue) {
-          if (document.activeElement === stickyDevMinInput) {
-            maxValue = minValue;
-          } else {
-            minValue = maxValue;
-          }
-        }
-        stickyDevMinInput.value = String(minValue);
-        stickyDevMaxInput.value = String(maxValue);
-        minDraftValue = minValue.toFixed(1);
-        maxDraftValue = maxValue.toFixed(1);
-        if (stickyDevMinNumberInput) {
-          stickyDevMinNumberInput.value = minDraftValue;
-        }
-        if (stickyDevMaxNumberInput) {
-          stickyDevMaxNumberInput.value = maxDraftValue;
-        }
-      } else {
-        minValue = minDraftValue === "" ? -20 : clampDeviationSliderValue(minDraftValue, -20);
-        maxValue = maxDraftValue === "" ? 20 : clampDeviationSliderValue(maxDraftValue, 20);
-        if (minValue > maxValue) {
-          if (document.activeElement === stickyDevMinInput || document.activeElement === stickyDevMinNumberInput) {
-            maxValue = minValue;
-            if (maxDraftValue !== "") {
-              maxDraftValue = maxValue.toFixed(1);
-            }
-          } else {
-            minValue = maxValue;
-            if (minDraftValue !== "") {
-              minDraftValue = minValue.toFixed(1);
-            }
-          }
-        }
-        stickyDevMinInput.value = String(minValue);
-        stickyDevMaxInput.value = String(maxValue);
-        if (source === "input") {
-          if (stickyDevMinNumberInput && minDraftValue !== "") {
-            stickyDevMinNumberInput.value = Number(minDraftValue).toFixed(1);
-          }
-          if (stickyDevMaxNumberInput && maxDraftValue !== "") {
-            stickyDevMaxNumberInput.value = Number(maxDraftValue).toFixed(1);
-          }
-        }
-      }
-      const percent = (value) => ((value + 20) / 40) * 100;
-      if (stickyDevRangeFill) {
-        stickyDevRangeFill.style.left = `${percent(minValue)}%`;
-        stickyDevRangeFill.style.width = `${Math.max(0, percent(maxValue) - percent(minValue))}%`;
-      }
-      const activeKey = getActiveDeviationSortKey(state.sort);
-      if (activeKey && source !== "state") {
-        const nextDraft = buildDeviationFilterFromBounds(
-          minDraftValue,
-          maxDraftValue,
-        );
-        state.deviationDrafts[activeKey] = nextDraft;
-      }
-    }
-
-    function positionFloatingPopover(anchor, popover, options = {}) {
-      if (!anchor || !popover) {
-        return;
-      }
-      const widthPadding = Number(options.widthPadding || 12);
-      const anchorRect = anchor.getBoundingClientRect();
-      const popoverRect = popover.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const maxLeft = Math.max(widthPadding, viewportWidth - popoverRect.width - widthPadding);
-      const idealLeft = anchorRect.right - popoverRect.width;
-      const left = Math.min(Math.max(widthPadding, idealLeft), maxLeft);
-      const top = Math.min(
-        Math.max(8, anchorRect.bottom + 8),
-        Math.max(8, viewportHeight - popoverRect.height - 8),
-      );
-      popover.style.left = `${Math.round(left)}px`;
-      popover.style.top = `${Math.round(top)}px`;
-    }
-
-    function positionDatePopover() {
-      if (!stickyDateButton || !stickyDatePopover) {
-        return;
-      }
-      const gap = 8;
-      const padding = 12;
-      const anchorRect = stickyDateButton.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      stickyDatePopover.style.left = "0px";
-      stickyDatePopover.style.top = "0px";
-      stickyDatePopover.style.maxHeight = `min(360px, calc(100vh - 24px))`;
-
-      const popoverRect = stickyDatePopover.getBoundingClientRect();
-      const popoverWidth = Math.min(popoverRect.width, viewportWidth - padding * 2);
-      const naturalHeight = popoverRect.height;
-      const availableBelow = viewportHeight - anchorRect.bottom - gap - padding;
-      const availableAbove = anchorRect.top - gap - padding;
-      const shouldOpenAbove = availableBelow < naturalHeight && availableAbove > availableBelow;
-      const availableHeight = Math.max(180, shouldOpenAbove ? availableAbove : availableBelow);
-      const maxHeight = Math.min(360, Math.max(180, availableHeight));
-
-      stickyDatePopover.style.maxHeight = `${Math.round(maxHeight)}px`;
-      const measuredHeight = Math.min(stickyDatePopover.getBoundingClientRect().height, maxHeight);
-      const left = Math.min(
-        Math.max(padding, anchorRect.left),
-        Math.max(padding, viewportWidth - popoverWidth - padding)
-      );
-      const top = shouldOpenAbove
-        ? Math.max(padding, anchorRect.top - measuredHeight - gap)
-        : Math.min(viewportHeight - measuredHeight - padding, anchorRect.bottom + gap);
-
-      stickyDatePopover.style.left = `${Math.round(left)}px`;
-      stickyDatePopover.style.top = `${Math.round(top)}px`;
-    }
-
-    function updateTimeframePopover() {
-      const targetTimeframe = state.timeframePopoverTarget || state.timeframe;
-      const options = INDEX_SCANNER_TIMEFRAME_RANGES[targetTimeframe] || [];
-      const targetRangeMonths = state.rangeMonthsByTimeframe[targetTimeframe] || options[0]?.months || state.rangeMonths;
-      if (timeframePopoverTitle) {
-        timeframePopoverTitle.textContent = `${indexScannerTimeframeLabel(targetTimeframe)} Range`;
-      }
-      if (timeframeOptions) {
-        timeframeOptions.innerHTML = options
-          .map((option) => `
-            <button
-              type="button"
-              class="index-timeframe-option${option.months === targetRangeMonths ? " is-active" : ""}"
-              data-timeframe-option="${targetTimeframe}"
-              data-range-months="${option.months}"
-            >${option.label}</button>
-          `)
-          .join("");
-        Array.from(timeframeOptions.querySelectorAll("button[data-timeframe-option]")).forEach((button) => {
-          button.addEventListener("click", async () => {
-            state.timeframe = String(button.dataset.timeframeOption || state.timeframe);
-            state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, button.dataset.rangeMonths, state.rangeMonths);
-            state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
-            state.timeframePopoverOpen = false;
-            state.timeframePopoverTarget = "";
-            updateTimeframeUI();
-            updateRangeChip();
-            updateTimeframePopover();
-            try {
-              errorBox.hidden = true;
-              list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
-              state.overview = await loadOverview(state.selectedDate, state.timeframe);
-              renderTagOptions();
-            } catch (error) {
-              showError(errorBox, error.message);
-              return;
-            }
-            await render();
-          });
-        });
-      }
-      if (timeframePopover) {
-        const isOpen = state.timeframePopoverOpen && Boolean(state.timeframePopoverTarget);
-        timeframePopover.hidden = !isOpen;
-        timeframePopover.classList.toggle("is-open", isOpen);
-      }
-    }
-
-    updateTimeframeUI();
-    updateStickyTimeframeUI();
-    updateRangeChip();
-    updateTimeframePopover();
-    updateDeviation200Controls();
-    updateStickyDateUi();
-    updateStickyFiltersUi();
-    updateStickyBarVisibility();
-    if (pickedLink) {
-      pickedLink.href = "./picked.html";
-    }
-    if (stickyPickedLink) {
-      stickyPickedLink.href = "./picked.html";
-    }
-
-    [...new Set([sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
-      .forEach((control) => {
-      control.addEventListener("change", async () => {
-        state.sort = stickySortSelect?.matches(":focus") ? stickySortSelect.value : sortSelect.value;
-        state.tag = stickyTagSelect?.matches(":focus") ? stickyTagSelect.value : tagSelect.value;
-        state.theme = stickyThemeSelect?.matches(":focus") ? stickyThemeSelect.value : themeSelect.value;
-        state.turnover = Number(stickyTurnoverSelect?.matches(":focus") ? stickyTurnoverSelect.value : turnoverSelect.value);
-        state.limit = Number(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect.value : limitSelect.value);
-        if (sortSelect) sortSelect.value = state.sort;
-        if (stickySortSelect) stickySortSelect.value = state.sort;
-        if (tagSelect) tagSelect.value = state.tag;
-        if (stickyTagSelect) stickyTagSelect.value = state.tag;
-        if (themeSelect) themeSelect.value = state.theme;
-        if (stickyThemeSelect) stickyThemeSelect.value = state.theme;
-        if (turnoverSelect) turnoverSelect.value = String(state.turnover);
-        if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(state.turnover);
-        if (limitSelect) limitSelect.value = String(state.limit);
-        if (stickyLimitSelect) stickyLimitSelect.value = String(state.limit);
-        const activeDeviationKey = getActiveDeviationSortKey(state.sort);
-        if (activeDeviationKey) {
-          state.deviationDrafts[activeDeviationKey] = { ...state.deviationFilters[activeDeviationKey] };
-        }
-        updateDeviation200Controls();
-        updateStickyFiltersUi();
-        await render();
-      });
-    });
-
-    [stickyDevMinInput, stickyDevMaxInput].filter(Boolean).forEach((input) => {
-      input.addEventListener("input", () => {
-        syncStickyDeviationSliderUi("slider");
-      });
-    });
-
-    [stickyDevMinNumberInput, stickyDevMaxNumberInput].filter(Boolean).forEach((input) => {
-      input.addEventListener("input", () => {
-        syncStickyDeviationSliderUi("input");
-      });
-      input.addEventListener("change", () => {
-        syncStickyDeviationSliderUi("input");
-      });
-    });
-
-    stickyDevApplyButton?.addEventListener("click", async (event) => {
-      event.preventDefault();
-      const activeKey = getActiveDeviationSortKey(state.sort);
-      if (!activeKey) {
-        return;
-      }
-      const nextFilter = buildDeviationFilterFromBounds(
-        stickyDevMinNumberInput?.value,
-        stickyDevMaxNumberInput?.value,
-      );
-      state.deviationDrafts[activeKey] = nextFilter;
-      state.deviationFilters[activeKey] = nextFilter;
-      setStickyDeviationControls(nextFilter);
-      console.debug('[Deviation Apply]', {
-        draftDevMin: stickyDevMinNumberInput?.value ?? '',
-        draftDevMax: stickyDevMaxNumberInput?.value ?? '',
-        appliedDevMin: nextFilter.min,
-        appliedDevMax: nextFilter.max,
-      });
-      updateDeviation200Controls();
-      updateStickyFiltersUi();
-      await render();
-      console.debug('[Deviation Apply Result]', {
-        updatedUrl: window.location.href,
-        filteredResultCount: state.visibleRecords?.length ?? 0,
-      });
-    });
-
-    stickyDevResetButton?.addEventListener("click", async (event) => {
-      event.preventDefault();
-      const activeKey = getActiveDeviationSortKey(state.sort);
-      if (activeKey) {
-        state.deviationDrafts[activeKey] = { mode: "", min: "", max: "" };
-        state.deviationFilters[activeKey] = { mode: "", min: "", max: "" };
-      }
-      if (stickyDevMinNumberInput) stickyDevMinNumberInput.value = "";
-      if (stickyDevMaxNumberInput) stickyDevMaxNumberInput.value = "";
-      setStickyDeviationControls({ mode: "", min: "", max: "" });
-      updateDeviation200Controls();
-      updateStickyFiltersUi();
-      await render();
-    });
-
-    stickyFiltersButton?.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      state.stickyFiltersOpen = !state.stickyFiltersOpen;
-      state.stickyDateOpen = false;
-      updateStickyFiltersUi();
-      updateStickyDateUi();
-    });
-
-    stickyFiltersPopover?.addEventListener("click", (event) => {
-      event.stopPropagation();
-    });
-
-    stickyDateButton?.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      state.stickyDateOpen = !state.stickyDateOpen;
-      state.stickyFiltersOpen = false;
-      updateStickyDateUi();
-      updateStickyFiltersUi();
-    });
-
-    stickyDatePopover?.addEventListener("click", (event) => {
-      event.stopPropagation();
-    });
-
-    document.addEventListener("click", (event) => {
-      if (state.timeframePopoverOpen && timeframePopover && timeframeGroup) {
-        if (!timeframePopover.contains(event.target) && !timeframeGroup.contains(event.target)) {
-          state.timeframePopoverOpen = false;
-          state.timeframePopoverTarget = "";
-          updateTimeframePopover();
-        }
-      }
-      if (state.stickyFiltersOpen && stickyFiltersPopover && stickyFiltersButton) {
-        if (!stickyFiltersPopover.contains(event.target) && !stickyFiltersButton.contains(event.target)) {
-          state.stickyFiltersOpen = false;
-          updateStickyFiltersUi();
-        }
-      }
-      if (state.stickyDateOpen && stickyDatePopover && stickyDateButton) {
-        if (!stickyDatePopover.contains(event.target) && !stickyDateButton.contains(event.target)) {
-          state.stickyDateOpen = false;
-          updateStickyDateUi();
-        }
-      }
-    });
-
-    window.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        if (state.timeframePopoverOpen) {
-          state.timeframePopoverOpen = false;
-          state.timeframePopoverTarget = "";
-          updateTimeframePopover();
-        }
-        if (state.stickyFiltersOpen) {
-          state.stickyFiltersOpen = false;
-          updateStickyFiltersUi();
-        }
-        if (state.stickyDateOpen) {
-          state.stickyDateOpen = false;
-          updateStickyDateUi();
-        }
-      }
-    });
-
-    window.addEventListener("resize", () => {
-      if (state.stickyDateOpen) {
-        positionDatePopover();
-      }
-    });
-
-    window.addEventListener("scroll", () => {
-      if (state.stickyDateOpen) {
-        positionDatePopover();
-      }
-    }, { passive: true });
-
-    if (timeframeGroup) {
-      const LONG_PRESS_MS = 420;
-      timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
-        let longPressTimer = null;
-        let longPressTriggered = false;
-
-        const clearLongPressTimer = () => {
-          if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-          }
-        };
-
-        const openTimeframePopover = () => {
-          state.timeframePopoverTarget = String(btn.dataset.value || state.timeframe);
-          state.timeframePopoverOpen = true;
-          updateTimeframePopover();
-        };
-
-        btn.addEventListener("pointerdown", (event) => {
-          if (event.button !== 0) {
-            return;
-          }
-          longPressTriggered = false;
-          clearLongPressTimer();
-          longPressTimer = setTimeout(() => {
-            longPressTriggered = true;
-            openTimeframePopover();
-          }, LONG_PRESS_MS);
-        });
-
-        ["pointerup", "pointerleave", "pointercancel"].forEach((eventName) => {
-          btn.addEventListener(eventName, clearLongPressTimer);
-        });
-
-        btn.addEventListener("click", async (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          clearLongPressTimer();
-          const nextTimeframe = String(btn.dataset.value || state.timeframe);
-          if (longPressTriggered) {
-            longPressTriggered = false;
-            return;
-          }
-          if (state.timeframe === nextTimeframe && !state.timeframePopoverOpen) {
-            return;
-          }
-          state.timeframe = nextTimeframe;
-          state.rangeMonths = normalizeIndexScannerRangeMonths(
-            state.timeframe,
-            state.rangeMonthsByTimeframe[state.timeframe],
-            state.rangeMonths,
-          );
-          state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
-          state.timeframePopoverOpen = false;
-          state.timeframePopoverTarget = "";
-          updateTimeframeUI();
-          updateRangeChip();
-          updateTimeframePopover();
-          try {
-            errorBox.hidden = true;
-            list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
-            state.overview = await loadOverview(state.selectedDate, state.timeframe);
-            renderTagOptions();
-          } catch (error) {
-            showError(errorBox, error.message);
-            return;
-          }
-          await render();
-        });
-      });
-    }
-
-    if (resetPicksButton) {
-      resetPicksButton.addEventListener("click", async () => {
-        resetScannerPicks(state);
-        await render();
-      });
-    }
-    if (stickyResetPicksButton) {
-      stickyResetPicksButton.addEventListener("click", async () => {
-        resetScannerPicks(state);
-        await render();
-      });
-    }
-    if (selectAllPicksButton) {
-      selectAllPicksButton.addEventListener("click", async () => {
-        selectAllScannerPicks(state.visibleRecords, state);
-        await render();
-      });
-    }
-    if (stickySelectAllPicksButton) {
-      stickySelectAllPicksButton.addEventListener("click", async () => {
-        selectAllScannerPicks(state.visibleRecords, state);
-        await render();
-      });
-    }
-    refreshButton?.addEventListener("click", async () => {
-      state.isRefreshing = true;
-      updateHeaderStatus();
-      await runRefreshAction(refreshButton, errorBox, async () => {
-        state.manifest = state.pendingManifest || await loadManifest();
-        state.pendingManifest = null;
-        state.hasFreshUpdate = false;
-        await loadDate(state.selectedDate || state.manifest.latestDate);
-        await render();
-      });
-      state.isRefreshing = false;
-      triggerHeaderStatusFlash();
-      updateHeaderStatus();
-    });
-
-    try {
-      state.manifest = await loadManifest();
-      state.themeOrder = await loadThemeOrder();
-      await loadDate(params.get("date") || state.manifest.latestDate);
-      await render();
-      startManifestPolling();
-    } catch (error) {
-      showError(errorBox, error.message);
-    }
-
-    async function loadDate(requestedDate) {
-      state.selectedDate = resolveAvailableDate(requestedDate, state.manifest.availableDates);
-      state.overview = await loadOverview(state.selectedDate, state.timeframe);
-      state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
-      renderTagOptions();
-      renderDateControls();
-      renderCalendar();
-    }
-
-    function renderTagOptions() {
-      const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
-      const industries = [...new Set(
-        turnoverRecords
-          .map((record) => String(record.industry || "").trim())
-          .filter(
-            (industry) =>
-              industry &&
-              !TSE_MARKETS.has(industry) &&
-              !MARKET_TAGS.has(industry.toLowerCase())
-          )
-      )].sort();
-      tagSelect.innerHTML = ['<option value="">All</option>']
-        .concat(industries.map((industry) => `<option value="${escapeHtml(industry)}">${escapeHtml(industry)}</option>`))
-        .join("");
-      if (stickyTagSelect) {
-        stickyTagSelect.innerHTML = tagSelect.innerHTML;
-      }
-      if (state.tag && !industries.includes(state.tag)) {
-        state.tag = "";
-      }
-      tagSelect.value = state.tag;
-      if (stickyTagSelect) {
-        stickyTagSelect.value = state.tag;
-      }
-    }
-
-    function renderThemeOptions() {
-      const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
-      const availableThemes = new Set();
-      turnoverRecords.forEach((record) => {
-        (record.themes || []).forEach((theme) => {
-          const label = String(theme || "").trim();
-          if (label) {
-            availableThemes.add(label);
-          }
-        });
-      });
-      const orderedThemes = state.themeOrder.filter((theme) => availableThemes.has(theme));
-      const extraThemes = [...availableThemes].filter((theme) => !state.themeOrder.includes(theme)).sort((left, right) =>
-        left.localeCompare(right, "ja", { sensitivity: "base" })
-      );
-      const themeOptions = ["", ...orderedThemes, ...extraThemes];
-      themeSelect.innerHTML = themeOptions
-        .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "All")}</option>`)
-        .join("");
-      if (stickyThemeSelect) {
-        stickyThemeSelect.innerHTML = themeSelect.innerHTML;
-      }
-      if (state.theme && !availableThemes.has(state.theme)) {
-        state.theme = "";
-      }
-      themeSelect.value = state.theme;
-      if (stickyThemeSelect) {
-        stickyThemeSelect.value = state.theme;
-      }
-    }
-
-    function updateIndexHeaderActions() {
-      if (!pickedLink) {
-        return;
-      }
-      const pickCount = Object.keys(state.picks || {}).length;
-      pickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
-      if (stickyPickedLink) {
-        stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
-      }
-    }
-
-    function updateHeaderStatus() {
-      if (!updatedStatus) {
-        return;
-      }
-      const currentSnapshot = state.manifest?.currentSnapshot || {};
-      const statusState = resolveHeaderStatusState(currentSnapshot?.generatedAt, {
-        snapshot: currentSnapshot,
-        hasFreshUpdate: state.hasFreshUpdate,
-        isRefreshing: state.isRefreshing,
-        flash: state.headerStatusFlashActive,
-      });
-      const timeParts = formatSnapshotGeneratedAtParts(currentSnapshot?.generatedAt);
-      updatedStatus.className = [
-        "index-header-status",
-        `index-header-status--${statusState.tone}`,
-        statusState.pending ? "index-header-status--pending" : "",
-        statusState.refreshing ? "index-header-status--refreshing" : "",
-        statusState.flash ? "index-header-status--flash" : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      updatedStatus.setAttribute(
-        "title",
-        [
-          statusState.label,
-          statusState.marketPhase,
-          timeParts.full || "--",
-          statusState.pending ? "new data ready" : "",
-          statusState.refreshing ? "refreshing" : "",
-        ]
-          .filter(Boolean)
-          .join(" / ")
-      );
-      updatedStatus.innerHTML = `
-        <span class="index-header-status-dot" aria-hidden="true"></span>
-        <span class="index-header-status-body">
-          <span class="index-header-status-topline">
-            <span class="index-header-status-label">${escapeHtml(statusState.label)}</span>
-            <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
-          </span>
-          <span class="index-header-status-bottomline">
-            <span class="index-header-status-date">${escapeHtml(timeParts.date || "--/--")}</span>
-            <span class="index-header-status-time">
-              <span class="index-header-status-hm">${escapeHtml(timeParts.hm || "--:--")}</span>
-              <span class="index-header-status-seconds">${escapeHtml(timeParts.seconds || "")}</span>
-            </span>
-          </span>
-        </span>
-      `;
-    }
-
-    function resolveHeaderStatusState(generatedAt, options = {}) {
-      const hasFreshUpdate = Boolean(options.hasFreshUpdate);
-      const isRefreshing = Boolean(options.isRefreshing);
-      const flash = Boolean(options.flash);
-      const snapshot = options.snapshot || {};
-      const marketPhase = resolveHeaderMarketPhase();
-      const tone = resolveHeaderStatusTone(generatedAt, { hasFreshUpdate, isRefreshing });
-      return {
-        tone,
-        pending: hasFreshUpdate,
-        refreshing: isRefreshing,
-        flash,
-        label: resolveHeaderStatusLabel(snapshot, marketPhase),
-        marketPhase,
-      };
-    }
-
-    function resolveHeaderStatusLabel(snapshot, marketPhase) {
-      if (String(snapshot?.status || "").trim() === "finalized" || String(snapshot?.type || "").trim() === "daily") {
-        return "EOD";
-      }
-      if (marketPhase === "PRE") {
-        return "PRE";
-      }
-      if (marketPhase === "JP CLOSED" || marketPhase === "AFTER") {
-        return "CLOSED";
-      }
-      return "LIVE";
-    }
-
-    function resolveHeaderStatusTone(generatedAt, options = {}) {
-      if (options.isRefreshing) {
-        return "refreshing";
-      }
-      if (options.hasFreshUpdate) {
-        return "pending";
-      }
-      if (!generatedAt) {
-        return "neutral";
-      }
-      const parsed = parseSnapshotGeneratedAtToDate(generatedAt);
-      if (!parsed) {
-        return "neutral";
-      }
-      const ageMinutes = Math.max(0, (Date.now() - parsed.getTime()) / 60000);
-      if (ageMinutes <= 5) {
-        return "fresh";
-      }
-      if (ageMinutes <= 30) {
-        return "warm";
-      }
-      if (ageMinutes <= 60) {
-        return "stale";
-      }
-      return "critical";
-    }
-
-    function resolveHeaderMarketPhase() {
-      const now = new Date();
-      const day = now.getDay();
-      if (day === 0 || day === 6) {
-        return "JP CLOSED";
-      }
-      const minutes = now.getHours() * 60 + now.getMinutes();
-      if (minutes < 9 * 60) {
-        return "PRE";
-      }
-      if ((minutes >= 9 * 60 && minutes < 11 * 60 + 30) || (minutes >= 12 * 60 + 30 && minutes <= 15 * 60 + 30)) {
-        return "JP LIVE";
-      }
-      if (minutes > 15 * 60 + 30 && minutes <= 18 * 60) {
-        return "AFTER";
-      }
-      return "JP CLOSED";
-    }
-
-    function parseSnapshotGeneratedAtToDate(value) {
-      const raw = String(value || "").trim();
-      if (!raw) {
-        return null;
-      }
-      const parsed = new Date(raw);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-
-    function formatSnapshotGeneratedAtParts(value) {
-      const text = String(value || "").trim();
-      if (!text) {
-        return { full: "", date: "", hm: "", seconds: "" };
-      }
-      const date = new Date(text);
-      if (Number.isNaN(date.getTime())) {
-        return { full: text, date: "", hm: text, seconds: "" };
-      }
-      const pad = (number) => String(number).padStart(2, "0");
-      const datePart = `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
-      const hmPart = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-      const secondsPart = `:${pad(date.getSeconds())}`;
-      return {
-        full: `${datePart} ${hmPart}${secondsPart}`,
-        date: datePart,
-        hm: hmPart,
-        seconds: secondsPart,
-      };
-    }
-
-    function triggerHeaderStatusFlash() {
-      if (state.headerStatusFlashTimer) {
-        window.clearTimeout(state.headerStatusFlashTimer);
-      }
-      state.headerStatusFlashActive = true;
-      updateHeaderStatus();
-      state.headerStatusFlashTimer = window.setTimeout(() => {
-        state.headerStatusFlashActive = false;
-        state.headerStatusFlashTimer = null;
-        updateHeaderStatus();
-      }, 1200);
-    }
-
-    function manifestRevisionKey(manifest) {
-      const currentSnapshot = manifest?.currentSnapshot || {};
-      return JSON.stringify({
-        latestDate: String(manifest?.latestDate || "").trim(),
-        snapshotDate: String(currentSnapshot?.date || "").trim(),
-        snapshotType: String(currentSnapshot?.type || "").trim(),
-        snapshotStatus: String(currentSnapshot?.status || "").trim(),
-        generatedAt: String(currentSnapshot?.generatedAt || "").trim(),
-      });
-    }
-
-    function isManifestNewer(nextManifest, currentManifest) {
-      return manifestRevisionKey(nextManifest) !== manifestRevisionKey(currentManifest);
-    }
-
-    async function checkForManifestUpdate() {
-      try {
-        const latestManifest = await loadManifest();
-        if (isManifestNewer(latestManifest, state.manifest)) {
-          state.pendingManifest = latestManifest;
-          state.hasFreshUpdate = true;
-        } else {
-          state.pendingManifest = null;
-          state.hasFreshUpdate = false;
-        }
-        updateHeaderStatus();
-      } catch (_error) {
-      }
-    }
-
-    function startManifestPolling() {
-      if (state.manifestPollId) {
-        clearInterval(state.manifestPollId);
-      }
-      state.manifestPollId = window.setInterval(() => {
-        if (document.visibilityState === "visible") {
-          void checkForManifestUpdate();
-        }
-      }, 30000);
-    }
-
-    async function render() {
-      errorBox.hidden = true;
-      list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
-      state.picks = loadScannerPicks();
-      updateIndexHeaderActions();
-      renderTagOptions();
-      renderThemeOptions();
-      const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
-      const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
-      const baseFiltered = priceFilteredRecords.filter(
-        (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
-      );
-      let scannerBase = baseFiltered;
-      if (state.sort === "lower_shadow") {
-        scannerBase = baseFiltered.filter(isLowerShadowCandidate);
-      } else if (state.sort === "stop_high") {
-        scannerBase = baseFiltered.filter((record) => getStopHighStatus(record) !== "none");
-      } else if (state.sort === "new_high_20d") {
-        scannerBase = baseFiltered.filter((record) => record.newHigh20d === true);
-      } else if (isDeviationSort(state.sort)) {
-        const deviationFilter = getActiveDeviationFilter(state);
-        scannerBase = baseFiltered.filter((record) => {
-          const deviationValue = getDeviationValueBySort(record, state.sort);
-          return deviationValue != null && matchesDeviationFilter(deviationValue, deviationFilter.mode, deviationFilter.min, deviationFilter.max);
-        });
-      } else if (state.sort === "trend_turn") {
-        scannerBase = baseFiltered.filter((record) => record.trendTurnCandidate === true);
-      } else if (state.sort === "rebound_signal") {
-        scannerBase = baseFiltered.filter((record) => String(record.signalCategory || "") !== "none");
-      }
-      const filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
-      state.visibleRecords = filtered;
-      syncIndexScannerUrl(
-        state.selectedDate,
-        state.sort,
-        state.tag,
-        state.theme,
-        state.turnover,
-        state.limit,
-        state.rangeMonths,
-        state.timeframe,
-        state.deviationFilters
-      );
-      if (stickySortSelect) {
-        stickySortSelect.value = state.sort;
-      }
-      if (stickyLimitSelect) {
-        stickyLimitSelect.value = String(state.limit);
-      }
-      if (stickyTurnoverSelect) {
-        stickyTurnoverSelect.value = String(state.turnover);
-      }
-      updateStickyTimeframeUI();
-      updateRangeChip();
-      updateStickyFiltersUi();
-      updateHeaderStatus();
-
-      if (!filtered.length) {
-        if (selectAllPicksButton) {
-          selectAllPicksButton.disabled = true;
-        }
-        if (stickySelectAllPicksButton) {
-          stickySelectAllPicksButton.disabled = true;
-        }
-        list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
-        return;
-      }
-      if (selectAllPicksButton) {
-        selectAllPicksButton.disabled = false;
-      }
-      if (stickySelectAllPicksButton) {
-        stickySelectAllPicksButton.disabled = false;
-      }
-
-      list.innerHTML = filtered
-        .map((record, index) => renderScannerItem(record, index, state))
-        .join("");
-
-      filtered.forEach((record) => {
-        const checkbox = list.querySelector(`input[data-pick-code="${record.code}"]`);
-        if (!checkbox) {
-          return;
-        }
-        checkbox.addEventListener("change", () => {
-          toggleScannerPick(record, checkbox.checked, state);
-        });
-      });
-
-      const results = await mapWithConcurrency(filtered, CHART_FETCH_CONCURRENCY, async (record) => {
-        try {
-          return {
-            record,
-            status: "fulfilled",
-            value: await loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate }),
-          };
-        } catch (error) {
-          return { record, status: "rejected", reason: error };
-        }
-      });
-
-      const baselineShape = results.find((result) => result.status === "fulfilled" && !result.value.validation.issues.length)?.value.shape || null;
-
-      results.forEach((result) => {
-        const record = result.record;
-        if (result.status === "rejected") {
-          renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
-          showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${result.reason?.message}`);
-          return;
-        }
-        const { payload, validation, shape, requestUrl, status, responseBody } = result.value;
-        if (validation.issues.length) {
-          console.debug("[ticker-chart:validation]", {
-            code: record.code,
-            requestUrl,
-            status,
-            responseBody: responseBody.slice(0, 1200),
-            parsedCandleCount: validation.parsedCandleCount,
-            issues: validation.issues,
-            warnings: validation.warnings,
-            shapeDiff: diffShapeAgainstBaseline(baselineShape, shape),
-          });
-          renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
-          showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
-          return;
-        }
-        renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
-          timeframe: state.timeframe,
-          useBarCount: false,
-        });
-        const linksElement = document.getElementById(`scanLinks-${record.code}`);
-        if (linksElement) {
-          linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
-        }
-      });
-    }
-
-    function renderDateControls() {
-      updateStickyDateUi();
-    }
-
-    function updateDeviation200Controls() {
-      const activeKey = getActiveDeviationSortKey(state.sort);
-      const activeFilter = getActiveDeviationFilter(state);
-      const activeDraft = getActiveDeviationDraft(state);
-      const hasSettings = Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
-      const activeLabel = getDeviationSortLabel(activeKey);
-      if (dev200Button) {
-        dev200Button.hidden = !activeKey;
-        dev200Button.classList.toggle("is-active", hasSettings);
-        dev200Button.textContent = hasSettings ? "Advanced ON" : "Advanced ▼";
-        dev200Button.setAttribute("aria-expanded", activeKey && state.dev200PopoverOpen ? "true" : "false");
-      }
-      if (deviationPopoverTitle) {
-        deviationPopoverTitle.textContent = activeLabel || "Deviation";
-      }
-      if (dev200Popover) {
-        const isOpen = Boolean(activeKey) && state.dev200PopoverOpen;
-        dev200Popover.hidden = !isOpen;
-        dev200Popover.classList.toggle("is-open", isOpen);
-      }
-      if (dev200ModeSelect) {
-        dev200ModeSelect.value = activeFilter.mode || "gte";
-      }
-      if (dev200MinInput && dev200MinInput.value !== activeFilter.min) {
-        dev200MinInput.value = activeFilter.min;
-      }
-      if (dev200MaxInput && dev200MaxInput.value !== activeFilter.max) {
-        dev200MaxInput.value = activeFilter.max;
-      }
-      const activeMode = normalizeDeviationFilterInputMode(dev200ModeSelect?.value) || activeFilter.mode || "gte";
-      if (dev200MinInput) {
-        dev200MinInput.disabled = activeMode === "lte";
-      }
-      if (dev200MaxInput) {
-        dev200MaxInput.disabled = activeMode === "gte";
-      }
-      if (stickyAdvanced) {
-        stickyAdvanced.hidden = !activeKey;
-      }
-      if (stickyDeviationTitle) {
-        stickyDeviationTitle.textContent = activeLabel || "Deviation";
-      }
-      setStickyDeviationControls(activeDraft);
-    }
-
-    function renderCalendar() {
-      const minMonth = startOfMonth(parseDate(state.manifest.availableDates[0]));
-      const maxMonth = startOfMonth(parseDate(state.manifest.availableDates.at(-1)));
-      renderMiniCalendar(
-        stickyMiniCalendar || miniCalendar,
-        state.calendarMonth || startOfMonth(parseDate(state.selectedDate)),
-        state.selectedDate,
-        state.manifest.availableDates,
-        async (nextDate) => {
-          state.stickyDateOpen = false;
-          updateStickyDateUi();
-          await loadDate(nextDate);
-          await render();
-        },
-        {
-          minMonth,
-          maxMonth,
-          onPrevMonth: () => {
-            state.calendarMonth = addCalendarMonths(state.calendarMonth, -1);
-            renderCalendar();
-          },
-          onNextMonth: () => {
-            state.calendarMonth = addCalendarMonths(state.calendarMonth, 1);
-            renderCalendar();
-          },
-        }
-      );
-    }
-  }
-
-  async function initPickedPage() {
-    const count = document.getElementById("pickedCount");
-    const countBadge = document.getElementById("pickedCountBadge");
-    const setsBadge = document.getElementById("pickedSetsBadge");
-    const updatedBadge = document.getElementById("pickedUpdatedBadge");
-    const exportMessage = document.getElementById("pickedExportMessage");
-    const exportTradingViewButton = document.getElementById("pickedExportTradingViewButton");
-    const exportHyperButton = document.getElementById("pickedExportHyperButton");
-    const headerExportButton = document.getElementById("pickedHeaderExportButton");
-    const headerSaveButton = document.getElementById("pickedHeaderSaveButton");
-    const exportList = document.getElementById("pickedExportList");
-    const registerAllButton = document.getElementById("pickedRegisterAllButton");
-    const registerCount = document.getElementById("pickedRegisterCount");
-    const registerList = document.getElementById("pickedRegisterList");
-    const registerNameModal = document.getElementById("registerNameModal");
-    const registerNameInput = document.getElementById("registerNameInput");
-    const registerNameError = document.getElementById("registerNameError");
-    const registerNameOkButton = document.getElementById("registerNameOkButton");
-    const registerNameCancelButton = document.getElementById("registerNameCancelButton");
-    const refreshButton = document.getElementById("pickedRefreshButton");
-    const errorBox = document.getElementById("pickedError");
-    const body = document.getElementById("pickedTableBody");
-    const chartList = document.getElementById("pickedChartList");
-    const state = {
-      exportEntries: [],
-      manifest: null,
-      selectedDate: "",
-      bars: 63,
-      timeframe: "daily",
-      sort: "code",
-      registered: [],
-    };
-
-    bindRegisterNameModalEvents();
-    closeRegisterNameModal();
-
-    exportTradingViewButton?.addEventListener("click", () => {
-      const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
-      triggerExportDownloads([buildTradingViewExportEntry(picks)]);
-      renderExportEntries(exportList, []);
-      exportMessage.textContent = "TradingView TXT downloaded.";
-    });
-
-    exportHyperButton?.addEventListener("click", () => {
-      const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
-      const entries = buildHyperExportEntries(picks);
-      triggerExportDownloads(entries);
-      renderExportEntries(exportList, []);
-      exportMessage.textContent = `HYPER SBI 2 CSV downloaded for ${formatNumber(picks.length, 0)} picks.`;
-    });
-
-    headerExportButton?.addEventListener("click", () => {
-      exportTradingViewButton?.click();
-    });
-
-    registerAllButton?.addEventListener("click", () => {
-      const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
-      if (!picks.length) {
-        showError(errorBox, "No picks available to save.");
-        return;
-      }
-      errorBox.hidden = true;
-      openRegisterNameModal();
-    });
-
-    headerSaveButton?.addEventListener("click", () => {
-      registerAllButton?.click();
-    });
-
-    refreshButton?.addEventListener("click", async () => {
-      await runRefreshAction(refreshButton, errorBox, async () => {
-        state.manifest = await loadManifest();
-        state.selectedDate = String(state.manifest.latestDate || "");
-        await render();
-      });
-    });
-
-    try {
-      state.manifest = await loadManifest();
-      state.selectedDate = String(state.manifest.latestDate || "");
-      await render();
-    } catch (error) {
-      showError(errorBox, error.message);
-    }
-
-    async function render() {
-      const picks = sortedScannerPicks(loadScannerPicks());
-      state.registered = loadRegisteredPicks();
-      const pickCountText = formatNumber(picks.length, 0);
-      if (count) {
-        count.textContent = `${pickCountText}`;
-      }
-      if (countBadge) {
-        countBadge.textContent = `Count ${pickCountText}`;
-      }
-      if (registerCount) {
-        registerCount.textContent = `${formatNumber(state.registered.length, 0)}`;
-      }
-      if (setsBadge) {
-        setsBadge.textContent = `Sets ${formatNumber(state.registered.length, 0)}`;
-      }
-      if (updatedBadge) {
-        const generatedAt = formatSnapshotGeneratedAt(state.manifest?.currentSnapshot?.generatedAt);
-        updatedBadge.textContent = generatedAt ? `Updated ${generatedAt}` : "Updated --";
-      }
-      errorBox.hidden = true;
-      renderRegisteredPanel(state.registered);
-      const hasPicks = picks.length > 0;
-      if (registerAllButton) {
-        registerAllButton.disabled = false;
-      }
-      if (exportTradingViewButton) {
-        exportTradingViewButton.disabled = !hasPicks;
-      }
-      if (exportHyperButton) {
-        exportHyperButton.disabled = !hasPicks;
-      }
-      if (!picks.length) {
-        body.innerHTML = '<tr><td colspan="5" class="empty-cell">選別銘柄はありません。トップ画面でチェックしてください。</td></tr>';
-        if (chartList) {
-          chartList.innerHTML = '<div class="empty-cell picked-chart-empty">No picks yet.</div>';
-        }
-        revokeExportEntries(state.exportEntries);
-        state.exportEntries = [];
-        renderExportEntries(exportList, []);
-        exportMessage.textContent = "No picks available for export.";
-        return;
-      }
-
-      renderPickedTable(picks);
-      await renderPickedCharts(picks);
-
-      if (!state.exportEntries.length) {
-        exportMessage.textContent = "Export the current picks as TradingView TXT or HYPER SBI 2 CSV.";
-        exportList.innerHTML = "";
-      }
-    }
-
-    function renderPickedTable(picks) {
-      body.innerHTML = picks
-        .map(
-          (pick) => `
-            <tr>
-              <td>${escapeHtml(pick.code)}</td>
-              <td>${renderTickerIdentity(pick.code, pick.name, { variant: "table", showCode: false })}</td>
-              <td>${escapeHtml(pick.market)}</td>
-              <td>${escapeHtml(formatPickedDateTime(pick.selectedAt))}</td>
-              <td>
-                <div class="actions-cell">
-                  <button type="button" class="row-button picked-remove-button" data-remove-pick="${escapeHtml(pick.code)}">解除</button>
-                </div>
-              </td>
-            </tr>
-          `
-        )
-        .join("");
-
-      Array.from(body.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
-        button.addEventListener("click", async () => {
-          removePickByCode(button.dataset.removePick);
-          exportMessage.textContent = "Pick list changed. Re-export if needed.";
-          await render();
-        });
-      });
-    }
-
-    async function renderPickedCharts(picks) {
-      if (!chartList) {
-        return;
-      }
-
-      const failures = [];
-      const loadedResults = await mapWithConcurrency(picks, CHART_FETCH_CONCURRENCY, async (pick) => {
-        try {
-          const inspected = await loadTickerPayloadWithDiagnostics(pick.code, { selectedDate: state.selectedDate });
-          const record = buildPickedRecordFromPayload(pick, inspected.payload, state.selectedDate);
-          if (!record) {
-            return { pick, status: "invalid", inspected, reason: "日付に一致する価格データなし" };
-          }
-          return { pick, status: "fulfilled", inspected, record };
-        } catch (error) {
-          return { pick, status: "rejected", reason: error.message || String(error) };
-        }
-      });
-      const baselineShape = loadedResults.find((result) => result.status === "fulfilled" && !result.inspected.validation.issues.length)?.inspected.shape || null;
-      const chartItems = loadedResults.map((result, index) => {
-        if (result.status === "fulfilled" && !result.inspected.validation.issues.length) {
-          return { kind: "success", index, record: result.record, inspected: result.inspected };
-        }
-        const code = result.pick.code;
-        if (result.status === "rejected") {
-          failures.push(`${code}: ${result.reason}`);
-          return {
-            kind: "failed",
-            index,
-            code,
-            name: result.pick.name,
-            message: result.reason,
-          };
-        }
-        const validationIssues = result.inspected.validation.issues.length
-          ? result.inspected.validation.issues.join(", ")
-          : result.reason;
-        console.debug("[ticker-chart:validation]", {
-          code,
-          requestUrl: result.inspected.requestUrl,
-          status: result.inspected.status,
-          responseBody: result.inspected.responseBody.slice(0, 1200),
-          parsedCandleCount: result.inspected.validation.parsedCandleCount,
-          issues: result.inspected.validation.issues,
-          warnings: result.inspected.validation.warnings,
-          shapeDiff: diffShapeAgainstBaseline(baselineShape, result.inspected.shape),
-        });
-        failures.push(`${code}: ${validationIssues}`);
-        return {
-          kind: "failed",
-          index,
-          code,
-          name: result.pick.name,
-          message: validationIssues,
-        };
-      });
-
-      if (!chartItems.length) {
-        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">No chart-ready picks found.</div>';
-        if (failures.length) {
-          showError(errorBox, `Chart load failed: ${failures.slice(0, 3).join(" / ")}`);
-        }
-        return;
-      }
-
-      if (failures.length) {
-        showError(errorBox, `Some charts failed to load: ${failures.slice(0, 3).join(" / ")}`);
-      }
-
-      chartList.innerHTML = chartItems
-        .map((entry) => {
-          if (entry.kind === "success") {
-            return renderPickedScannerItem(entry.record, entry.index, state);
-          }
-          return renderChartFetchFailedItem(entry.code, entry.name, entry.index, state, {
-            picked: true,
-            english: true,
-            message: entry.message,
-            linksMarkup: `<a class="picked-link-pill" href="${buildTickerUrl(entry.code, state.selectedDate, "")}">📈 Detail</a>`,
-            actionMarkup: `<button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(entry.code)}">✕ Remove</button>`,
-          });
-        })
-        .join("");
-
-      chartItems.forEach((entry) => {
-        if (entry.kind !== "success") {
-          return;
-        }
-        const { inspected, record } = entry;
-        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, inspected.payload.ohlcv || [], state.selectedDate, state.bars, {
-          timeframe: state.timeframe,
-          useBarCount: true,
-        });
-        const linksElement = document.getElementById(`pickedLinks-${record.code}`);
-        if (linksElement) {
-          linksElement.innerHTML = renderPickedItemLinks(inspected.payload, record, state);
-        }
-      });
-
-      Array.from(chartList.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
-        button.addEventListener("click", async () => {
-          removePickByCode(button.dataset.removePick);
-          exportMessage.textContent = "Pick list changed. Re-export if needed.";
-          await render();
-        });
-      });
-
-    }
-
-    function renderRegisteredPanel(entries) {
-      if (!registerList) {
-        return;
-      }
-      if (!entries.length) {
-        registerList.innerHTML = '<div class="empty-cell">No saved sets.</div>';
-        return;
-      }
-      registerList.innerHTML = entries
-        .slice(0, 20)
-        .map((entry) => renderRegisteredSetRow(entry))
-        .join("");
-
-      Array.from(registerList.querySelectorAll("button[data-open-registered-set]")).forEach((button) => {
-        button.addEventListener("click", () => {
-          const id = String(button.dataset.openRegisteredSet || "").trim();
-          if (!id) {
-            return;
-          }
-          window.location.href = `./registered.html?id=${encodeURIComponent(id)}`;
-        });
-      });
-
-      Array.from(registerList.querySelectorAll("button[data-remove-registered-set]")).forEach((button) => {
-        button.addEventListener("click", async () => {
-          const id = String(button.dataset.removeRegisteredSet || "").trim();
-          if (!id) {
-            return;
-          }
-          removeRegisteredSetById(id);
-          exportMessage.textContent = "Saved set deleted.";
-          await render();
-        });
-      });
-    }
-
-    function openRegisterNameModal() {
-      if (!registerNameModal || !registerNameInput) {
-        return;
-      }
-      if (registerNameError) {
-        registerNameError.hidden = true;
-        registerNameError.textContent = "";
-      }
-      registerNameInput.value = "";
-      registerNameModal.classList.remove("is-hidden");
-      registerNameModal.hidden = false;
-      registerNameInput.focus();
-      registerNameInput.select();
-    }
-
-    function closeRegisterNameModal() {
-      if (!registerNameModal) {
-        return;
-      }
-      registerNameModal.classList.add("is-hidden");
-      registerNameModal.hidden = true;
-      if (registerNameError) {
-        registerNameError.hidden = true;
-        registerNameError.textContent = "";
-      }
-    }
-
-    async function submitRegisterNameModal() {
-      const input = String(registerNameInput?.value || "").trim();
-      if (!input) {
-        if (registerNameError) {
-          registerNameError.hidden = false;
-          registerNameError.textContent = "Enter a set name.";
-        }
-        registerNameInput?.focus();
-        return;
-      }
-      try {
-        const picks = dedupeScannerPicks(sortedScannerPicks(loadScannerPicks()));
-        const entry = registerAllPicks(picks, input);
-        closeRegisterNameModal();
-        exportMessage.textContent = `Saved: ${entry.name}`;
-        await render();
-      } catch (error) {
-        showError(errorBox, error.message);
-      }
-    }
-
-    function bindRegisterNameModalEvents() {
-      registerNameOkButton?.addEventListener("click", (event) => {
-        event.preventDefault();
-        submitRegisterNameModal();
-      });
-      registerNameCancelButton?.addEventListener("click", (event) => {
-        event.preventDefault();
-        closeRegisterNameModal();
-      });
-      registerNameModal?.addEventListener("click", (event) => {
-        if (event.target === registerNameModal) {
-          closeRegisterNameModal();
-        }
-      });
-      registerNameInput?.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          submitRegisterNameModal();
-        }
-      });
-      window.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && registerNameModal && !registerNameModal.hidden) {
-          closeRegisterNameModal();
-        }
-      });
-    }
-  }
-
-  async function initRegisteredPage() {
-    const title = document.getElementById("registeredTitle");
-    const meta = document.getElementById("registeredMeta");
-    const exportMessage = document.getElementById("registeredExportMessage");
-    const exportTradingViewButton = document.getElementById("registeredExportTradingViewButton");
-    const exportHyperButton = document.getElementById("registeredExportHyperButton");
-    const exportList = document.getElementById("registeredExportList");
-    const errorBox = document.getElementById("registeredError");
-    const chartList = document.getElementById("registeredChartList");
-    const tableBody = document.getElementById("registeredTableBody");
-
-    const state = {
-      exportEntries: [],
-      manifest: null,
-      selectedDate: "",
-      bars: 63,
-      timeframe: "daily",
-      set: null,
-    };
-
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const id = String(params.get("id") || "").trim();
-      if (!id) {
-        throw new Error("登録セットIDが指定されていません。");
-      }
-
-      state.set = getRegisteredSetById(id);
-      if (!state.set) {
-        throw new Error("指定された登録セットが見つかりません。");
-      }
-
-      state.manifest = await loadManifest();
-      state.selectedDate = resolveRegisteredSelectedDate(state.set, state.manifest);
-      renderMeta();
-      renderTable();
-      bindExportEvents();
-      await renderCharts();
-      exportMessage.textContent = "登録セットから TradingView 用TXTと HYPER SBI 2 用CSVを生成します。";
-    } catch (error) {
-      showError(errorBox, error.message);
-      if (chartList) {
-        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">登録セットを表示できません。</div>';
-      }
-      if (tableBody) {
-        tableBody.innerHTML = '<tr><td colspan="4" class="empty-cell">登録セットを表示できません。</td></tr>';
-      }
-      if (exportTradingViewButton) {
-        exportTradingViewButton.disabled = true;
-      }
-      if (exportHyperButton) {
-        exportHyperButton.disabled = true;
-      }
-    }
-
-    function renderMeta() {
-      if (title) {
-        title.textContent = String(state.set?.name || "登録セット");
-      }
-      if (meta) {
-        meta.textContent = `${formatPickedDateTime(state.set?.registeredAt)} / ${formatNumber(Number(state.set?.count || 0), 0)}銘柄`;
-      }
-    }
-
-    function renderTable() {
-      const items = dedupeScannerPicks(state.set?.items || []);
-      if (!tableBody) {
-        return;
-      }
-      if (!items.length) {
-        tableBody.innerHTML = '<tr><td colspan="4" class="empty-cell">登録銘柄がありません。</td></tr>';
-        return;
-      }
-      tableBody.innerHTML = items
-        .map(
-          (item) => `
-            <tr>
-              <td>${escapeHtml(item.code)}</td>
-              <td>${renderTickerIdentity(item.code, item.name || "-", { variant: "table", showCode: false })}</td>
-              <td>${escapeHtml(item.market || "-")}</td>
-              <td>${escapeHtml(formatPickedDateTime(item.selectedAt))}</td>
-            </tr>
-          `
-        )
-        .join("");
-    }
-
-    function bindExportEvents() {
-      const items = dedupeScannerPicks(state.set?.items || []);
-      const hasItems = items.length > 0;
-      if (exportTradingViewButton) {
-        exportTradingViewButton.disabled = !hasItems;
-        exportTradingViewButton.addEventListener("click", () => {
-          triggerExportDownloads([buildTradingViewExportEntry(items)]);
-          renderExportEntries(exportList, []);
-          exportMessage.textContent = "TradingView 用TXTをダウンロードしました。";
-        });
-      }
-      if (exportHyperButton) {
-        exportHyperButton.disabled = !hasItems;
-        exportHyperButton.addEventListener("click", () => {
-          const entries = buildHyperExportEntries(items);
-          triggerExportDownloads(entries);
-          renderExportEntries(exportList, []);
-          exportMessage.textContent = `HYPER SBI 2 用CSVを${formatNumber(items.length, 0)}銘柄でダウンロードしました。`;
-        });
-      }
-    }
-
-    async function renderCharts() {
-      if (!chartList) {
-        return;
-      }
-      errorBox.hidden = true;
-      const items = dedupeScannerPicks(state.set?.items || []);
-      if (!items.length) {
-        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">登録銘柄がありません。</div>';
-        return;
-      }
-
-      const failures = [];
-      const loadedResults = await mapWithConcurrency(items, CHART_FETCH_CONCURRENCY, async (item) => {
-        try {
-          const inspected = await loadTickerPayloadWithDiagnostics(item.code, { selectedDate: state.selectedDate });
-          const record = buildPickedRecordFromPayload(item, inspected.payload, state.selectedDate);
-          if (!record) {
-            return { item, status: "invalid", inspected, reason: "日付に一致する価格データなし" };
-          }
-          return { item, status: "fulfilled", inspected, record };
-        } catch (error) {
-          return { item, status: "rejected", reason: error.message || String(error) };
-        }
-      });
-      const baselineShape = loadedResults.find((result) => result.status === "fulfilled" && !result.inspected.validation.issues.length)?.inspected.shape || null;
-      const chartItems = loadedResults.map((result, index) => {
-        if (result.status === "fulfilled" && !result.inspected.validation.issues.length) {
-          return { kind: "success", index, record: result.record, inspected: result.inspected };
-        }
-        const code = result.item.code;
-        if (result.status === "rejected") {
-          failures.push(`${code}: ${result.reason}`);
-          return { kind: "failed", index, code, name: result.item.name, message: result.reason };
-        }
-        const validationIssues = result.inspected.validation.issues.length
-          ? result.inspected.validation.issues.join(", ")
-          : result.reason;
-        console.debug("[ticker-chart:validation]", {
-          code,
-          requestUrl: result.inspected.requestUrl,
-          status: result.inspected.status,
-          responseBody: result.inspected.responseBody.slice(0, 1200),
-          parsedCandleCount: result.inspected.validation.parsedCandleCount,
-          issues: result.inspected.validation.issues,
-          warnings: result.inspected.validation.warnings,
-          shapeDiff: diffShapeAgainstBaseline(baselineShape, result.inspected.shape),
-        });
-        failures.push(`${code}: ${validationIssues}`);
-        return { kind: "failed", index, code, name: result.item.name, message: validationIssues };
-      });
-
-      if (!chartItems.length) {
-        chartList.innerHTML = '<div class="empty-cell picked-chart-empty">チャート表示可能な銘柄がありません。</div>';
-        if (failures.length) {
-          showError(errorBox, `チャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
-        }
-        return;
-      }
-
-      if (failures.length) {
-        showError(errorBox, `一部のチャート読込に失敗: ${failures.slice(0, 3).join(" / ")}`);
-      }
-
-      chartList.innerHTML = chartItems
-        .map((entry) => {
-          if (entry.kind === "success") {
-            return renderRegisteredScannerItem(entry.record, entry.index, state);
-          }
-          return renderChartFetchFailedItem(entry.code, entry.name, entry.index, state, {
-            message: entry.message,
-            linksMarkup: `<a href="${buildTickerUrl(entry.code, state.selectedDate, "")}">個別ページ</a>`,
-          });
-        })
-        .join("");
-
-      chartItems.forEach((entry) => {
-        if (entry.kind !== "success") {
-          return;
-        }
-        const { inspected, record } = entry;
-        renderScannerCompactChart(
-          `registeredChart-${record.code}`,
-          record.code,
-          inspected.payload.ohlcv || [],
-          state.selectedDate,
-          state.bars,
-          { timeframe: state.timeframe, useBarCount: true }
-        );
-        const linksElement = document.getElementById(`registeredLinks-${record.code}`);
-        if (linksElement) {
-          linksElement.innerHTML = renderScannerItemLinks(inspected.payload, record, { selectedDate: state.selectedDate, sort: "code" });
-        }
-      });
-    }
-  }
 
   async function loadManifest() {
-    const payload = await fetchJson(MANIFEST_PATH);
-    if (!Array.isArray(payload.availableDates) || !payload.latestDate) {
-      throw new Error("manifest.json の形式が不正です。");
-    }
-    return payload;
+    return loadManifestData(fetchJson, MANIFEST_PATH);
   }
 
   async function loadThemeOrder() {
-    const payload = await fetchJson(THEME_MAP_PATH);
-    const items = Array.isArray(payload?.themes) ? payload.themes : [];
-    return items
-      .map((item) => String(item?.name || item?.label || "").trim())
-      .filter(Boolean);
+    return loadThemeOrderData(fetchJson, THEME_MAP_PATH);
   }
 
   function snapshotTypeLabel(snapshotType, snapshotStatus) {
@@ -3026,27 +898,15 @@
   }
 
   async function loadOverview(date, timeframe = "daily") {
-    const suffix = timeframe === "weekly" ? "_weekly" : timeframe === "monthly" ? "_monthly" : "";
-    return fetchJson(`./data/overview/${date}/market_pulse${suffix}.json`);
+    return loadOverviewData(fetchJson, date, timeframe);
   }
 
   async function loadRanking(date, key) {
-    const path = `./data/rankings/${date}/${key}.json`;
-    const response = await fetch(path);
-    if (!response.ok) {
-      if (key === "lower_shadow" && response.status === 404) {
-        return { date, ranking: rankingLabel(key), count: 0, items: [] };
-      }
-      if (key === "rebound_signal" && response.status === 404) {
-        return { date, ranking: rankingLabel(key), count: 0, items: [] };
-      }
-      throw new Error(`JSON 読み込み失敗: ${path} (${response.status})`);
-    }
-    return response.json();
+    return loadRankingData(date, key, rankingLabel);
   }
 
   async function loadTickerPayload(code) {
-    return fetchJson(`./data/tickers/${code}.json`);
+    return loadTickerPayloadData(fetchJson, code);
   }
 
   async function loadWatchlist() {
@@ -3109,30 +969,17 @@
   }
 
   function loadScannerPicks() {
-    const raw = localStorage.getItem(SCANNER_PICKS_STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-    } catch (_error) {
-      localStorage.removeItem(SCANNER_PICKS_STORAGE_KEY);
-      return {};
-    }
+    const parsed = readJsonStorage(SCANNER_PICKS_STORAGE_KEY, {});
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   }
 
   function saveScannerPicks(picks) {
-    localStorage.setItem(SCANNER_PICKS_STORAGE_KEY, JSON.stringify(picks));
+    writeJsonStorage(SCANNER_PICKS_STORAGE_KEY, picks);
   }
 
   function loadRegisteredPicks() {
-    const raw = localStorage.getItem(REGISTERED_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
+    const parsed = readJsonStorage(REGISTERED_STORAGE_KEY, []);
     try {
-      const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         if (parsed.every((entry) => entry && typeof entry === "object" && Array.isArray(entry.items))) {
           return parsed
@@ -3179,7 +1026,7 @@
   }
 
   function saveRegisteredPicks(records) {
-    localStorage.setItem(REGISTERED_STORAGE_KEY, JSON.stringify(Array.isArray(records) ? records : []));
+    writeJsonStorage(REGISTERED_STORAGE_KEY, Array.isArray(records) ? records : []);
   }
 
   function removePickByCode(code) {
@@ -3911,24 +1758,6 @@
     `;
   }
 
-  async function fetchJson(path) {
-    try {
-      const response = await fetch(path, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`JSON 読み込み失敗: ${path} (${response.status})`);
-      }
-      return response.json();
-    } catch (error) {
-      if (typeof window !== "undefined" && window.location?.protocol === "file:") {
-        throw new Error("この画面は file:// では開けません。http://127.0.0.1:8010/index.html で開いてください。");
-      }
-      if (error instanceof TypeError && String(error.message || "").includes("Failed to fetch")) {
-        throw new Error("データ取得に失敗しました。http://127.0.0.1:8010/index.html で開いているか確認してください。");
-      }
-      throw error;
-    }
-  }
-
   function compareRecords(left, right, key, direction) {
     const leftValue = left[key];
     const rightValue = right[key];
@@ -4140,81 +1969,6 @@
     if (element.scrollIntoView) {
       element.scrollIntoView({ block: "nearest" });
     }
-  }
-
-  function parseDate(value) {
-    return new Date(`${value}T00:00:00`);
-  }
-
-  function formatDateKey(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
-  function addMonths(date, delta) {
-    const next = new Date(date);
-    next.setMonth(next.getMonth() + delta);
-    return next;
-  }
-
-  function startOfMonth(date) {
-    return new Date(date.getFullYear(), date.getMonth(), 1);
-  }
-
-  function addCalendarMonths(date, delta) {
-    return startOfMonth(addMonths(date, delta));
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-  }
-
-  function formatNumber(value, digits = 2) {
-    if (value == null || Number.isNaN(value)) {
-      return "-";
-    }
-    const numericValue = Number(value);
-    return numericValue.toLocaleString("ja-JP", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: digits,
-    });
-  }
-
-  function formatSignedNumber(value) {
-    if (value == null || Number.isNaN(value)) {
-      return "-";
-    }
-    const sign = value > 0 ? "+" : "";
-    return `${sign}${formatNumber(value)}`;
-  }
-
-  function formatSignedPercent(value) {
-    if (value == null || Number.isNaN(value)) {
-      return "-";
-    }
-    const sign = value > 0 ? "+" : "";
-    return `${sign}${Number(value).toFixed(2)}%`;
-  }
-
-  function formatRatio(value) {
-    if (value == null || Number.isNaN(value)) {
-      return "-";
-    }
-    return `${Number(value).toFixed(2)}x`;
-  }
-
-  function formatPercent(value) {
-    if (value == null || Number.isNaN(value)) {
-      return "-";
-    }
-    return `${Number(value).toFixed(2)}%`;
   }
 
 
@@ -4530,6 +2284,26 @@
     if (sortKey === "watch_candidates") {
       return items.sort((a, b) => compareNullableNumbers(b.watchCandidateScore, a.watchCandidateScore));
     }
+    const strategySortMap = {
+      strategy_minervini: "minervini_trend_template",
+      strategy_stage2: "stan_weinstein_stage2",
+      strategy_turtle: "turtle_donchian_breakout",
+      strategy_canslim: "can_slim",
+      strategy_rsi2: "rsi2_pullback",
+    };
+    if (strategySortMap[sortKey]) {
+      const strategyId = strategySortMap[sortKey];
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(
+            Number((b.strategyScores || {})[strategyId] || 0),
+            Number((a.strategyScores || {})[strategyId] || 0)
+          ) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     return items.sort((a, b) => String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" }));
   }
 
@@ -4586,7 +2360,54 @@
       deviation200: "MA200 Dev",
       lower_shadow: "Lower Shadow",
       watch_candidates: "Watchlist",
+      strategy_minervini: "Minervini",
+      strategy_stage2: "Stage 2",
+      strategy_turtle: "Turtle",
+      strategy_canslim: "CAN SLIM",
+      strategy_rsi2: "RSI(2)",
     }[sortKey] || sortKey;
+  }
+
+  function strategyLabel(strategyId) {
+    return STRATEGY_CONFIG.find((item) => item.key === strategyId)?.label || strategyId;
+  }
+
+  function collectStrategyBadges(record) {
+    const matches = Array.isArray(record?.strategyMatches) ? record.strategyMatches : [];
+    return matches.map((strategyId) => ({
+      id: strategyId,
+      label: strategyLabel(strategyId),
+      score: Number((record?.strategyScores || {})[strategyId] || 0),
+    }));
+  }
+
+  function renderStrategyBadges(record, options = {}) {
+    const badges = collectStrategyBadges(record);
+    if (!badges.length) {
+      return options.empty || "";
+    }
+    return badges
+      .map((badge) => `<span class="scanner-stop-high-badge scanner-stop-high-badge--strategy">${escapeHtml(badge.label)}</span>`)
+      .join("");
+  }
+
+  function renderStrategyReasons(record, options = {}) {
+    const matches = Array.isArray(record?.strategyMatches) ? record.strategyMatches : [];
+    if (!matches.length) {
+      return options.empty || "";
+    }
+    const limit = Number(options.limit || 4);
+    const lines = [];
+    matches.forEach((strategyId) => {
+      const reasons = (record?.strategyReasons || {})[strategyId] || [];
+      reasons.slice(0, limit).forEach((reason) => {
+        lines.push(`<li>${escapeHtml(`${strategyLabel(strategyId)}: ${reason}`)}</li>`);
+      });
+    });
+    if (!lines.length) {
+      return options.empty || "";
+    }
+    return `<ul class="strategy-reason-list">${lines.join("")}</ul>`;
   }
 
   function filterByTurnover(records, turnoverThreshold) {
@@ -4895,6 +2716,8 @@
     const stopHighBadge = hasStopHighBadge
       ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
       : "";
+    const strategyBadges = renderStrategyBadges(record);
+    const strategyReasons = renderStrategyReasons(record, { limit: 2 });
     return `
       <article class="scanner-item${stopHighClass}">
         <div class="scanner-rank-table">
@@ -4920,6 +2743,7 @@
                       variant: "scanner",
                     })}
                     ${stopHighBadge}
+                    ${strategyBadges ? ` ${strategyBadges}` : ""}
                   </div>
                 </td>
                 <td class="scanner-trade-cell">
@@ -4941,6 +2765,7 @@
         <div class="scanner-item-chart-wrap">
           <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
+        ${strategyReasons ? `<div class="scanner-item-strategy-reasons">${strategyReasons}</div>` : ""}
         <div class="scanner-item-links">
           <div id="scanLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
             <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">Detail</a>
@@ -5007,23 +2832,6 @@
       )
       .join("");
   }
-
-  const TICKER_NAME_EXACT_ALIASES = new Map([
-    ["フジ・メディア・ホールディングス", "フジHD"],
-    ["トリドールホールディングス", "トリドールHD"],
-    ["三井倉庫ホールディングス", "三井倉庫HD"],
-    ["Ｆｉｎａｔｅｘｔホールディングス", "Finatext HD"],
-    ["日本電信電話", "NTT"],
-    ["東京電力ホールディングス", "東京電力HD"],
-    ["デリカフーズホールディングス", "デリカフーズHD"],
-    ["Ｇｒｅｅｎ　Ｅａｒｔｈ　Ｉｎｓｔｉｔｕｔｅ", "Green Earth Inst."],
-  ]);
-
-  const TICKER_NAME_REPLACEMENTS = [
-    [/ホールディングス/g, "HD"],
-    [/ホールディング/g, "HD"],
-    [/ＨＤ/g, "HD"],
-  ];
 
   function abbreviateTickerName(name) {
     const fullName = String(name || "").trim();
@@ -5564,7 +3372,7 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, rangeMonths, timeframe, deviationFilters = {}) {
+  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, rangeMonths, timeframe, deviationFilters = {}, selectedStrategies = []) {
     const params = new URLSearchParams(window.location.search);
     params.set("date", date);
     params.set("sort", sort);
@@ -5582,6 +3390,11 @@
       params.set("theme", theme);
     } else {
       params.delete("theme");
+    }
+    if (selectedStrategies.length) {
+      params.set("strategy", selectedStrategies[0]);
+    } else {
+      params.delete("strategy");
     }
     params.set("turnover", String(turnover));
     DEVIATION_SORT_KEYS.forEach((key) => {
@@ -5622,9 +3435,6 @@
   function normalizeDeviationFilterInputMode(value) {
     return ["gte", "lte", "between"].includes(String(value || "").trim()) ? String(value || "").trim() : "";
   }
-
-  const DEVIATION_SORT_KEYS = ["deviation25", "deviation75", "deviation200"];
-  const DEVIATION_URL_KEY_MAP = { deviation25: "dev25", deviation75: "dev75", deviation200: "dev200" };
 
   function isDeviationSort(sortKey) {
     return DEVIATION_SORT_KEYS.includes(sortKey);
@@ -5816,13 +3626,6 @@
     return results;
   }
 
-  function roundNumber(value, digits = 4) {
-    if (value == null || Number.isNaN(value)) {
-      return null;
-    }
-    return Number(value.toFixed(digits));
-  }
-
   function weekBucketKey(dateValue) {
     const date = parseDate(dateValue);
     const offset = (date.getDay() + 6) % 7;
@@ -5885,6 +3688,11 @@
       deviation200: "deviation200",
       lower_shadow: "lower_shadow",
       watch_candidates: "watch_candidates",
+      strategy_minervini: "strategy_minervini",
+      strategy_stage2: "strategy_stage2",
+      strategy_turtle: "strategy_turtle",
+      strategy_canslim: "strategy_canslim",
+      strategy_rsi2: "strategy_rsi2",
       code: "",
     }[sortKey] || "";
   }

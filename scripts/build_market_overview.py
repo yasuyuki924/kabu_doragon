@@ -7,17 +7,14 @@ from common import (
     MANIFEST_JSON,
     OVERVIEW_DIR,
     build_manifest_payload,
-    discover_available_dates,
     load_daily_records,
-    iter_ticker_payloads,
-    load_update_state,
     parse_codes,
-    select_dates,
     summarize_sector_strength,
     summarize_tag_counts,
     summarize_theme_counts,
     write_json,
 )
+from src.app.shared_view_data import load_records_by_date, resolve_explicit_dates, resolve_selected_dates
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,47 +32,14 @@ def main() -> int:
     codes = parse_codes(args.codes)
     if codes:
         print(f"warning: partial overview build for {len(codes)} code(s); shared overview/manifest JSON will be overwritten")
-    all_dates = discover_available_dates()
-    explicit_dates = parse_codes(args.dates)
-    if args.dates == "__UPDATE_STATE__":
-        explicit_dates = [str(item) for item in load_update_state().get("updatedDates") or []]
-    selected_dates = [date_value for date_value in (explicit_dates or []) if date_value in set(all_dates)]
-    if not selected_dates:
-        if args.from_date:
-            selected_dates = [date_value for date_value in all_dates if date_value >= args.from_date]
-            if args.end_date:
-                selected_dates = [date_value for date_value in selected_dates if date_value <= args.end_date]
-        else:
-            selected_dates = select_dates(all_dates, args.days, args.end_date)
-    selected_date_set = set(selected_dates)
-    per_date: dict[str, list[dict[str, object]]] = {date_value: [] for date_value in selected_dates}
-    missing_dates: list[str] = []
-    for date_value in selected_dates:
-        cached = load_daily_records(date_value, codes)
-        if cached is None:
-            missing_dates.append(date_value)
-            continue
-        per_date[date_value] = cached
-
-    if missing_dates:
-        payloads = iter_ticker_payloads(codes)
-        missing_date_set = set(missing_dates)
-        for payload in payloads:
-            meta = {
-                "code": payload["code"],
-                "name": payload["name"],
-                "market": payload["market"],
-                "sector": payload.get("sector", ""),
-                "industry": payload.get("industry", ""),
-                "themes": payload.get("themes", []),
-                "tags": payload.get("tags", []),
-                "links": payload.get("links", {}),
-            }
-            for row in payload.get("ohlcv", []):
-                date_value = str(row["date"])
-                if date_value not in missing_date_set or date_value not in selected_date_set:
-                    continue
-                per_date[date_value].append({**meta, **row})
+    explicit_dates = resolve_explicit_dates(args.dates)
+    all_dates, selected_dates = resolve_selected_dates(
+        days=args.days,
+        end_date=args.end_date,
+        from_date=args.from_date,
+        explicit_dates=explicit_dates,
+    )
+    per_date = load_records_by_date(selected_dates, codes)
 
     for date_value in selected_dates:
         for suffix in ["", "_weekly", "_monthly"]:

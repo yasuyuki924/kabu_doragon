@@ -83,9 +83,9 @@ PY
 )
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] OK: AM snapshot reflected ${update_summary} fetch=${fetch_elapsed}s build=${build_elapsed}s total=${total_elapsed}s"
   exit 0
+else
+  check_status=$?
 fi
-
-check_status=$?
 if [ "${check_status}" -eq "${PENDING_EXIT_CODE}" ]; then
   total_elapsed=$("${PYTHON_BIN}" - <<PY
 from time import perf_counter
