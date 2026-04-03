@@ -101,7 +101,14 @@
           themeOrder: [],
           visibleRecords: [],
           selectedStrategies: [],
+          chartObserver: null,
+          chartPayloadCache: new Map(),
+          chartRequestCache: new Map(),
+          chartRenderedCodes: new Set(),
+          chartBaselineShape: null,
         };
+
+        let stopAutoRefreshPolling = null;
       
         if (stickyDatePopover && stickyDatePopover.parentElement !== document.body) {
           document.body.appendChild(stickyDatePopover);
@@ -530,7 +537,7 @@
             timeframePopover.classList.toggle("is-open", isOpen);
           }
         }
-      
+
         updateTimeframeUI();
         updateStickyTimeframeUI();
         updateRangeChip();
@@ -678,6 +685,9 @@
               updateStickyDateUi();
             }
           }
+          if (!(event.target instanceof Element) || !event.target.closest("[data-strategy-bar]")) {
+            closeAllStrategyPopovers();
+          }
         });
       
         window.addEventListener("keydown", (event) => {
@@ -695,6 +705,7 @@
               state.stickyDateOpen = false;
               updateStickyDateUi();
             }
+            closeAllStrategyPopovers();
           }
         });
       
@@ -807,11 +818,11 @@
             await render();
           });
         }
-        refreshButton?.addEventListener("click", async () => {
+        async function refreshIndexScanner(nextManifest = null) {
           state.isRefreshing = true;
           updateHeaderStatus();
           await runRefreshAction(refreshButton, errorBox, async () => {
-            state.manifest = state.pendingManifest || await loadManifest();
+            state.manifest = nextManifest || state.pendingManifest || await loadManifest();
             state.pendingManifest = null;
             state.hasFreshUpdate = false;
             await loadDate(state.selectedDate || state.manifest.latestDate);
@@ -820,6 +831,10 @@
           state.isRefreshing = false;
           triggerHeaderStatusFlash();
           updateHeaderStatus();
+        }
+
+        refreshButton?.addEventListener("click", async () => {
+          await refreshIndexScanner();
         });
       
         try {
@@ -961,6 +976,193 @@
             </span>
           `;
         }
+
+        function closeStrategyPopover(card) {
+          if (!card) {
+            return;
+          }
+          const popover = card.querySelector("[data-strategy-popover]");
+          if (popover) {
+            popover.hidden = true;
+          }
+          card.querySelectorAll("[data-strategy-badge]").forEach((button) => {
+            button.classList.remove("is-active");
+            button.setAttribute("aria-expanded", "false");
+          });
+          card.querySelectorAll("[data-strategy-panel]").forEach((panel) => {
+            panel.hidden = true;
+          });
+        }
+
+        function closeAllStrategyPopovers() {
+          list?.querySelectorAll(".scanner-item").forEach((card) => closeStrategyPopover(card));
+        }
+
+        function disconnectChartObserver() {
+          if (state.chartObserver) {
+            state.chartObserver.disconnect();
+            state.chartObserver = null;
+          }
+        }
+
+        function renderChartLoadingState(code, title = "Chart standby", message = "表示領域に入ると読み込みます") {
+          const element = document.getElementById(`scanChart-${code}`);
+          if (!element) {
+            return;
+          }
+          element.innerHTML = `<div class="chart-inline-error chart-placeholder">${escapeHtml(title)}<br /><span>${escapeHtml(message)}</span></div>`;
+        }
+
+        function getChartCacheKey(record) {
+          return `${state.timeframe}:${state.selectedDate}:${record.code}`;
+        }
+
+        async function ensureScannerCardChart(record) {
+          const cacheKey = getChartCacheKey(record);
+          if (state.chartRenderedCodes.has(cacheKey)) {
+            return;
+          }
+          const chartElementId = `scanChart-${record.code}`;
+          const linksElement = document.getElementById(`scanLinks-${record.code}`);
+          const chartElement = document.getElementById(chartElementId);
+          if (!chartElement || !linksElement) {
+            return;
+          }
+
+          let inspected = state.chartPayloadCache.get(cacheKey);
+          if (!inspected) {
+            if (!state.chartRequestCache.has(cacheKey)) {
+              state.chartRequestCache.set(
+                cacheKey,
+                loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate })
+                  .then((value) => {
+                    state.chartPayloadCache.set(cacheKey, value);
+                    return value;
+                  })
+                  .finally(() => {
+                    state.chartRequestCache.delete(cacheKey);
+                  })
+              );
+            }
+            try {
+              inspected = await state.chartRequestCache.get(cacheKey);
+            } catch (error) {
+              renderChartFailure(chartElementId, "データ取得失敗");
+              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${error?.message || error}`);
+              return;
+            }
+          }
+
+          const { payload, validation, shape, requestUrl, status, responseBody } = inspected;
+          if (validation.issues.length) {
+            console.debug("[ticker-chart:validation]", {
+              code: record.code,
+              requestUrl,
+              status,
+              responseBody: responseBody.slice(0, 1200),
+              parsedCandleCount: validation.parsedCandleCount,
+              issues: validation.issues,
+              warnings: validation.warnings,
+              shapeDiff: diffShapeAgainstBaseline(state.chartBaselineShape, shape),
+            });
+            renderChartFailure(chartElementId, "データ取得失敗");
+            showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
+            return;
+          }
+
+          if (!state.chartBaselineShape) {
+            state.chartBaselineShape = shape;
+          }
+
+          renderScannerCompactChart(chartElementId, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
+            timeframe: state.timeframe,
+            useBarCount: false,
+          });
+          linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+          state.chartRenderedCodes.add(cacheKey);
+        }
+
+        function observeScannerCharts(records) {
+          disconnectChartObserver();
+          if (!("IntersectionObserver" in window)) {
+            records.slice(0, 8).forEach((record) => {
+              void ensureScannerCardChart(record);
+            });
+            return;
+          }
+          state.chartObserver = new IntersectionObserver(
+            (entries) => {
+              entries.forEach((entry) => {
+                if (!entry.isIntersecting) {
+                  return;
+                }
+                const code = String(entry.target.getAttribute("data-chart-code") || "");
+                const record = records.find((item) => String(item.code) === code);
+                if (!record) {
+                  state.chartObserver?.unobserve(entry.target);
+                  return;
+                }
+                state.chartObserver?.unobserve(entry.target);
+                void ensureScannerCardChart(record);
+              });
+            },
+            {
+              root: null,
+              rootMargin: "240px 0px 360px",
+              threshold: 0.05,
+            }
+          );
+
+          records.forEach((record, index) => {
+            const chartElement = document.getElementById(`scanChart-${record.code}`);
+            if (!chartElement) {
+              return;
+            }
+            chartElement.setAttribute("data-chart-code", String(record.code));
+            if (index < 4) {
+              void ensureScannerCardChart(record);
+              return;
+            }
+            renderChartLoadingState(record.code);
+            state.chartObserver.observe(chartElement);
+          });
+        }
+
+        function bindStrategyPopoverEvents() {
+          list?.querySelectorAll("[data-strategy-badge]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const badge = event.currentTarget;
+              if (!(badge instanceof HTMLElement)) {
+                return;
+              }
+              const card = badge.closest(".scanner-item");
+              const popover = card?.querySelector("[data-strategy-popover]");
+              const strategyId = badge.dataset.strategyBadge || "";
+              const targetPanel = [...(card?.querySelectorAll("[data-strategy-panel]") || [])].find(
+                (panel) => panel.getAttribute("data-strategy-panel") === strategyId
+              );
+              if (!card || !popover || !targetPanel) {
+                return;
+              }
+              const alreadyOpen = badge.classList.contains("is-active") && !popover.hidden;
+              closeAllStrategyPopovers();
+              if (alreadyOpen) {
+                return;
+              }
+              popover.hidden = false;
+              card.querySelectorAll("[data-strategy-panel]").forEach((panel) => {
+                panel.hidden = panel !== targetPanel;
+              });
+              card.querySelectorAll("[data-strategy-badge]").forEach((item) => {
+                const isActive = item === badge;
+                item.classList.toggle("is-active", isActive);
+                item.setAttribute("aria-expanded", isActive ? "true" : "false");
+              });
+            });
+          });
+        }
       
         function triggerHeaderStatusFlash() {
           if (state.headerStatusFlashTimer) {
@@ -980,7 +1182,8 @@
             const latestManifest = await loadManifest();
             if (isManifestNewer(latestManifest, state.manifest)) {
               state.pendingManifest = latestManifest;
-              state.hasFreshUpdate = true;
+              state.hasFreshUpdate = false;
+              await refreshIndexScanner(latestManifest);
             } else {
               state.pendingManifest = null;
               state.hasFreshUpdate = false;
@@ -991,20 +1194,32 @@
         }
       
         function startManifestPolling() {
+          if (stopAutoRefreshPolling) {
+            stopAutoRefreshPolling();
+          }
           if (state.manifestPollId) {
             clearInterval(state.manifestPollId);
           }
-          state.manifestPollId = window.setInterval(() => {
-            if (document.visibilityState === "visible") {
-              void checkForManifestUpdate();
-            }
-          }, 30000);
+          stopAutoRefreshPolling = startAutoRefreshPolling({
+            getCurrentManifest: () => state.manifest,
+            onRefresh: async (latestManifest) => {
+              if (state.isRefreshing) {
+                state.pendingManifest = latestManifest;
+                return;
+              }
+              state.pendingManifest = latestManifest;
+              await checkForManifestUpdate();
+            },
+          });
         }
       
         async function render() {
           errorBox.hidden = true;
+          disconnectChartObserver();
           list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
           state.picks = loadScannerPicks();
+          state.chartRenderedCodes = new Set();
+          state.chartBaselineShape = null;
           updateIndexHeaderActions();
           renderTagOptions();
           renderThemeOptions();
@@ -1101,53 +1316,8 @@
               toggleScannerPick(record, checkbox.checked, state);
             });
           });
-      
-          const results = await mapWithConcurrency(filtered, CHART_FETCH_CONCURRENCY, async (record) => {
-            try {
-              return {
-                record,
-                status: "fulfilled",
-                value: await loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate }),
-              };
-            } catch (error) {
-              return { record, status: "rejected", reason: error };
-            }
-          });
-      
-          const baselineShape = results.find((result) => result.status === "fulfilled" && !result.value.validation.issues.length)?.value.shape || null;
-      
-          results.forEach((result) => {
-            const record = result.record;
-            if (result.status === "rejected") {
-              renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
-              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${result.reason?.message}`);
-              return;
-            }
-            const { payload, validation, shape, requestUrl, status, responseBody } = result.value;
-            if (validation.issues.length) {
-              console.debug("[ticker-chart:validation]", {
-                code: record.code,
-                requestUrl,
-                status,
-                responseBody: responseBody.slice(0, 1200),
-                parsedCandleCount: validation.parsedCandleCount,
-                issues: validation.issues,
-                warnings: validation.warnings,
-                shapeDiff: diffShapeAgainstBaseline(baselineShape, shape),
-              });
-              renderChartFailure(`scanChart-${record.code}`, "データ取得失敗");
-              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
-              return;
-            }
-            renderScannerCompactChart(`scanChart-${record.code}`, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
-              timeframe: state.timeframe,
-              useBarCount: false,
-            });
-            const linksElement = document.getElementById(`scanLinks-${record.code}`);
-            if (linksElement) {
-              linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
-            }
-          });
+          bindStrategyPopoverEvents();
+          observeScannerCharts(filtered);
         }
 
         stickyStrategySelect?.addEventListener("change", () => {

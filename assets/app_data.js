@@ -39,6 +39,62 @@
     return fetchJson(`./data/tickers/${code}.json`);
   }
 
+  function normalizeYahooMetric(value) {
+    return String(value || "")
+      .replace(/\[用語\]\([^)]+\)/g, "")
+      .replace(/\[[^\]]+\]\([^)]+\)/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function extractYahooMetric(text, pattern) {
+    const matched = text.match(pattern);
+    return normalizeYahooMetric(matched?.[1] || "");
+  }
+
+  function parseYahooFinanceMarkdown(code, text) {
+    const symbol = `${String(code || "").replace(/\.T$/i, "")}.T`;
+    const sourceUrl = `https://finance.yahoo.co.jp/quote/${symbol}`;
+    return {
+      code: String(code || ""),
+      symbol,
+      sourceUrl,
+      marketCap: extractYahooMetric(text, /時価総額[\s\S]{0,120}?\s([0-9,]+\s百万円(?:\([^)]+\))?)/),
+      sharesOutstanding: extractYahooMetric(text, /発行済株式数[\s\S]{0,120}?\s([0-9,]+\s株(?:\([^)]+\))?)/),
+      dividendYield: extractYahooMetric(text, /配当利回り（会社予想）[\s\S]{0,120}?\s([0-9.\-]+%|---\(--:--\)|---)/),
+      dividendPerShare: extractYahooMetric(text, /1株配当（会社予想）[\s\S]{0,120}?\s([0-9.\-]+(?:\([^)]+\))?|---(?:\([^)]+\))?)/),
+      per: extractYahooMetric(text, /PER（会社予想）[\s\S]{0,120}?(?:\(連\))?\s*([0-9.]+\s倍)/),
+      pbr: extractYahooMetric(text, /PBR（実績）[\s\S]{0,120}?(?:\(連\))?\s*([0-9.]+\s倍)/),
+      eps: extractYahooMetric(text, /EPS（会社予想）[\s\S]{0,120}?(?:\(連\))?\s*([0-9.]+(?:\([^)]+\))?)/),
+      bps: extractYahooMetric(text, /BPS（実績）[\s\S]{0,120}?(?:\(連\))?\s*([0-9.]+)/),
+      roe: extractYahooMetric(text, /ROE（実績）[\s\S]{0,120}?(?:\(連\))?\s*([0-9.]+%)/),
+      equityRatio: extractYahooMetric(text, /自己資本比率（実績）[\s\S]{0,120}?(?:\(連\))?\s*([0-9.]+%)/),
+      minPurchase: extractYahooMetric(text, /最低購入代金[\s\S]{0,120}?\s([0-9,]+(?:\([^)]+\))?)/),
+      unitShares: extractYahooMetric(text, /単元株数[\s\S]{0,120}?\s([0-9,]+\s株)/),
+      marginRatio: extractYahooMetric(text, /信用倍率[\s\S]{0,120}?\s([0-9.]+\s倍(?:\([^)]+\))?)/),
+      nextEarningsDate: extractYahooMetric(text, /次回の決算発表日は([^\n。]+(?:頃)?)/),
+      earningsSummary: extractYahooMetric(text, /株式会社[^\n]*当中間期業績[^\n]*。/),
+    };
+  }
+
+  async function loadYahooFinanceProfileData(code) {
+    const normalizedCode = String(code || "").trim().replace(/\.T$/i, "");
+    if (!normalizedCode) {
+      throw new Error("Yahoo Finance 取得用のコードがありません。");
+    }
+    const url = `https://r.jina.ai/http://finance.yahoo.co.jp/quote/${encodeURIComponent(normalizedCode)}.T`;
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Yahoo Finance 取得失敗: ${response.status}`);
+      }
+      const text = await response.text();
+      return parseYahooFinanceMarkdown(normalizedCode, text);
+    } catch (error) {
+      throw new Error(`Yahoo Finance 指標の取得に失敗しました: ${error.message}`);
+    }
+  }
+
   function readJsonStorage(key, fallbackValue) {
     const raw = localStorage.getItem(key);
     if (!raw) {
@@ -62,6 +118,7 @@
     loadRankingData,
     loadThemeOrderData,
     loadTickerPayloadData,
+    loadYahooFinanceProfileData,
     readJsonStorage,
     writeJsonStorage,
   });

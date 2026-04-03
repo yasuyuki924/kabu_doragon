@@ -18,6 +18,7 @@
       loadManifest,
       loadTickerNote,
       loadTickerPayload,
+      loadYahooFinanceProfile,
       loadRanking,
       normalizeTickerChartMode,
       rankingLabel,
@@ -29,6 +30,7 @@
       resolvePickerDate,
       runRefreshAction,
       showError,
+      startAutoRefreshPolling,
       syncSnapshotStatusUi,
       syncTickerUrl,
       updatePeriodButtonState,
@@ -79,6 +81,16 @@
     const tickerCardLinks = document.getElementById("tickerCardLinks");
     const strategyBadges = document.getElementById("strategyBadges");
     const strategyReasons = document.getElementById("strategyReasons");
+    const yahooFundMeta = document.getElementById("yahooFundMeta");
+    const yahooMarketCap = document.getElementById("yahooMarketCap");
+    const yahooSharesOutstanding = document.getElementById("yahooSharesOutstanding");
+    const yahooValuation = document.getElementById("yahooValuation");
+    const yahooPerShare = document.getElementById("yahooPerShare");
+    const yahooProfitability = document.getElementById("yahooProfitability");
+    const yahooDividendUnit = document.getElementById("yahooDividendUnit");
+    const yahooMinPurchase = document.getElementById("yahooMinPurchase");
+    const yahooMarginRatio = document.getElementById("yahooMarginRatio");
+    const yahooEarningsSummary = document.getElementById("yahooEarningsSummary");
     const backLink = document.querySelector(".eyebrow a");
 
     const params = new URLSearchParams(window.location.search);
@@ -96,7 +108,10 @@
       rankingItem: null,
       selectedChartMode: normalizeTickerChartMode(params.get("chart") || "3m"),
       selectedDate: "",
+      yahooProfile: null,
     };
+
+    let stopAutoRefreshPolling = null;
 
     periodButtons.innerHTML = TICKER_CHART_MODES.map(
       (mode) =>
@@ -139,10 +154,12 @@
       renderTicker();
     });
 
-    refreshButton?.addEventListener("click", async () => {
+    async function refreshTickerPage(nextManifest = null) {
       await runRefreshAction(refreshButton, errorBox, async () => {
-        state.manifest = await loadManifest();
-        state.payload = await loadTickerPayload(code);
+        const [manifest, payload] = await Promise.all([nextManifest || loadManifest(), loadTickerPayload(code)]);
+        state.manifest = manifest;
+        state.payload = payload;
+        state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
         const availableDates = state.payload.ohlcv.map((row) => row.date);
         state.selectedDate = resolveAvailableDate(state.selectedDate || state.manifest.latestDate, availableDates);
         tickerDatePicker.min = availableDates[0];
@@ -150,17 +167,29 @@
         await refreshRankContext();
         renderTicker();
       });
+    }
+
+    refreshButton?.addEventListener("click", async () => {
+      await refreshTickerPage();
     });
 
     try {
-      state.manifest = await loadManifest();
-      state.payload = await loadTickerPayload(code);
+      const [manifest, payload] = await Promise.all([loadManifest(), loadTickerPayload(code)]);
+      state.manifest = manifest;
+      state.payload = payload;
+      state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
       const availableDates = state.payload.ohlcv.map((row) => row.date);
       state.selectedDate = resolveAvailableDate(params.get("date") || state.manifest.latestDate, availableDates);
       tickerDatePicker.min = availableDates[0];
       tickerDatePicker.max = availableDates.at(-1);
       await refreshRankContext();
       renderTicker();
+      stopAutoRefreshPolling = startAutoRefreshPolling({
+        getCurrentManifest: () => state.manifest,
+        onRefresh: async (latestManifest) => {
+          await refreshTickerPage(latestManifest);
+        },
+      });
     } catch (error) {
       showError(errorBox, error.message);
     }
@@ -233,6 +262,56 @@
       });
     }
 
+    function setYahooFundamentals(profile) {
+      const metrics = profile || {};
+      if (yahooFundMeta) {
+        yahooFundMeta.textContent = profile
+          ? [profile.nextEarningsDate ? `次回決算 ${profile.nextEarningsDate}` : null, "Yahoo Finance JP"]
+              .filter(Boolean)
+              .join(" / ")
+          : "Yahoo Finance JP / 取得失敗";
+      }
+      if (yahooMarketCap) {
+        yahooMarketCap.textContent = metrics.marketCap || "-";
+      }
+      if (yahooSharesOutstanding) {
+        yahooSharesOutstanding.textContent = metrics.sharesOutstanding || "-";
+      }
+      if (yahooValuation) {
+        yahooValuation.textContent =
+          metrics.per || metrics.pbr
+            ? `PER ${metrics.per || "-"} / PBR ${metrics.pbr || "-"}`
+            : "-";
+      }
+      if (yahooPerShare) {
+        yahooPerShare.textContent =
+          metrics.eps || metrics.bps
+            ? `EPS ${metrics.eps || "-"} / BPS ${metrics.bps || "-"}`
+            : "-";
+      }
+      if (yahooProfitability) {
+        yahooProfitability.textContent =
+          metrics.roe || metrics.equityRatio
+            ? `ROE ${metrics.roe || "-"} / 自己資本 ${metrics.equityRatio || "-"}`
+            : "-";
+      }
+      if (yahooDividendUnit) {
+        yahooDividendUnit.textContent =
+          metrics.dividendYield || metrics.unitShares || metrics.dividendPerShare
+            ? `利回り ${metrics.dividendYield || "-"} / 1株配当 ${metrics.dividendPerShare || "-"} / ${metrics.unitShares || "-"}`
+            : "-";
+      }
+      if (yahooMinPurchase) {
+        yahooMinPurchase.textContent = metrics.minPurchase || "-";
+      }
+      if (yahooMarginRatio) {
+        yahooMarginRatio.textContent = metrics.marginRatio || "-";
+      }
+      if (yahooEarningsSummary) {
+        yahooEarningsSummary.textContent = metrics.earningsSummary || "Yahoo Finance JP から取得した参考指標を表示します。";
+      }
+    }
+
     function renderTicker() {
       const rows = state.payload.ohlcv || [];
       const selectedIndex = findSelectedIndex(rows, state.selectedDate);
@@ -287,6 +366,7 @@
       profileSector.textContent = state.payload.sector || "-";
       profileIndustry.textContent = state.payload.industry || "-";
       profileTags.textContent = state.payload.tags?.length ? state.payload.tags.join(", ") : "-";
+      setYahooFundamentals(state.yahooProfile);
       if (strategyBadges) {
         strategyBadges.innerHTML = renderStrategyBadges(row, { empty: '<span class="meta">一致なし</span>' });
       }

@@ -30,6 +30,7 @@
       renderScannerItemLinks,
       runRefreshAction,
       showError,
+      startAutoRefreshPolling,
       sortedScannerPicks,
       triggerExportDownloads,
     } = deps;
@@ -65,6 +66,8 @@
       sort: "code",
       registered: [],
     };
+
+    let stopAutoRefreshPolling = null;
 
     bindRegisterNameModalEvents();
     closeRegisterNameModal();
@@ -102,18 +105,28 @@
       registerAllButton?.click();
     });
 
-    refreshButton?.addEventListener("click", async () => {
+    async function refreshPickedPage(nextManifest = null) {
       await runRefreshAction(refreshButton, errorBox, async () => {
-        state.manifest = await loadManifest();
+        state.manifest = nextManifest || await loadManifest();
         state.selectedDate = String(state.manifest.latestDate || "");
         await render();
       });
+    }
+
+    refreshButton?.addEventListener("click", async () => {
+      await refreshPickedPage();
     });
 
     try {
       state.manifest = await loadManifest();
       state.selectedDate = String(state.manifest.latestDate || "");
       await render();
+      stopAutoRefreshPolling = startAutoRefreshPolling({
+        getCurrentManifest: () => state.manifest,
+        onRefresh: async (latestManifest) => {
+          await refreshPickedPage(latestManifest);
+        },
+      });
     } catch (error) {
       showError(errorBox, error.message);
     }

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>一覧カード試作 2列版 | scanner_card_sample_grid</title>
+    <link rel="stylesheet" href="./assets/scanner_card_sample_grid.css?v=1.1.1" />
+  </head>
+  <body class="scanner-grid-sample-page">
+    <main class="scanner-grid-sample-shell">
+      <header class="scanner-grid-sample-header">
+        <p class="scanner-grid-sample-eyebrow">一覧カード 2列モック</p>
+        <h1 class="scanner-grid-sample-title">Compact v3 / Cleaner Grid Sample</h1>
+        <p class="scanner-grid-sample-lead">
+          表ヘッダを捨てて、上段を `順位 + コード / facts / 価格` に整理した 2 列一覧サンプルです。
+          strategy 情報は Signals 側に寄せ、高値と安値は `H / L` で集約しています。
+        </p>
+      </header>
+
+      <section class="scanner-grid-list">
+        <article class="scanner-grid-card">
+          <section class="scanner-grid-card-hero">
+            <div class="scanner-grid-card-left">
+              <div class="scanner-grid-rank">
+                <span class="scanner-grid-rank-label">RANK</span>
+                <strong>3</strong>
+              </div>
+              <div class="scanner-grid-id">
+                <div class="scanner-grid-code">9044</div>
+                <div class="scanner-grid-name">Minervini</div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-center">
+              <div class="scanner-grid-facts">
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Volume</span>
+                  <strong>4,346,100</strong>
+                </div>
+                <div class="scanner-grid-fact scanner-grid-fact--hl">
+                  <span class="scanner-grid-fact-label">Range</span>
+                  <div class="scanner-grid-hl-row">
+                    <span class="scanner-grid-hl-chip">H</span>
+                    <strong>3,173</strong>
+                    <span class="scanner-grid-hl-separator">/</span>
+                    <span class="scanner-grid-hl-chip scanner-grid-hl-chip--low">L</span>
+                    <strong>2,970.5</strong>
+                  </div>
+                </div>
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Date</span>
+                  <strong>3/27 (金)</strong>
+                </div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-right">
+              <div class="scanner-grid-price-label">Close</div>
+              <div class="scanner-grid-price">3,151</div>
+              <div class="scanner-grid-change is-up">+143 +4.75%</div>
+            </div>
+          </section>
+
+          <section class="scanner-grid-chart">
+            <svg viewBox="0 0 900 320" aria-label="sample chart">
+              <rect x="0" y="0" width="900" height="320" rx="18" class="chart-bg" />
+              <g class="chart-grid">
+                <line x1="56" y1="52" x2="848" y2="52" />
+                <line x1="56" y1="110" x2="848" y2="110" />
+                <line x1="56" y1="168" x2="848" y2="168" />
+                <line x1="56" y1="226" x2="848" y2="226" />
+                <line x1="56" y1="284" x2="848" y2="284" />
+              </g>
+              <line x1="56" y1="74" x2="848" y2="74" class="chart-resistance" />
+              <polyline class="chart-ma chart-ma-25" points="56,240 174,236 300,228 424,188 548,160 674,136 848,126" />
+              <polyline class="chart-ma chart-ma-75" points="56,176 174,178 300,181 424,184 548,182 674,178 848,172" />
+              <polyline class="chart-ma chart-ma-200" points="56,220 174,224 300,226 424,224 548,220 674,214 848,206" />
+              <polyline class="chart-price" points="56,232 126,264 210,280 302,274 392,254 474,178 566,132 654,118 736,110 800,106 848,66" />
+            </svg>
+          </section>
+
+          <details class="scanner-grid-signals">
+            <summary>Signals 4</summary>
+            <ul>
+              <li>株価が50日・150日・200日線の上</li>
+              <li>150日線の上で推移</li>
+              <li>20日高値更新</li>
+              <li>売買代金が増加</li>
+            </ul>
+          </details>
+
+          <footer class="scanner-grid-actions">
+            <div class="scanner-grid-links">
+              <a href="#">Detail</a>
+              <a href="#">Yahoo</a>
+            </div>
+            <label class="scanner-grid-pick">
+              <input type="checkbox" />
+              <span>Pick</span>
+            </label>
+          </footer>
+        </article>
+
+        <article class="scanner-grid-card">
+          <section class="scanner-grid-card-hero">
+            <div class="scanner-grid-card-left">
+              <div class="scanner-grid-rank">
+                <span class="scanner-grid-rank-label">RANK</span>
+                <strong>7</strong>
+              </div>
+              <div class="scanner-grid-id">
+                <div class="scanner-grid-code">6526</div>
+                <div class="scanner-grid-name">Socionext</div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-center">
+              <div class="scanner-grid-facts">
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Volume</span>
+                  <strong>9,812,500</strong>
+                </div>
+                <div class="scanner-grid-fact scanner-grid-fact--hl">
+                  <span class="scanner-grid-fact-label">Range</span>
+                  <div class="scanner-grid-hl-row">
+                    <span class="scanner-grid-hl-chip">H</span>
+                    <strong>4,882</strong>
+                    <span class="scanner-grid-hl-separator">/</span>
+                    <span class="scanner-grid-hl-chip scanner-grid-hl-chip--low">L</span>
+                    <strong>4,655</strong>
+                  </div>
+                </div>
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Date</span>
+                  <strong>3/27 (金)</strong>
+                </div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-right">
+              <div class="scanner-grid-price-label">Close</div>
+              <div class="scanner-grid-price">4,810</div>
+              <div class="scanner-grid-change is-up">+226 +4.93%</div>
+            </div>
+          </section>
+
+          <section class="scanner-grid-chart">
+            <svg viewBox="0 0 900 320" aria-label="sample chart">
+              <rect x="0" y="0" width="900" height="320" rx="18" class="chart-bg" />
+              <g class="chart-grid">
+                <line x1="56" y1="52" x2="848" y2="52" />
+                <line x1="56" y1="110" x2="848" y2="110" />
+                <line x1="56" y1="168" x2="848" y2="168" />
+                <line x1="56" y1="226" x2="848" y2="226" />
+                <line x1="56" y1="284" x2="848" y2="284" />
+              </g>
+              <line x1="56" y1="78" x2="848" y2="78" class="chart-resistance" />
+              <polyline class="chart-ma chart-ma-25" points="56,254 174,246 300,236 424,198 548,172 674,142 848,124" />
+              <polyline class="chart-ma chart-ma-75" points="56,192 174,194 300,196 424,194 548,188 674,180 848,170" />
+              <polyline class="chart-ma chart-ma-200" points="56,232 174,228 300,224 424,218 548,212 674,204 848,194" />
+              <polyline class="chart-price" points="56,278 140,252 222,264 310,226 390,190 474,144 566,126 644,114 734,108 808,98 848,72" />
+            </svg>
+          </section>
+
+          <details class="scanner-grid-signals" open>
+            <summary>Signals 5</summary>
+            <ul>
+              <li>25日線を明確に上抜け</li>
+              <li>高値圏を維持</li>
+              <li>出来高が増加</li>
+              <li>テーマ性が強い</li>
+              <li>押し目が浅い</li>
+            </ul>
+          </details>
+
+          <footer class="scanner-grid-actions">
+            <div class="scanner-grid-links">
+              <a href="#">Detail</a>
+              <a href="#">Yahoo</a>
+            </div>
+            <label class="scanner-grid-pick">
+              <input type="checkbox" checked />
+              <span>Pick</span>
+            </label>
+          </footer>
+        </article>
+
+        <article class="scanner-grid-card">
+          <section class="scanner-grid-card-hero">
+            <div class="scanner-grid-card-left">
+              <div class="scanner-grid-rank">
+                <span class="scanner-grid-rank-label">RANK</span>
+                <strong>11</strong>
+              </div>
+              <div class="scanner-grid-id">
+                <div class="scanner-grid-code">7011</div>
+                <div class="scanner-grid-name">Mitsubishi Heavy</div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-center">
+              <div class="scanner-grid-facts">
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Volume</span>
+                  <strong>15,201,900</strong>
+                </div>
+                <div class="scanner-grid-fact scanner-grid-fact--hl">
+                  <span class="scanner-grid-fact-label">Range</span>
+                  <div class="scanner-grid-hl-row">
+                    <span class="scanner-grid-hl-chip">H</span>
+                    <strong>2,286</strong>
+                    <span class="scanner-grid-hl-separator">/</span>
+                    <span class="scanner-grid-hl-chip scanner-grid-hl-chip--low">L</span>
+                    <strong>2,198</strong>
+                  </div>
+                </div>
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Date</span>
+                  <strong>3/27 (金)</strong>
+                </div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-right">
+              <div class="scanner-grid-price-label">Close</div>
+              <div class="scanner-grid-price">2,244</div>
+              <div class="scanner-grid-change is-up">+49 +2.23%</div>
+            </div>
+          </section>
+
+          <section class="scanner-grid-chart">
+            <svg viewBox="0 0 900 320" aria-label="sample chart">
+              <rect x="0" y="0" width="900" height="320" rx="18" class="chart-bg" />
+              <g class="chart-grid">
+                <line x1="56" y1="52" x2="848" y2="52" />
+                <line x1="56" y1="110" x2="848" y2="110" />
+                <line x1="56" y1="168" x2="848" y2="168" />
+                <line x1="56" y1="226" x2="848" y2="226" />
+                <line x1="56" y1="284" x2="848" y2="284" />
+              </g>
+              <line x1="56" y1="84" x2="848" y2="84" class="chart-resistance" />
+              <polyline class="chart-ma chart-ma-25" points="56,260 174,248 300,220 424,188 548,158 674,144 848,138" />
+              <polyline class="chart-ma chart-ma-75" points="56,212 174,208 300,204 424,198 548,192 674,184 848,176" />
+              <polyline class="chart-ma chart-ma-200" points="56,246 174,242 300,238 424,232 548,224 674,214 848,202" />
+              <polyline class="chart-price" points="56,284 136,264 214,238 304,202 394,176 484,150 564,126 652,112 752,102 820,98 848,90" />
+            </svg>
+          </section>
+
+          <details class="scanner-grid-signals">
+            <summary>Signals 3</summary>
+            <ul>
+              <li>25日線上で上昇トレンド継続</li>
+              <li>押し戻し後の再加速</li>
+              <li>強い出来高を伴う上抜け</li>
+            </ul>
+          </details>
+
+          <footer class="scanner-grid-actions">
+            <div class="scanner-grid-links">
+              <a href="#">Detail</a>
+              <a href="#">Yahoo</a>
+            </div>
+            <label class="scanner-grid-pick">
+              <input type="checkbox" />
+              <span>Pick</span>
+            </label>
+          </footer>
+        </article>
+
+        <article class="scanner-grid-card">
+          <section class="scanner-grid-card-hero">
+            <div class="scanner-grid-card-left">
+              <div class="scanner-grid-rank">
+                <span class="scanner-grid-rank-label">RANK</span>
+                <strong>18</strong>
+              </div>
+              <div class="scanner-grid-id">
+                <div class="scanner-grid-code">6920</div>
+                <div class="scanner-grid-name">Lasertec</div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-center">
+              <div class="scanner-grid-facts">
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Volume</span>
+                  <strong>3,905,400</strong>
+                </div>
+                <div class="scanner-grid-fact scanner-grid-fact--hl">
+                  <span class="scanner-grid-fact-label">Range</span>
+                  <div class="scanner-grid-hl-row">
+                    <span class="scanner-grid-hl-chip">H</span>
+                    <strong>34,220</strong>
+                    <span class="scanner-grid-hl-separator">/</span>
+                    <span class="scanner-grid-hl-chip scanner-grid-hl-chip--low">L</span>
+                    <strong>33,180</strong>
+                  </div>
+                </div>
+                <div class="scanner-grid-fact">
+                  <span class="scanner-grid-fact-label">Date</span>
+                  <strong>3/27 (金)</strong>
+                </div>
+              </div>
+            </div>
+            <div class="scanner-grid-card-right">
+              <div class="scanner-grid-price-label">Close</div>
+              <div class="scanner-grid-price">33,980</div>
+              <div class="scanner-grid-change is-up">+640 +1.92%</div>
+            </div>
+          </section>
+
+          <section class="scanner-grid-chart">
+            <svg viewBox="0 0 900 320" aria-label="sample chart">
+              <rect x="0" y="0" width="900" height="320" rx="18" class="chart-bg" />
+              <g class="chart-grid">
+                <line x1="56" y1="52" x2="848" y2="52" />
+                <line x1="56" y1="110" x2="848" y2="110" />
+                <line x1="56" y1="168" x2="848" y2="168" />
+                <line x1="56" y1="226" x2="848" y2="226" />
+                <line x1="56" y1="284" x2="848" y2="284" />
+              </g>
+              <line x1="56" y1="70" x2="848" y2="70" class="chart-resistance" />
+              <polyline class="chart-ma chart-ma-25" points="56,268 174,254 300,238 424,212 548,184 674,156 848,142" />
+              <polyline class="chart-ma chart-ma-75" points="56,220 174,216 300,210 424,202 548,194 674,184 848,176" />
+              <polyline class="chart-ma chart-ma-200" points="56,246 174,244 300,240 424,234 548,226 674,214 848,202" />
+              <polyline class="chart-price" points="56,292 136,274 214,252 304,228 392,190 476,162 564,136 652,120 734,116 810,106 848,82" />
+            </svg>
+          </section>
+
+          <details class="scanner-grid-signals">
+            <summary>Signals 4</summary>
+            <ul>
+              <li>戻り高値更新を試す位置</li>
+              <li>25日線が反転上向き</li>
+              <li>出来高はやや増加</li>
+              <li>監視継続向き</li>
+            </ul>
+          </details>
+
+          <footer class="scanner-grid-actions">
+            <div class="scanner-grid-links">
+              <a href="#">Detail</a>
+              <a href="#">Yahoo</a>
+            </div>
+            <label class="scanner-grid-pick">
+              <input type="checkbox" />
+              <span>Pick</span>
+            </label>
+          </footer>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -48,6 +48,7 @@
     loadRankingData,
     loadThemeOrderData,
     loadTickerPayloadData,
+    loadYahooFinanceProfileData,
     readJsonStorage,
     writeJsonStorage,
   } = window.KabuAppData;
@@ -115,6 +116,7 @@
       loadThemeOrder,
       loadTickerNote,
       loadTickerPayload,
+      loadYahooFinanceProfile,
       loadTickerPayloadWithDiagnostics,
       mapWithConcurrency,
       matchesDeviationFilter,
@@ -129,6 +131,8 @@
       removePickByCode,
       removeRegisteredSetById,
       renderChartFetchFailedItem,
+      renderChartFailure,
+      renderChartStatus,
       renderExportEntries,
       renderMiniCalendar,
       renderPickedItemLinks,
@@ -141,6 +145,7 @@
       renderStrategyBadges,
       renderStrategyReasons,
       strategyLabel,
+      startAutoRefreshPolling,
       renderTickerChart,
       renderTickerIdentity,
       resetScannerPicks,
@@ -786,6 +791,68 @@
     return loadManifestData(fetchJson, MANIFEST_PATH);
   }
 
+  function manifestRevisionKey(manifest) {
+    const currentSnapshot = manifest?.currentSnapshot || {};
+    return JSON.stringify({
+      latestDate: String(manifest?.latestDate || "").trim(),
+      snapshotDate: String(currentSnapshot?.date || "").trim(),
+      snapshotType: String(currentSnapshot?.type || "").trim(),
+      snapshotStatus: String(currentSnapshot?.status || "").trim(),
+      generatedAt: String(currentSnapshot?.generatedAt || "").trim(),
+    });
+  }
+
+  function hasManifestRevisionChanged(nextManifest, currentManifest) {
+    return manifestRevisionKey(nextManifest) !== manifestRevisionKey(currentManifest);
+  }
+
+  function startAutoRefreshPolling({
+    getCurrentManifest,
+    onRefresh,
+    onError,
+    intervalMs = 30000,
+  }) {
+    let timerId = null;
+    let disposed = false;
+    let inFlight = false;
+
+    const runCheck = async () => {
+      if (disposed || inFlight || document.visibilityState !== "visible") {
+        return;
+      }
+      inFlight = true;
+      try {
+        const latestManifest = await loadManifest();
+        if (hasManifestRevisionChanged(latestManifest, getCurrentManifest?.())) {
+          await onRefresh(latestManifest);
+        }
+      } catch (error) {
+        onError?.(error);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void runCheck();
+      }
+    };
+
+    timerId = window.setInterval(() => {
+      void runCheck();
+    }, intervalMs);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      disposed = true;
+      if (timerId) {
+        window.clearInterval(timerId);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }
+
   async function loadThemeOrder() {
     return loadThemeOrderData(fetchJson, THEME_MAP_PATH);
   }
@@ -907,6 +974,10 @@
 
   async function loadTickerPayload(code) {
     return loadTickerPayloadData(fetchJson, code);
+  }
+
+  async function loadYahooFinanceProfile(code) {
+    return loadYahooFinanceProfileData(code);
   }
 
   async function loadWatchlist() {
@@ -2381,16 +2452,6 @@
     }));
   }
 
-  function renderStrategyBadges(record, options = {}) {
-    const badges = collectStrategyBadges(record);
-    if (!badges.length) {
-      return options.empty || "";
-    }
-    return badges
-      .map((badge) => `<span class="scanner-stop-high-badge scanner-stop-high-badge--strategy">${escapeHtml(badge.label)}</span>`)
-      .join("");
-  }
-
   function renderStrategyReasons(record, options = {}) {
     const matches = Array.isArray(record?.strategyMatches) ? record.strategyMatches : [];
     if (!matches.length) {
@@ -2408,6 +2469,81 @@
       return options.empty || "";
     }
     return `<ul class="strategy-reason-list">${lines.join("")}</ul>`;
+  }
+
+  function renderStrategyPopoverContent(record, strategyId) {
+    const reasons = (record?.strategyReasons || {})[strategyId] || [];
+    const items = reasons.length
+      ? reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")
+      : "<li>条件情報はまだありません。</li>";
+    return `
+      <section class="scanner-item-strategy-panel" data-strategy-panel="${escapeHtml(strategyId)}" hidden>
+        <div class="scanner-item-strategy-popover-title">${escapeHtml(strategyLabel(strategyId))}</div>
+        <ul class="scanner-item-strategy-popover-list">${items}</ul>
+      </section>
+    `;
+  }
+
+  function strategyBadgeTone(strategyId) {
+    return {
+      minervini_trend_template: "minervini",
+      stan_weinstein_stage2: "stage2",
+      turtle_donchian_breakout: "turtle",
+      can_slim: "canslim",
+      rsi2_pullback: "rsi2",
+    }[strategyId] || "default";
+  }
+
+  function renderStrategyBadges(record, options = {}) {
+    const badges = collectStrategyBadges(record);
+    if (!badges.length) {
+      return options.empty || "";
+    }
+    return `
+      <div class="strategy-badge-row">
+        ${badges
+          .map(
+            (badge) => `
+              <span class="strategy-badge-pill strategy-badge-pill--${escapeHtml(strategyBadgeTone(badge.id))}">
+                ${escapeHtml(badge.label)}
+              </span>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  function renderScannerStrategyBar(record) {
+    const badges = collectStrategyBadges(record);
+    if (!badges.length) {
+      return "";
+    }
+    const code = escapeHtml(String(record?.code || ""));
+    return `
+      <div class="scanner-item-strategy-bar" data-strategy-bar>
+        <div class="scanner-item-strategy-badges" aria-label="Strategy badges">
+          ${badges
+            .map(
+              (badge) => `
+                <button
+                  type="button"
+                  class="scanner-item-strategy-badge scanner-item-strategy-badge--${escapeHtml(strategyBadgeTone(badge.id))}"
+                  data-strategy-badge="${escapeHtml(badge.id)}"
+                  data-code="${code}"
+                  aria-expanded="false"
+                >
+                  <span class="scanner-item-strategy-badge-label">${escapeHtml(badge.label)}</span>
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+        <div class="scanner-item-strategy-popover" data-strategy-popover hidden>
+          ${badges.map((badge) => renderStrategyPopoverContent(record, badge.id)).join("")}
+        </div>
+      </div>
+    `;
   }
 
   function filterByTurnover(records, turnoverThreshold) {
@@ -2716,8 +2852,7 @@
     const stopHighBadge = hasStopHighBadge
       ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
       : "";
-    const strategyBadges = renderStrategyBadges(record);
-    const strategyReasons = renderStrategyReasons(record, { limit: 2 });
+    const strategyBar = renderScannerStrategyBar(record);
     return `
       <article class="scanner-item${stopHighClass}">
         <div class="scanner-rank-table">
@@ -2737,13 +2872,12 @@
               <tr>
                 <td class="num">${formatNumber(rank, 0)}</td>
                 <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner scanner-name-cell-inner--with-badge">
+                  <div class="scanner-name-cell-inner">
                     ${renderTickerIdentity(record.code, record.name, {
                       href: buildTickerUrl(record.code, state.selectedDate, rankingKey),
                       variant: "scanner",
                     })}
                     ${stopHighBadge}
-                    ${strategyBadges ? ` ${strategyBadges}` : ""}
                   </div>
                 </td>
                 <td class="scanner-trade-cell">
@@ -2765,11 +2899,11 @@
         <div class="scanner-item-chart-wrap">
           <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
-        ${strategyReasons ? `<div class="scanner-item-strategy-reasons">${strategyReasons}</div>` : ""}
         <div class="scanner-item-links">
           <div id="scanLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
             <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">Detail</a>
           </div>
+          ${strategyBar ? `<div class="scanner-item-links-center">${strategyBar}</div>` : '<div class="scanner-item-links-center"></div>'}
           <label class="scanner-pick-toggle">
             <input type="checkbox" data-pick-code="${escapeHtml(record.code)}"${picked ? " checked" : ""} />
             <span>Pick</span>
@@ -3142,7 +3276,7 @@
     renderCompactStyleChart(element, rows, selectedDate, rangeValue, {
       ...options,
       code,
-      height: 173,
+      height: 208,
       onInitialRow: (row) => setScannerTableValues(code, row),
       onRowSelect: (row) => setScannerTableValues(code, row),
     });

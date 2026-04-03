@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>一覧カード試作 | scanner_card_sample</title>
+    <link rel="stylesheet" href="./assets/scanner_card_sample.css?v=1.0.0" />
+  </head>
+  <body class="scanner-sample-page">
+    <main class="scanner-sample-shell">
+      <header class="scanner-sample-header">
+        <p class="scanner-sample-eyebrow">一覧カード 比較用モック</p>
+        <h1 class="scanner-sample-title">一気に変えないための見本</h1>
+        <p class="scanner-sample-lead">
+          現行の情報量を残しつつ、どこを畳むと見やすくなるかを比較するためのサンプルです。
+        </p>
+      </header>
+
+      <section class="scanner-sample-grid">
+        <article class="scanner-demo-card scanner-demo-card--dense">
+          <div class="scanner-demo-label">A. 現状に近い密度</div>
+          <header class="scanner-card">
+            <div class="scanner-card-tablehead">
+              <span>順位</span>
+              <span>コード</span>
+              <span>取引値</span>
+              <span>前日比</span>
+              <span>出来高</span>
+              <span>高値</span>
+              <span>安値</span>
+            </div>
+            <div class="scanner-card-top">
+              <div class="scanner-card-rank">3</div>
+              <div class="scanner-card-identity">
+                <div class="scanner-card-code">9044</div>
+                <div class="scanner-card-name">Minervini</div>
+                <div class="scanner-chip-row">
+                  <span class="scanner-chip">Stage 2</span>
+                  <span class="scanner-chip">Turtle</span>
+                </div>
+              </div>
+              <div class="scanner-card-price">3,151</div>
+              <div class="scanner-card-change is-up">+143 +4.75%</div>
+              <div class="scanner-card-meta">4,346,100</div>
+              <div class="scanner-card-meta">3,173</div>
+              <div class="scanner-card-meta">2,970.5</div>
+            </div>
+            <div class="scanner-chart-frame">
+              <svg viewBox="0 0 760 220" class="scanner-chart-svg" aria-label="sample chart">
+                <rect x="0" y="0" width="760" height="220" rx="14" class="chart-bg" />
+                <g class="chart-grid">
+                  <line x1="50" y1="30" x2="720" y2="30" />
+                  <line x1="50" y1="75" x2="720" y2="75" />
+                  <line x1="50" y1="120" x2="720" y2="120" />
+                  <line x1="50" y1="165" x2="720" y2="165" />
+                  <line x1="150" y1="20" x2="150" y2="190" />
+                  <line x1="300" y1="20" x2="300" y2="190" />
+                  <line x1="450" y1="20" x2="450" y2="190" />
+                  <line x1="600" y1="20" x2="600" y2="190" />
+                </g>
+                <polyline class="chart-ma chart-ma-25" points="50,140 150,142 260,138 360,116 470,98 600,86 720,80" />
+                <polyline class="chart-ma chart-ma-75" points="50,122 150,124 260,126 360,128 470,126 600,122 720,118" />
+                <polyline class="chart-ma chart-ma-200" points="50,146 150,150 260,151 360,150 470,148 600,145 720,140" />
+                <polyline class="chart-price" points="50,146 95,162 140,172 190,170 240,168 290,158 340,122 390,102 440,92 490,88 540,84 590,86 640,81 690,79 720,60" />
+                <line x1="50" y1="42" x2="720" y2="42" class="chart-resistance" />
+                <g class="chart-volume">
+                  <rect x="60" y="154" width="14" height="26" />
+                  <rect x="80" y="160" width="14" height="20" />
+                  <rect x="100" y="164" width="14" height="16" />
+                  <rect x="120" y="161" width="14" height="19" />
+                  <rect x="280" y="150" width="14" height="30" />
+                  <rect x="380" y="142" width="14" height="38" />
+                  <rect x="540" y="158" width="14" height="22" />
+                  <rect x="680" y="146" width="14" height="34" />
+                </g>
+              </svg>
+            </div>
+            <ul class="scanner-bullet-list">
+              <li>Minervini: 株価が50日・150日・200日線の上</li>
+              <li>Stage 2: 150日線の上で推移</li>
+              <li>Turtle: 20日高値更新</li>
+              <li>CAN SLIM: 売買代金が増加</li>
+            </ul>
+            <footer class="scanner-card-actions">
+              <div class="scanner-link-row">
+                <a href="#">Detail</a>
+                <a href="#">Yahoo</a>
+              </div>
+              <label class="scanner-pick-toggle">
+                <input type="checkbox" />
+                <span>Pick</span>
+              </label>
+            </footer>
+          </header>
+        </article>
+
+        <article class="scanner-demo-card">
+          <div class="scanner-demo-label">B. Compact + Signals 折りたたみ</div>
+          <header class="scanner-card scanner-card--compact">
+            <div class="scanner-card-hero">
+              <div class="scanner-card-hero-main">
+                <div class="scanner-rank-badge">#3</div>
+                <div>
+                  <div class="scanner-card-code">9044</div>
+                  <div class="scanner-card-name">Minervini</div>
+                </div>
+              </div>
+              <div class="scanner-card-hero-side">
+                <div class="scanner-card-price">3,151</div>
+                <div class="scanner-card-change is-up">+143 +4.75%</div>
+              </div>
+            </div>
+
+            <div class="scanner-chip-row scanner-chip-row--quiet">
+              <span class="scanner-chip">Stage 2</span>
+              <span class="scanner-chip">Turtle</span>
+              <span class="scanner-chip">20D High</span>
+            </div>
+
+            <div class="scanner-submeta-grid">
+              <div>
+                <span class="scanner-meta-label">出来高</span>
+                <strong>4,346,100</strong>
+              </div>
+              <div>
+                <span class="scanner-meta-label">高値 / 安値</span>
+                <strong>3,173 / 2,970.5</strong>
+              </div>
+              <div>
+                <span class="scanner-meta-label">基準日</span>
+                <strong>3/27 (金)</strong>
+              </div>
+            </div>
+
+            <div class="scanner-chart-frame scanner-chart-frame--compact">
+              <svg viewBox="0 0 760 220" class="scanner-chart-svg" aria-label="sample chart">
+                <rect x="0" y="0" width="760" height="220" rx="14" class="chart-bg" />
+                <g class="chart-grid">
+                  <line x1="50" y1="30" x2="720" y2="30" />
+                  <line x1="50" y1="75" x2="720" y2="75" />
+                  <line x1="50" y1="120" x2="720" y2="120" />
+                  <line x1="50" y1="165" x2="720" y2="165" />
+                </g>
+                <polyline class="chart-ma chart-ma-25" points="50,140 150,142 260,138 360,116 470,98 600,86 720,80" />
+                <polyline class="chart-ma chart-ma-75" points="50,122 150,124 260,126 360,128 470,126 600,122 720,118" />
+                <polyline class="chart-ma chart-ma-200" points="50,146 150,150 260,151 360,150 470,148 600,145 720,140" />
+                <polyline class="chart-price" points="50,146 95,162 140,172 190,170 240,168 290,158 340,122 390,102 440,92 490,88 540,84 590,86 640,81 690,79 720,60" />
+                <line x1="50" y1="42" x2="720" y2="42" class="chart-resistance" />
+              </svg>
+            </div>
+
+            <details class="scanner-signals">
+              <summary>Signals 4</summary>
+              <ul class="scanner-bullet-list scanner-bullet-list--compact">
+                <li>株価が50日・150日・200日線の上</li>
+                <li>150日線の上で推移</li>
+                <li>20日高値更新</li>
+                <li>売買代金が増加</li>
+              </ul>
+            </details>
+
+            <footer class="scanner-card-actions">
+              <div class="scanner-link-row">
+                <a href="#">Detail</a>
+                <a href="#">Yahoo</a>
+              </div>
+              <label class="scanner-pick-toggle">
+                <input type="checkbox" />
+                <span>Pick</span>
+              </label>
+            </footer>
+          </header>
+        </article>
+
+        <article class="scanner-demo-card">
+          <div class="scanner-demo-label">C. Research card</div>
+          <header class="scanner-card scanner-card--research">
+            <div class="scanner-research-layout">
+              <div class="scanner-research-main">
+                <div class="scanner-card-hero">
+                  <div class="scanner-card-hero-main">
+                    <div class="scanner-rank-badge">#3</div>
+                    <div>
+                      <div class="scanner-card-code">9044</div>
+                      <div class="scanner-card-name">Minervini</div>
+                    </div>
+                  </div>
+                  <div class="scanner-card-hero-side">
+                    <div class="scanner-card-price">3,151</div>
+                    <div class="scanner-card-change is-up">+143 +4.75%</div>
+                  </div>
+                </div>
+
+                <div class="scanner-chart-frame scanner-chart-frame--research">
+                  <svg viewBox="0 0 760 220" class="scanner-chart-svg" aria-label="sample chart">
+                    <rect x="0" y="0" width="760" height="220" rx="14" class="chart-bg" />
+                    <g class="chart-grid">
+                      <line x1="50" y1="30" x2="720" y2="30" />
+                      <line x1="50" y1="75" x2="720" y2="75" />
+                      <line x1="50" y1="120" x2="720" y2="120" />
+                      <line x1="50" y1="165" x2="720" y2="165" />
+                    </g>
+                    <polyline class="chart-ma chart-ma-25" points="50,140 150,142 260,138 360,116 470,98 600,86 720,80" />
+                    <polyline class="chart-ma chart-ma-75" points="50,122 150,124 260,126 360,128 470,126 600,122 720,118" />
+                    <polyline class="chart-ma chart-ma-200" points="50,146 150,150 260,151 360,150 470,148 600,145 720,140" />
+                    <polyline class="chart-price" points="50,146 95,162 140,172 190,170 240,168 290,158 340,122 390,102 440,92 490,88 540,84 590,86 640,81 690,79 720,60" />
+                    <line x1="50" y1="42" x2="720" y2="42" class="chart-resistance" />
+                  </svg>
+                </div>
+              </div>
+
+              <aside class="scanner-research-side">
+                <div class="scanner-side-block">
+                  <div class="scanner-side-title">Quick Facts</div>
+                  <div class="scanner-submeta-grid scanner-submeta-grid--stack">
+                    <div>
+                      <span class="scanner-meta-label">出来高</span>
+                      <strong>4,346,100</strong>
+                    </div>
+                    <div>
+                      <span class="scanner-meta-label">高値 / 安値</span>
+                      <strong>3,173 / 2,970.5</strong>
+                    </div>
+                    <div>
+                      <span class="scanner-meta-label">Date</span>
+                      <strong>3/27 (金)</strong>
+                    </div>
+                  </div>
+                </div>
+                <div class="scanner-side-block">
+                  <div class="scanner-side-title">Signals</div>
+                  <div class="scanner-chip-row scanner-chip-row--quiet">
+                    <span class="scanner-chip">Stage 2</span>
+                    <span class="scanner-chip">Turtle</span>
+                    <span class="scanner-chip">CAN SLIM</span>
+                  </div>
+                  <ul class="scanner-bullet-list scanner-bullet-list--compact">
+                    <li>株価が中長期線の上</li>
+                    <li>20日高値を更新</li>
+                    <li>売買代金が増加</li>
+                  </ul>
+                </div>
+              </aside>
+            </div>
+            <footer class="scanner-card-actions">
+              <div class="scanner-link-row">
+                <a href="#">Detail</a>
+                <a href="#">Yahoo</a>
+              </div>
+              <label class="scanner-pick-toggle">
+                <input type="checkbox" checked />
+                <span>Pick</span>
+              </label>
+            </footer>
+          </header>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
