@@ -14,8 +14,8 @@
   "links": {
     "quote": "https://finance.yahoo.co.jp/quote/2342.T"
   },
-  "snapshotType": "daily",
-  "snapshotDate": "2026-04-03",
+  "snapshotType": null,
+  "snapshotDate": null,
   "ohlcv": [
     {
       "date": "2021-03-05",
@@ -207971,8 +207971,8 @@
       "high": 269.0,
       "low": 256.0,
       "close": 257.0,
-      "volume": 80300,
-      "turnover": 20637100.0,
+      "volume": 85800,
+      "turnover": 22050600.0,
       "change": -4.0,
       "changePercent": -1.5326,
       "ma5": 259.8,
@@ -207987,10 +207987,10 @@
       "ma150SlopePct": 3.0621,
       "ma160SlopePct": 4.0752,
       "ma200SlopePct": 4.9591,
-      "volumeMa5": 74520.0,
-      "volumeMa20": 104855.0,
-      "volumeMa25": 146552.0,
-      "turnoverMa5": 19363760.0,
+      "volumeMa5": 75620.0,
+      "volumeMa20": 105130.0,
+      "volumeMa25": 146772.0,
+      "turnoverMa5": 19646460.0,
       "distanceToMa25": -6.938,
       "distanceToMa50": -11.0419,
       "distanceToMa75": -9.9383,
@@ -207998,7 +207998,7 @@
       "distanceToMa150": -0.5752,
       "distanceToMa160": 0.3196,
       "distanceToMa200": 6.5153,
-      "volumeRatio25": 0.5479,
+      "volumeRatio25": 0.5846,
       "rci12": -55.59,
       "rci24": -83.07,
       "rci48": -81.17,
@@ -208102,13 +208102,13 @@
         "turtle_donchian_breakout": {
           "breakoutPeriod": null,
           "breakoutDistancePct": 21.8845,
-          "volumeRatio25": 0.5479,
+          "volumeRatio25": 0.5846,
           "preBreakoutRangePct": 11.3725
         },
         "can_slim": {
           "fundamentalMode": "technical_optional",
           "distanceTo52wHighPct": 47.2279,
-          "turnoverMa5": 19363760.0,
+          "turnoverMa5": 19646460.0,
           "basePeriodDays": 22,
           "distanceToBaseHighPct": 13.468
         },
@@ -208118,6 +208118,996 @@
           "distanceToMa50": -11.0419,
           "distanceToMa150": -0.5752,
           "pullbackDepthPct": -11.0419
+        }
+      },
+      "minervini_trend_templateCandidate": false,
+      "stan_weinstein_stage2Candidate": false,
+      "turtle_donchian_breakoutCandidate": false,
+      "can_slimCandidate": false,
+      "rsi2_pullbackCandidate": false,
+      "minervini_trend_templateScore": 0.0,
+      "stan_weinstein_stage2Score": 0.0,
+      "turtle_donchian_breakoutScore": 0.0,
+      "can_slimScore": 0.0,
+      "rsi2_pullbackScore": 0.0
+    },
+    {
+      "date": "2026-04-06",
+      "open": 260.0,
+      "high": 268.0,
+      "low": 257.0,
+      "close": 265.0,
+      "volume": 66200,
+      "turnover": 17543000.0,
+      "change": 8.0,
+      "changePercent": 3.1128,
+      "ma5": 261.2,
+      "ma25": 274.32,
+      "ma50": 288.38,
+      "ma75": 285.2667,
+      "ma140": 260.65,
+      "ma150": 258.5867,
+      "ma160": 256.5813,
+      "ma200": 241.84,
+      "ma140SlopePct": 2.4107,
+      "ma150SlopePct": 2.9296,
+      "ma160SlopePct": 3.9369,
+      "ma200SlopePct": 4.897,
+      "volumeMa5": 72200.0,
+      "volumeMa20": 103905.0,
+      "volumeMa25": 137748.0,
+      "turnoverMa5": 18856780.0,
+      "distanceToMa25": -3.3975,
+      "distanceToMa50": -8.1074,
+      "distanceToMa75": -7.1045,
+      "distanceToMa140": 1.6689,
+      "distanceToMa150": 2.4801,
+      "distanceToMa160": 3.2811,
+      "distanceToMa200": 9.5766,
+      "volumeRatio25": 0.4806,
+      "rci12": -31.99,
+      "rci24": -80.13,
+      "rci48": -81.11,
+      "rsi2": 69.7325,
+      "consecutiveDownDays": 0,
+      "rangePosition52w": 37.8151,
+      "high52w": 487.0,
+      "low52w": 130.0,
+      "distanceTo52wHighPct": 45.5852,
+      "near52wHighRatio": 0.5441,
+      "recoveryFrom52wLowPct": 103.8462,
+      "newHigh52w": false,
+      "newHigh20d": false,
+      "donchian20High": 292.0,
+      "donchian55High": 329.0,
+      "distanceToDonchian20Pct": 9.2466,
+      "distanceToDonchian55Pct": 19.4529,
+      "base10to20": {
+        "detected": true,
+        "window": 16,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base10to30": {
+        "detected": true,
+        "window": 16,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base20to60": {
+        "detected": true,
+        "window": 23,
+        "high": 297.0,
+        "low": 255.0,
+        "range_pct": 16.4706
+      },
+      "distanceToBaseHighPct": 6.6901,
+      "distanceToMidBaseHighPct": 10.7744,
+      "distanceToPrevHighPct": 1.487,
+      "volatility20Pct": 16.4706,
+      "unstableBelowMa200Days": 0,
+      "upperWick3dAvg": 0.3747,
+      "newHigh20dCount10": 0,
+      "signalCategory": "none",
+      "lowerWickFlag": false,
+      "strongHammerFlag": false,
+      "prevBearFlag": true,
+      "belowMa5Flag": false,
+      "trendTurnCandidate": false,
+      "trendTurnBreakoutDate": null,
+      "trendTurnDaysAfterBreakout": null,
+      "trendTurnRangePct": null,
+      "trendTurnAboveMa75Ratio": null,
+      "trendTurnScore": 0,
+      "trendTurnReason": "",
+      "strategyMatches": [],
+      "strategyScores": {
+        "minervini_trend_template": 0.0,
+        "stan_weinstein_stage2": 0.0,
+        "turtle_donchian_breakout": 0.0,
+        "can_slim": 0.0,
+        "rsi2_pullback": 0.0
+      },
+      "strategyReasons": {},
+      "strategyExcludedReasons": {
+        "minervini_trend_template": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "stan_weinstein_stage2": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "can_slim": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "rsi2_pullback": [
+          "板薄銘柄を除外"
+        ]
+      },
+      "strategyMetrics": {
+        "minervini_trend_template": {
+          "distanceTo52wHighPct": 45.5852,
+          "recoveryFrom52wLowPct": 103.8462,
+          "maStackAligned": true,
+          "ma200SlopePct": 4.897,
+          "basePeriodDays": 16,
+          "distanceToBaseHighPct": 6.6901
+        },
+        "stan_weinstein_stage2": {
+          "stage": "Stage 2",
+          "distanceToLongMaPct": 2.4801,
+          "longMaSlopePct": 2.9296,
+          "basePeriodDays": 23,
+          "distanceToBaseHighPct": 10.7744
+        },
+        "turtle_donchian_breakout": {
+          "breakoutPeriod": null,
+          "breakoutDistancePct": 19.4529,
+          "volumeRatio25": 0.4806,
+          "preBreakoutRangePct": 11.3725
+        },
+        "can_slim": {
+          "fundamentalMode": "technical_optional",
+          "distanceTo52wHighPct": 45.5852,
+          "turnoverMa5": 18856780.0,
+          "basePeriodDays": 23,
+          "distanceToBaseHighPct": 10.7744
+        },
+        "rsi2_pullback": {
+          "rsi2": 69.7325,
+          "consecutiveDownDays": 0,
+          "distanceToMa50": -8.1074,
+          "distanceToMa150": 2.4801,
+          "pullbackDepthPct": -8.1074
+        }
+      },
+      "minervini_trend_templateCandidate": false,
+      "stan_weinstein_stage2Candidate": false,
+      "turtle_donchian_breakoutCandidate": false,
+      "can_slimCandidate": false,
+      "rsi2_pullbackCandidate": false,
+      "minervini_trend_templateScore": 0.0,
+      "stan_weinstein_stage2Score": 0.0,
+      "turtle_donchian_breakoutScore": 0.0,
+      "can_slimScore": 0.0,
+      "rsi2_pullbackScore": 0.0
+    },
+    {
+      "date": "2026-04-07",
+      "open": 264.0,
+      "high": 269.0,
+      "low": 262.0,
+      "close": 264.0,
+      "volume": 25900,
+      "turnover": 6837600.0,
+      "change": -1.0,
+      "changePercent": -0.3774,
+      "ma5": 262.8,
+      "ma25": 273.04,
+      "ma50": 287.78,
+      "ma75": 285.32,
+      "ma140": 260.9,
+      "ma150": 258.8133,
+      "ma160": 256.975,
+      "ma200": 242.385,
+      "ma140SlopePct": 2.2879,
+      "ma150SlopePct": 2.8179,
+      "ma160SlopePct": 3.8388,
+      "ma200SlopePct": 4.8605,
+      "volumeMa5": 65920.0,
+      "volumeMa20": 94800.0,
+      "volumeMa25": 127820.0,
+      "turnoverMa5": 17290540.0,
+      "distanceToMa25": -3.3109,
+      "distanceToMa50": -8.2633,
+      "distanceToMa75": -7.4723,
+      "distanceToMa140": 1.1882,
+      "distanceToMa150": 2.004,
+      "distanceToMa160": 2.7337,
+      "distanceToMa200": 8.9176,
+      "volumeRatio25": 0.2026,
+      "rci12": -9.44,
+      "rci24": -77.52,
+      "rci48": -82.95,
+      "rsi2": 60.8884,
+      "consecutiveDownDays": 1,
+      "rangePosition52w": 37.535,
+      "high52w": 487.0,
+      "low52w": 130.0,
+      "distanceTo52wHighPct": 45.7906,
+      "near52wHighRatio": 0.5421,
+      "recoveryFrom52wLowPct": 103.0769,
+      "newHigh52w": false,
+      "newHigh20d": false,
+      "donchian20High": 292.0,
+      "donchian55High": 329.0,
+      "distanceToDonchian20Pct": 9.589,
+      "distanceToDonchian55Pct": 19.7568,
+      "base10to20": {
+        "detected": true,
+        "window": 17,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base10to30": {
+        "detected": true,
+        "window": 17,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base20to60": {
+        "detected": true,
+        "window": 24,
+        "high": 297.0,
+        "low": 255.0,
+        "range_pct": 16.4706
+      },
+      "distanceToBaseHighPct": 7.0423,
+      "distanceToMidBaseHighPct": 11.1111,
+      "distanceToPrevHighPct": 1.4925,
+      "volatility20Pct": 16.4706,
+      "unstableBelowMa200Days": 0,
+      "upperWick3dAvg": 0.4572,
+      "newHigh20dCount10": 0,
+      "signalCategory": "none",
+      "lowerWickFlag": false,
+      "strongHammerFlag": false,
+      "prevBearFlag": false,
+      "belowMa5Flag": false,
+      "trendTurnCandidate": false,
+      "trendTurnBreakoutDate": null,
+      "trendTurnDaysAfterBreakout": null,
+      "trendTurnRangePct": null,
+      "trendTurnAboveMa75Ratio": null,
+      "trendTurnScore": 0,
+      "trendTurnReason": "",
+      "strategyMatches": [],
+      "strategyScores": {
+        "minervini_trend_template": 0.0,
+        "stan_weinstein_stage2": 0.0,
+        "turtle_donchian_breakout": 0.0,
+        "can_slim": 0.0,
+        "rsi2_pullback": 0.0
+      },
+      "strategyReasons": {},
+      "strategyExcludedReasons": {
+        "minervini_trend_template": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "stan_weinstein_stage2": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "can_slim": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "rsi2_pullback": [
+          "板薄銘柄を除外"
+        ]
+      },
+      "strategyMetrics": {
+        "minervini_trend_template": {
+          "distanceTo52wHighPct": 45.7906,
+          "recoveryFrom52wLowPct": 103.0769,
+          "maStackAligned": true,
+          "ma200SlopePct": 4.8605,
+          "basePeriodDays": 17,
+          "distanceToBaseHighPct": 7.0423
+        },
+        "stan_weinstein_stage2": {
+          "stage": "Stage 2",
+          "distanceToLongMaPct": 2.004,
+          "longMaSlopePct": 2.8179,
+          "basePeriodDays": 24,
+          "distanceToBaseHighPct": 11.1111
+        },
+        "turtle_donchian_breakout": {
+          "breakoutPeriod": null,
+          "breakoutDistancePct": 19.7568,
+          "volumeRatio25": 0.2026,
+          "preBreakoutRangePct": 11.3725
+        },
+        "can_slim": {
+          "fundamentalMode": "technical_optional",
+          "distanceTo52wHighPct": 45.7906,
+          "turnoverMa5": 17290540.0,
+          "basePeriodDays": 24,
+          "distanceToBaseHighPct": 11.1111
+        },
+        "rsi2_pullback": {
+          "rsi2": 60.8884,
+          "consecutiveDownDays": 1,
+          "distanceToMa50": -8.2633,
+          "distanceToMa150": 2.004,
+          "pullbackDepthPct": -8.2633
+        }
+      },
+      "minervini_trend_templateCandidate": false,
+      "stan_weinstein_stage2Candidate": false,
+      "turtle_donchian_breakoutCandidate": false,
+      "can_slimCandidate": false,
+      "rsi2_pullbackCandidate": false,
+      "minervini_trend_templateScore": 0.0,
+      "stan_weinstein_stage2Score": 0.0,
+      "turtle_donchian_breakoutScore": 0.0,
+      "can_slimScore": 0.0,
+      "rsi2_pullbackScore": 0.0
+    },
+    {
+      "date": "2026-04-08",
+      "open": 267.0,
+      "high": 282.0,
+      "low": 267.0,
+      "close": 280.0,
+      "volume": 165300,
+      "turnover": 46284000.0,
+      "change": 16.0,
+      "changePercent": 6.0606,
+      "ma5": 265.4,
+      "ma25": 272.6,
+      "ma50": 287.06,
+      "ma75": 285.76,
+      "ma140": 261.3214,
+      "ma150": 259.1467,
+      "ma160": 257.45,
+      "ma200": 243.015,
+      "ma140SlopePct": 2.2013,
+      "ma150SlopePct": 2.6784,
+      "ma160SlopePct": 3.7346,
+      "ma200SlopePct": 4.8337,
+      "volumeMa5": 84720.0,
+      "volumeMa20": 96700.0,
+      "volumeMa25": 121072.0,
+      "turnoverMa5": 22739920.0,
+      "distanceToMa25": 2.7146,
+      "distanceToMa50": -2.4594,
+      "distanceToMa75": -2.0157,
+      "distanceToMa140": 7.1477,
+      "distanceToMa150": 8.0469,
+      "distanceToMa160": 8.759,
+      "distanceToMa200": 15.2192,
+      "volumeRatio25": 1.3653,
+      "rci12": 2.62,
+      "rci24": -72.85,
+      "rci48": -83.2,
+      "rsi2": 92.2682,
+      "consecutiveDownDays": 0,
+      "rangePosition52w": 42.0168,
+      "high52w": 487.0,
+      "low52w": 130.0,
+      "distanceTo52wHighPct": 42.5051,
+      "near52wHighRatio": 0.5749,
+      "recoveryFrom52wLowPct": 115.3846,
+      "newHigh52w": false,
+      "newHigh20d": false,
+      "donchian20High": 292.0,
+      "donchian55High": 329.0,
+      "distanceToDonchian20Pct": 4.1096,
+      "distanceToDonchian55Pct": 14.8936,
+      "base10to20": {
+        "detected": true,
+        "window": 18,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base10to30": {
+        "detected": true,
+        "window": 18,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base20to60": {
+        "detected": true,
+        "window": 25,
+        "high": 297.0,
+        "low": 255.0,
+        "range_pct": 16.4706
+      },
+      "distanceToBaseHighPct": 1.4085,
+      "distanceToMidBaseHighPct": 5.7239,
+      "distanceToPrevHighPct": -4.0892,
+      "volatility20Pct": 16.4706,
+      "unstableBelowMa200Days": 0,
+      "upperWick3dAvg": 0.3734,
+      "newHigh20dCount10": 0,
+      "signalCategory": "none",
+      "lowerWickFlag": false,
+      "strongHammerFlag": false,
+      "prevBearFlag": false,
+      "belowMa5Flag": false,
+      "trendTurnCandidate": false,
+      "trendTurnBreakoutDate": null,
+      "trendTurnDaysAfterBreakout": null,
+      "trendTurnRangePct": null,
+      "trendTurnAboveMa75Ratio": null,
+      "trendTurnScore": 0,
+      "trendTurnReason": "",
+      "strategyMatches": [],
+      "strategyScores": {
+        "minervini_trend_template": 0.0,
+        "stan_weinstein_stage2": 0.0,
+        "turtle_donchian_breakout": 0.0,
+        "can_slim": 0.0,
+        "rsi2_pullback": 1.5
+      },
+      "strategyReasons": {
+        "rsi2_pullback": [
+          "MA50から -2.5% の押し目",
+          "押し目候補"
+        ]
+      },
+      "strategyExcludedReasons": {
+        "minervini_trend_template": [
+          "低位株を除外"
+        ],
+        "stan_weinstein_stage2": [
+          "低位株を除外"
+        ],
+        "can_slim": [
+          "低位株を除外"
+        ]
+      },
+      "strategyMetrics": {
+        "minervini_trend_template": {
+          "distanceTo52wHighPct": 42.5051,
+          "recoveryFrom52wLowPct": 115.3846,
+          "maStackAligned": true,
+          "ma200SlopePct": 4.8337,
+          "basePeriodDays": 18,
+          "distanceToBaseHighPct": 1.4085
+        },
+        "stan_weinstein_stage2": {
+          "stage": "Stage 2",
+          "distanceToLongMaPct": 8.0469,
+          "longMaSlopePct": 2.6784,
+          "basePeriodDays": 25,
+          "distanceToBaseHighPct": 5.7239
+        },
+        "turtle_donchian_breakout": {
+          "breakoutPeriod": null,
+          "breakoutDistancePct": 14.8936,
+          "volumeRatio25": 1.3653,
+          "preBreakoutRangePct": 11.3725
+        },
+        "can_slim": {
+          "fundamentalMode": "technical_optional",
+          "distanceTo52wHighPct": 42.5051,
+          "turnoverMa5": 22739920.0,
+          "basePeriodDays": 25,
+          "distanceToBaseHighPct": 5.7239
+        },
+        "rsi2_pullback": {
+          "rsi2": 92.2682,
+          "consecutiveDownDays": 0,
+          "distanceToMa50": -2.4594,
+          "distanceToMa150": 8.0469,
+          "pullbackDepthPct": -2.4594
+        }
+      },
+      "minervini_trend_templateCandidate": false,
+      "stan_weinstein_stage2Candidate": false,
+      "turtle_donchian_breakoutCandidate": false,
+      "can_slimCandidate": false,
+      "rsi2_pullbackCandidate": false,
+      "minervini_trend_templateScore": 0.0,
+      "stan_weinstein_stage2Score": 0.0,
+      "turtle_donchian_breakoutScore": 0.0,
+      "can_slimScore": 0.0,
+      "rsi2_pullbackScore": 1.5
+    },
+    {
+      "date": "2026-04-09",
+      "open": 280.0,
+      "high": 280.0,
+      "low": 269.0,
+      "close": 269.0,
+      "volume": 99100,
+      "turnover": 26657900.0,
+      "change": -11.0,
+      "changePercent": -3.9286,
+      "ma5": 267.0,
+      "ma25": 272.52,
+      "ma50": 286.48,
+      "ma75": 285.9733,
+      "ma140": 261.6357,
+      "ma150": 259.42,
+      "ma160": 257.8562,
+      "ma200": 243.59,
+      "ma140SlopePct": 2.079,
+      "ma150SlopePct": 2.5348,
+      "ma160SlopePct": 3.6035,
+      "ma200SlopePct": 4.7879,
+      "volumeMa5": 88460.0,
+      "volumeMa20": 97260.0,
+      "volumeMa25": 106404.0,
+      "turnoverMa5": 23874620.0,
+      "distanceToMa25": -1.2916,
+      "distanceToMa50": -6.1016,
+      "distanceToMa75": -5.9353,
+      "distanceToMa140": 2.8147,
+      "distanceToMa150": 3.6929,
+      "distanceToMa160": 4.3217,
+      "distanceToMa200": 10.4315,
+      "volumeRatio25": 0.9314,
+      "rci12": 16.08,
+      "rci24": -67.22,
+      "rci48": -85.28,
+      "rsi2": 43.8708,
+      "consecutiveDownDays": 1,
+      "rangePosition52w": 38.9356,
+      "high52w": 487.0,
+      "low52w": 130.0,
+      "distanceTo52wHighPct": 44.7639,
+      "near52wHighRatio": 0.5524,
+      "recoveryFrom52wLowPct": 106.9231,
+      "newHigh52w": false,
+      "newHigh20d": false,
+      "donchian20High": 290.0,
+      "donchian55High": 329.0,
+      "distanceToDonchian20Pct": 7.2414,
+      "distanceToDonchian55Pct": 18.2371,
+      "base10to20": {
+        "detected": true,
+        "window": 19,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base10to30": {
+        "detected": true,
+        "window": 19,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base20to60": {
+        "detected": true,
+        "window": 26,
+        "high": 297.0,
+        "low": 255.0,
+        "range_pct": 16.4706
+      },
+      "distanceToBaseHighPct": 5.2817,
+      "distanceToMidBaseHighPct": 9.4276,
+      "distanceToPrevHighPct": 4.6099,
+      "volatility20Pct": 12.9412,
+      "unstableBelowMa200Days": 0,
+      "upperWick3dAvg": 0.2825,
+      "newHigh20dCount10": 0,
+      "signalCategory": "none",
+      "lowerWickFlag": false,
+      "strongHammerFlag": false,
+      "prevBearFlag": false,
+      "belowMa5Flag": false,
+      "trendTurnCandidate": false,
+      "trendTurnBreakoutDate": null,
+      "trendTurnDaysAfterBreakout": null,
+      "trendTurnRangePct": null,
+      "trendTurnAboveMa75Ratio": null,
+      "trendTurnScore": 0,
+      "trendTurnReason": "",
+      "strategyMatches": [],
+      "strategyScores": {
+        "minervini_trend_template": 0.0,
+        "stan_weinstein_stage2": 0.0,
+        "turtle_donchian_breakout": 0.0,
+        "can_slim": 0.0,
+        "rsi2_pullback": 1.5
+      },
+      "strategyReasons": {
+        "rsi2_pullback": [
+          "MA50から -6.1% の押し目",
+          "押し目候補"
+        ]
+      },
+      "strategyExcludedReasons": {
+        "minervini_trend_template": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "stan_weinstein_stage2": [
+          "低位株を除外"
+        ],
+        "can_slim": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ]
+      },
+      "strategyMetrics": {
+        "minervini_trend_template": {
+          "distanceTo52wHighPct": 44.7639,
+          "recoveryFrom52wLowPct": 106.9231,
+          "maStackAligned": true,
+          "ma200SlopePct": 4.7879,
+          "basePeriodDays": 19,
+          "distanceToBaseHighPct": 5.2817
+        },
+        "stan_weinstein_stage2": {
+          "stage": "Stage 2",
+          "distanceToLongMaPct": 3.6929,
+          "longMaSlopePct": 2.5348,
+          "basePeriodDays": 26,
+          "distanceToBaseHighPct": 9.4276
+        },
+        "turtle_donchian_breakout": {
+          "breakoutPeriod": null,
+          "breakoutDistancePct": 18.2371,
+          "volumeRatio25": 0.9314,
+          "preBreakoutRangePct": 11.3725
+        },
+        "can_slim": {
+          "fundamentalMode": "technical_optional",
+          "distanceTo52wHighPct": 44.7639,
+          "turnoverMa5": 23874620.0,
+          "basePeriodDays": 26,
+          "distanceToBaseHighPct": 9.4276
+        },
+        "rsi2_pullback": {
+          "rsi2": 43.8708,
+          "consecutiveDownDays": 1,
+          "distanceToMa50": -6.1016,
+          "distanceToMa150": 3.6929,
+          "pullbackDepthPct": -6.1016
+        }
+      },
+      "minervini_trend_templateCandidate": false,
+      "stan_weinstein_stage2Candidate": false,
+      "turtle_donchian_breakoutCandidate": false,
+      "can_slimCandidate": false,
+      "rsi2_pullbackCandidate": false,
+      "minervini_trend_templateScore": 0.0,
+      "stan_weinstein_stage2Score": 0.0,
+      "turtle_donchian_breakoutScore": 0.0,
+      "can_slimScore": 0.0,
+      "rsi2_pullbackScore": 1.5
+    },
+    {
+      "date": "2026-04-10",
+      "open": 270.0,
+      "high": 273.0,
+      "low": 266.0,
+      "close": 268.0,
+      "volume": 29400,
+      "turnover": 7879200.0,
+      "change": -1.0,
+      "changePercent": -0.3717,
+      "ma5": 269.2,
+      "ma25": 271.64,
+      "ma50": 285.9,
+      "ma75": 286.2533,
+      "ma140": 261.95,
+      "ma150": 259.7133,
+      "ma160": 258.15,
+      "ma200": 244.115,
+      "ma140SlopePct": 2.0196,
+      "ma150SlopePct": 2.4618,
+      "ma160SlopePct": 3.4488,
+      "ma200SlopePct": 4.7322,
+      "volumeMa5": 77180.0,
+      "volumeMa20": 94790.0,
+      "volumeMa25": 99540.0,
+      "turnoverMa5": 21040340.0,
+      "distanceToMa25": -1.34,
+      "distanceToMa50": -6.2609,
+      "distanceToMa75": -6.3766,
+      "distanceToMa140": 2.3096,
+      "distanceToMa150": 3.1907,
+      "distanceToMa160": 3.8156,
+      "distanceToMa200": 9.7843,
+      "volumeRatio25": 0.2954,
+      "rci12": 44.76,
+      "rci24": -60.7,
+      "rci48": -86.49,
+      "rsi2": 40.0511,
+      "consecutiveDownDays": 2,
+      "rangePosition52w": 38.6555,
+      "high52w": 487.0,
+      "low52w": 130.0,
+      "distanceTo52wHighPct": 44.9692,
+      "near52wHighRatio": 0.5503,
+      "recoveryFrom52wLowPct": 106.1538,
+      "newHigh52w": false,
+      "newHigh20d": false,
+      "donchian20High": 285.0,
+      "donchian55High": 329.0,
+      "distanceToDonchian20Pct": 5.9649,
+      "distanceToDonchian55Pct": 18.541,
+      "base10to20": {
+        "detected": true,
+        "window": 20,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base10to30": {
+        "detected": true,
+        "window": 20,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base20to60": {
+        "detected": true,
+        "window": 27,
+        "high": 297.0,
+        "low": 255.0,
+        "range_pct": 16.4706
+      },
+      "distanceToBaseHighPct": 5.6338,
+      "distanceToMidBaseHighPct": 9.7643,
+      "distanceToPrevHighPct": 4.2857,
+      "volatility20Pct": 11.3725,
+      "unstableBelowMa200Days": 0,
+      "upperWick3dAvg": 0.1873,
+      "newHigh20dCount10": 0,
+      "signalCategory": "none",
+      "lowerWickFlag": false,
+      "strongHammerFlag": false,
+      "prevBearFlag": true,
+      "belowMa5Flag": true,
+      "trendTurnCandidate": false,
+      "trendTurnBreakoutDate": null,
+      "trendTurnDaysAfterBreakout": null,
+      "trendTurnRangePct": null,
+      "trendTurnAboveMa75Ratio": null,
+      "trendTurnScore": 0,
+      "trendTurnReason": "",
+      "strategyMatches": [],
+      "strategyScores": {
+        "minervini_trend_template": 0.0,
+        "stan_weinstein_stage2": 0.0,
+        "turtle_donchian_breakout": 0.0,
+        "can_slim": 0.0,
+        "rsi2_pullback": 0.0
+      },
+      "strategyReasons": {},
+      "strategyExcludedReasons": {
+        "minervini_trend_template": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "stan_weinstein_stage2": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "can_slim": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "rsi2_pullback": [
+          "板薄銘柄を除外"
+        ]
+      },
+      "strategyMetrics": {
+        "minervini_trend_template": {
+          "distanceTo52wHighPct": 44.9692,
+          "recoveryFrom52wLowPct": 106.1538,
+          "maStackAligned": true,
+          "ma200SlopePct": 4.7322,
+          "basePeriodDays": 20,
+          "distanceToBaseHighPct": 5.6338
+        },
+        "stan_weinstein_stage2": {
+          "stage": "Stage 2",
+          "distanceToLongMaPct": 3.1907,
+          "longMaSlopePct": 2.4618,
+          "basePeriodDays": 27,
+          "distanceToBaseHighPct": 9.7643
+        },
+        "turtle_donchian_breakout": {
+          "breakoutPeriod": null,
+          "breakoutDistancePct": 18.541,
+          "volumeRatio25": 0.2954,
+          "preBreakoutRangePct": 11.3725
+        },
+        "can_slim": {
+          "fundamentalMode": "technical_optional",
+          "distanceTo52wHighPct": 44.9692,
+          "turnoverMa5": 21040340.0,
+          "basePeriodDays": 27,
+          "distanceToBaseHighPct": 9.7643
+        },
+        "rsi2_pullback": {
+          "rsi2": 40.0511,
+          "consecutiveDownDays": 2,
+          "distanceToMa50": -6.2609,
+          "distanceToMa150": 3.1907,
+          "pullbackDepthPct": -6.2609
+        }
+      },
+      "minervini_trend_templateCandidate": false,
+      "stan_weinstein_stage2Candidate": false,
+      "turtle_donchian_breakoutCandidate": false,
+      "can_slimCandidate": false,
+      "rsi2_pullbackCandidate": false,
+      "minervini_trend_templateScore": 0.0,
+      "stan_weinstein_stage2Score": 0.0,
+      "turtle_donchian_breakoutScore": 0.0,
+      "can_slimScore": 0.0,
+      "rsi2_pullbackScore": 0.0
+    },
+    {
+      "date": "2026-04-13",
+      "open": 267.0,
+      "high": 269.0,
+      "low": 260.0,
+      "close": 262.0,
+      "volume": 63400,
+      "turnover": 16610800.0,
+      "change": -6.0,
+      "changePercent": -2.2388,
+      "ma5": 268.6,
+      "ma25": 270.56,
+      "ma50": 285.32,
+      "ma75": 286.28,
+      "ma140": 262.2571,
+      "ma150": 259.9733,
+      "ma160": 258.3687,
+      "ma200": 244.36,
+      "ma140SlopePct": 1.986,
+      "ma150SlopePct": 2.3947,
+      "ma160SlopePct": 3.252,
+      "ma200SlopePct": 4.5838,
+      "volumeMa5": 76620.0,
+      "volumeMa20": 92760.0,
+      "volumeMa25": 98448.0,
+      "turnoverMa5": 20853900.0,
+      "distanceToMa25": -3.1638,
+      "distanceToMa50": -8.1733,
+      "distanceToMa75": -8.4812,
+      "distanceToMa140": -0.098,
+      "distanceToMa150": 0.7796,
+      "distanceToMa160": 1.4055,
+      "distanceToMa200": 7.2189,
+      "volumeRatio25": 0.644,
+      "rci12": 28.67,
+      "rci24": -59.3,
+      "rci48": -86.15,
+      "rsi2": 19.5869,
+      "consecutiveDownDays": 3,
+      "rangePosition52w": 36.9748,
+      "high52w": 487.0,
+      "low52w": 130.0,
+      "distanceTo52wHighPct": 46.2012,
+      "near52wHighRatio": 0.538,
+      "recoveryFrom52wLowPct": 101.5385,
+      "newHigh52w": false,
+      "newHigh20d": false,
+      "donchian20High": 281.0,
+      "donchian55High": 329.0,
+      "distanceToDonchian20Pct": 6.7616,
+      "distanceToDonchian55Pct": 20.3647,
+      "base10to20": {
+        "detected": true,
+        "window": 20,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base10to30": {
+        "detected": true,
+        "window": 21,
+        "high": 284.0,
+        "low": 255.0,
+        "range_pct": 11.3725
+      },
+      "base20to60": {
+        "detected": true,
+        "window": 28,
+        "high": 297.0,
+        "low": 255.0,
+        "range_pct": 16.4706
+      },
+      "distanceToBaseHighPct": 7.7465,
+      "distanceToMidBaseHighPct": 11.7845,
+      "distanceToPrevHighPct": 4.0293,
+      "volatility20Pct": 11.3725,
+      "unstableBelowMa200Days": 0,
+      "upperWick3dAvg": 0.2169,
+      "newHigh20dCount10": 0,
+      "signalCategory": "none",
+      "lowerWickFlag": false,
+      "strongHammerFlag": false,
+      "prevBearFlag": true,
+      "belowMa5Flag": true,
+      "trendTurnCandidate": false,
+      "trendTurnBreakoutDate": null,
+      "trendTurnDaysAfterBreakout": null,
+      "trendTurnRangePct": null,
+      "trendTurnAboveMa75Ratio": null,
+      "trendTurnScore": 0,
+      "trendTurnReason": "",
+      "strategyMatches": [],
+      "strategyScores": {
+        "minervini_trend_template": 0.0,
+        "stan_weinstein_stage2": 0.0,
+        "turtle_donchian_breakout": 0.0,
+        "can_slim": 0.0,
+        "rsi2_pullback": 0.0
+      },
+      "strategyReasons": {},
+      "strategyExcludedReasons": {
+        "minervini_trend_template": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "stan_weinstein_stage2": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "can_slim": [
+          "低位株を除外",
+          "流動性不足を除外"
+        ],
+        "rsi2_pullback": [
+          "板薄銘柄を除外"
+        ]
+      },
+      "strategyMetrics": {
+        "minervini_trend_template": {
+          "distanceTo52wHighPct": 46.2012,
+          "recoveryFrom52wLowPct": 101.5385,
+          "maStackAligned": true,
+          "ma200SlopePct": 4.5838,
+          "basePeriodDays": 21,
+          "distanceToBaseHighPct": 7.7465
+        },
+        "stan_weinstein_stage2": {
+          "stage": "Stage 2",
+          "distanceToLongMaPct": 0.7796,
+          "longMaSlopePct": 2.3947,
+          "basePeriodDays": 28,
+          "distanceToBaseHighPct": 11.7845
+        },
+        "turtle_donchian_breakout": {
+          "breakoutPeriod": null,
+          "breakoutDistancePct": 20.3647,
+          "volumeRatio25": 0.644,
+          "preBreakoutRangePct": 11.3725
+        },
+        "can_slim": {
+          "fundamentalMode": "technical_optional",
+          "distanceTo52wHighPct": 46.2012,
+          "turnoverMa5": 20853900.0,
+          "basePeriodDays": 28,
+          "distanceToBaseHighPct": 11.7845
+        },
+        "rsi2_pullback": {
+          "rsi2": 19.5869,
+          "consecutiveDownDays": 3,
+          "distanceToMa50": -8.1733,
+          "distanceToMa150": 0.7796,
+          "pullbackDepthPct": -8.1733
         }
       },
       "minervini_trend_templateCandidate": false,

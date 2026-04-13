@@ -2,7 +2,7 @@
 
 set -u
 
-PROJECT_DIR="/Users/okamoto/kabu_doragon"
+PROJECT_DIR="/Users/okamoto/My Project/kabu_doragon"
 PORT="8010"
 URL="http://127.0.0.1:${PORT}/index.html"
 LOG_DIR="${PROJECT_DIR}/.tmp"
@@ -27,6 +27,20 @@ is_port_in_use() {
   lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1
 }
 
+open_browser_url() {
+  local target_url="$1"
+  if open -a "Google Chrome" "${target_url}" >/dev/null 2>&1; then
+    return 0
+  fi
+  if open -a "Safari" "${target_url}" >/dev/null 2>&1; then
+    return 0
+  fi
+  if open "${target_url}" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 cd "${PROJECT_DIR}" || {
   print_status "作業フォルダに移動できません: ${PROJECT_DIR}"
   wait_for_enter
@@ -35,7 +49,9 @@ cd "${PROJECT_DIR}" || {
 
 if is_server_responding; then
   print_status "既存サーバーを検出しました。ブラウザで開きます。"
-  open "${URL}"
+  if ! open_browser_url "${URL}"; then
+    print_status "ブラウザを自動で開けませんでした: ${URL}"
+  fi
   exit 0
 fi
 
@@ -53,12 +69,16 @@ if is_port_in_use; then
 fi
 
 print_status "ローカルサーバーを起動します..."
-nohup python3 -m http.server "${PORT}" --bind 127.0.0.1 >"${LOG_FILE}" 2>&1 &
+nohup python3 -m http.server "${PORT}" --bind 127.0.0.1 </dev/null >"${LOG_FILE}" 2>&1 &
+SERVER_PID=$!
+disown "${SERVER_PID}" 2>/dev/null || true
 
 for _ in {1..20}; do
   if is_server_responding; then
     print_status "起動しました。ブラウザで開きます。"
-    open "${URL}"
+    if ! open_browser_url "${URL}"; then
+      print_status "ブラウザを自動で開けませんでした: ${URL}"
+    fi
     exit 0
   fi
   sleep 0.5
