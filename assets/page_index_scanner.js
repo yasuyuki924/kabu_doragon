@@ -57,6 +57,7 @@
         const resetPicksButton = document.getElementById("indexResetPicksButton");
         const miniCalendar = document.getElementById("indexMiniCalendar") || stickyMiniCalendar;
         const errorBox = document.getElementById("indexError");
+        const dataQualitySummaryBox = document.getElementById("indexDataQualitySummary");
         const list = document.getElementById("indexList");
       
         const state = {
@@ -1013,6 +1014,45 @@
           element.innerHTML = `<div class="chart-inline-error chart-placeholder">${escapeHtml(title)}<br /><span>${escapeHtml(message)}</span></div>`;
         }
 
+        function summarizeOverviewDataQuality(overview) {
+          const summary = overview?.dataQualitySummary;
+          if (summary && typeof summary === "object") {
+            return {
+              matchedCount: Number(summary.matchedCount || 0),
+              staleCount: Number(summary.staleCount || 0),
+              emptyCount: Number(summary.emptyCount || 0),
+            };
+          }
+          const records = Array.isArray(overview?.records) ? overview.records : [];
+          let matchedCount = 0;
+          let staleCount = 0;
+          let emptyCount = 0;
+          records.forEach((record) => {
+            const quality = summarizeScannerRecordQuality(record, state.selectedDate);
+            if (quality.reasonCodes.includes("NO_OHLCV")) {
+              emptyCount += 1;
+            } else if (quality.isStale) {
+              staleCount += 1;
+            } else {
+              matchedCount += 1;
+            }
+          });
+          return { matchedCount, staleCount, emptyCount };
+        }
+
+        function renderDataQualitySummary() {
+          if (!dataQualitySummaryBox) {
+            return;
+          }
+          const summary = summarizeOverviewDataQuality(state.overview);
+          dataQualitySummaryBox.hidden = false;
+          dataQualitySummaryBox.innerHTML = `
+            <span class="index-data-quality-chip">最新一致 <strong>${formatNumber(summary.matchedCount, 0)}</strong></span>
+            <span class="index-data-quality-chip">遅延 <strong>${formatNumber(summary.staleCount, 0)}</strong></span>
+            <span class="index-data-quality-chip">空データ <strong>${formatNumber(summary.emptyCount, 0)}</strong></span>
+          `;
+        }
+
         function getChartCacheKey(record) {
           return `${state.timeframe}:${state.selectedDate}:${record.code}`;
         }
@@ -1048,12 +1088,14 @@
               inspected = await state.chartRequestCache.get(cacheKey);
             } catch (error) {
               renderChartFailure(chartElementId, "データ取得失敗");
-              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${error?.message || error}`);
+              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / FETCH_FAIL / ${error?.message || error}`);
               return;
             }
           }
 
           const { payload, validation, shape, requestUrl, status, responseBody } = inspected;
+          const reasonCodes = Array.isArray(validation.reasonCodes) ? validation.reasonCodes : [];
+          const isNoOhlcv = reasonCodes.includes("NO_OHLCV");
           if (validation.issues.length) {
             console.debug("[ticker-chart:validation]", {
               code: record.code,
@@ -1063,10 +1105,19 @@
               parsedCandleCount: validation.parsedCandleCount,
               issues: validation.issues,
               warnings: validation.warnings,
+              reasonCodes,
               shapeDiff: diffShapeAgainstBaseline(state.chartBaselineShape, shape),
             });
             renderChartFailure(chartElementId, "データ取得失敗");
-            showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
+            showError(errorBox, `一部のチャート読込に失敗: ${record.code} / PARSE_FAIL / ${validation.issues.join(", ")}`);
+            return;
+          }
+
+          if (isNoOhlcv) {
+            console.debug("[ticker-chart:no-ohlcv]", { code: record.code, requestUrl, reasonCode: "NO_OHLCV" });
+            renderChartStatus(chartElementId, "データなし", "NO_OHLCV", "chart-placeholder");
+            linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+            state.chartRenderedCodes.add(cacheKey);
             return;
           }
 
@@ -1077,6 +1128,7 @@
           renderScannerCompactChart(chartElementId, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
             timeframe: state.timeframe,
             useBarCount: false,
+            extendToLatest: true,
           });
           linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
           state.chartRenderedCodes.add(cacheKey);
@@ -1285,6 +1337,7 @@
           updateRangeChip();
           updateStickyFiltersUi();
           updateHeaderStatus();
+          renderDataQualitySummary();
       
           if (!filtered.length) {
             if (selectAllPicksButton) {
