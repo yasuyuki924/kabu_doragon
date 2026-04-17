@@ -20,6 +20,7 @@
     INDEX_SCANNER_TIMEFRAME_RANGES,
     INDEX_SCANNER_TURNOVER_OPTIONS,
     INDEX_SCANNER_MIN_CLOSE,
+    STALE_TOLERANCE_BUSINESS_DAYS,
     STOP_HIGH_EPSILON,
     JPX_PRICE_LIMIT_TABLE,
     TICKER_NAME_EXACT_ALIASES,
@@ -30,6 +31,7 @@
   const {
     addCalendarMonths,
     addMonths,
+    buildDesktopPortFallbackUrl,
     escapeHtml,
     fetchJson,
     formatDateKey,
@@ -40,6 +42,7 @@
     formatSignedPercent,
     parseDate,
     roundNumber,
+    shouldUseDesktopPortFallback,
     startOfMonth,
   } = window.KabuAppUtils;
   const {
@@ -48,6 +51,7 @@
     loadRankingData,
     loadThemeOrderData,
     loadTickerPayloadData,
+    loadTickerSummaryData,
     loadYahooFinanceProfileData,
     readJsonStorage,
     writeJsonStorage,
@@ -63,6 +67,7 @@
       INDEX_SCANNER_TIMEFRAMES,
       INDEX_SCANNER_TIMEFRAME_RANGES,
       INDEX_SCANNER_TURNOVER_OPTIONS,
+      STALE_TOLERANCE_BUSINESS_DAYS,
       STRATEGY_CONFIG,
       MARKET_TAGS,
       TSE_MARKETS,
@@ -74,6 +79,7 @@
       buildFilterSnapshotFromState,
       buildHyperExportEntries,
       buildPickedRecordFromPayload,
+      buildPickedRecordFromSummary,
       buildRegisteredDisplayName,
       buildRegisteredItemFromPick,
       buildScannerPickPayload,
@@ -116,6 +122,7 @@
       loadThemeOrder,
       loadTickerNote,
       loadTickerPayload,
+      loadTickerSummary,
       loadYahooFinanceProfile,
       loadTickerPayloadWithDiagnostics,
       mapWithConcurrency,
@@ -150,6 +157,7 @@
       renderTickerIdentity,
       resetScannerPicks,
       resolveAvailableDate,
+      resolveVisibleManifestGeneratedAt,
       resolvePickerDate,
       resolveRegisteredSelectedDate,
       runRefreshAction,
@@ -159,6 +167,7 @@
       selectAllScannerPicks,
       showError,
       sortScannerRecords,
+      summarizeScannerRecordQuality,
       sortedScannerPicks,
       startOfMonth,
       syncIndexScannerUrl,
@@ -806,6 +815,26 @@
     return manifestRevisionKey(nextManifest) !== manifestRevisionKey(currentManifest);
   }
 
+  function resolveVisibleManifestGeneratedAt(manifest, selectedDate = "") {
+    const manifestGeneratedAt = String(manifest?.generatedAt || "").trim();
+    const snapshot = manifest?.currentSnapshot || {};
+    const snapshotGeneratedAt = String(snapshot?.generatedAt || "").trim();
+    const snapshotDate = String(snapshot?.date || "").trim();
+    const targetDate = String(selectedDate || "").trim();
+    if (!snapshotGeneratedAt) {
+      return manifestGeneratedAt;
+    }
+    if (targetDate && snapshotDate && snapshotDate !== targetDate) {
+      return manifestGeneratedAt || snapshotGeneratedAt;
+    }
+    const manifestTime = manifestGeneratedAt ? Date.parse(manifestGeneratedAt) : NaN;
+    const snapshotTime = snapshotGeneratedAt ? Date.parse(snapshotGeneratedAt) : NaN;
+    if (Number.isFinite(manifestTime) && Number.isFinite(snapshotTime)) {
+      return manifestTime > snapshotTime ? manifestGeneratedAt : snapshotGeneratedAt;
+    }
+    return manifestGeneratedAt || snapshotGeneratedAt;
+  }
+
   function startAutoRefreshPolling({
     getCurrentManifest,
     onRefresh,
@@ -974,6 +1003,10 @@
 
   async function loadTickerPayload(code) {
     return loadTickerPayloadData(fetchJson, code);
+  }
+
+  async function loadTickerSummary(date) {
+    return loadTickerSummaryData(fetchJson, date);
   }
 
   async function loadYahooFinanceProfile(code) {
@@ -1641,24 +1674,29 @@
   function validateTickerPayloadForChart(payload, selectedDate) {
     const issues = [];
     const warnings = [];
+    const reasonCodes = [];
     const ohlcv = Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
     if (!ohlcv.length) {
-      issues.push("ohlcv missing or empty");
-      return { issues, warnings, parsedCandleCount: 0, invalidRowCount: 0, hasSelectedDate: false, selectedDateMissing: false };
+      warnings.push("ohlcv missing or empty");
+      reasonCodes.push("NO_OHLCV");
+      return { issues, warnings, reasonCodes, parsedCandleCount: 0, invalidRowCount: 0, hasSelectedDate: false, selectedDateMissing: false };
     }
     const invalidRows = ohlcv.filter(
       (row) => !row || row.date == null || row.open == null || row.high == null || row.low == null || row.close == null || row.volume == null
     );
     if (invalidRows.length) {
       issues.push(`ohlcv contains ${invalidRows.length} invalid rows`);
+      reasonCodes.push("PARSE_FAIL");
     }
     const hasSelectedDate = ohlcv.some((row) => row?.date === selectedDate);
     if (selectedDate && !hasSelectedDate) {
       warnings.push(`selected date ${selectedDate} missing`);
+      reasonCodes.push("STALE_ND");
     }
     return {
       issues,
       warnings,
+      reasonCodes,
       parsedCandleCount: ohlcv.length,
       invalidRowCount: invalidRows.length,
       hasSelectedDate,
@@ -1672,6 +1710,12 @@
     let responseBody = "";
     try {
       response = await fetch(requestUrl, { cache: "no-store" });
+      if (!response.ok && response.status === 404 && shouldUseDesktopPortFallback(requestUrl)) {
+        const fallbackUrl = buildDesktopPortFallbackUrl(requestUrl);
+        if (fallbackUrl && fallbackUrl !== requestUrl) {
+          response = await fetch(fallbackUrl, { cache: "no-store" });
+        }
+      }
       responseBody = await response.text();
       console.debug("[ticker-chart:response]", {
         code,
@@ -2556,7 +2600,13 @@
   }
 
   function filterByMinimumClose(records, minimumClose) {
-    return records.filter((record) => Number(record.close) >= minimumClose);
+    return records.filter((record) => {
+      const reasons = Array.isArray(record?.dataQuality?.reasonCodes) ? record.dataQuality.reasonCodes : [];
+      if (reasons.includes("NO_OHLCV") || reasons.includes("FETCH_FAIL") || reasons.includes("PARSE_FAIL")) {
+        return true;
+      }
+      return Number(record.close) >= minimumClose;
+    });
   }
 
   function turnoverLabel(value) {
@@ -2692,12 +2742,51 @@
       sector: String(payload.sector || ""),
       industry: String(payload.industry || ""),
       themes: Array.isArray(payload.themes) ? payload.themes : [],
+      tags: Array.isArray(payload.tags) ? payload.tags : [],
+      links: payload.links && typeof payload.links === "object" ? payload.links : {},
       close: row.close,
       change: row.change,
       changePercent: row.changePercent,
       volume: row.volume,
       high: row.high,
       low: row.low,
+    };
+  }
+
+  function buildPickedRecordFromSummary(pick, summary) {
+    if (!summary || typeof summary !== "object") {
+      return {
+        code: String(pick.code || ""),
+        name: String(pick.name || ""),
+        market: String(pick.market || ""),
+        sector: "",
+        industry: "",
+        themes: [],
+        tags: [],
+        links: {},
+        close: null,
+        change: null,
+        changePercent: null,
+        volume: null,
+        high: null,
+        low: null,
+      };
+    }
+    return {
+      code: String(pick.code || summary.code || ""),
+      name: String(pick.name || summary.name || ""),
+      market: String(pick.market || summary.market || ""),
+      sector: String(summary.sector || ""),
+      industry: String(summary.industry || ""),
+      themes: Array.isArray(summary.themes) ? summary.themes : [],
+      tags: Array.isArray(summary.tags) ? summary.tags : [],
+      links: summary.links && typeof summary.links === "object" ? summary.links : {},
+      close: summary.close ?? null,
+      change: summary.change ?? null,
+      changePercent: summary.changePercent ?? null,
+      volume: summary.volume ?? null,
+      high: summary.high ?? null,
+      low: summary.low ?? null,
     };
   }
 
@@ -2779,7 +2868,7 @@
         </div>
         <div class="scanner-item-links scanner-item-links--picked">
           <div id="pickedLinks-${escapeHtml(record.code)}" class="scanner-item-links-main scanner-item-links-main--picked">
-            <a class="picked-link-pill" href="${buildTickerUrl(record.code, state.selectedDate, "")}">📈 Detail</a>
+            ${renderPickedItemLinks(record, record, state)}
           </div>
           <button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(record.code)}">✕ Remove</button>
         </div>
@@ -2834,7 +2923,7 @@
         </div>
         <div class="scanner-item-links">
           <div id="registeredLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
-            <a href="${buildTickerUrl(record.code, state.selectedDate, "")}">個別ページ</a>
+            ${renderScannerItemLinks(record, record, { selectedDate: state.selectedDate, sort: "code" })}
           </div>
         </div>
       </article>
@@ -2852,6 +2941,9 @@
     const stopHighBadge = hasStopHighBadge
       ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
       : "";
+    const quality = summarizeScannerRecordQuality(record, state.selectedDate);
+    const qualityBadges = renderScannerQualityBadges(quality);
+    const lastDataDate = quality.lastDataDate ? formatScannerTradeDate(quality.lastDataDate) : "--/--";
     const strategyBar = renderScannerStrategyBar(record);
     return `
       <article class="scanner-item${stopHighClass}">
@@ -2878,12 +2970,14 @@
                       variant: "scanner",
                     })}
                     ${stopHighBadge}
+                    ${qualityBadges}
                   </div>
                 </td>
                 <td class="scanner-trade-cell">
                   <div class="scanner-trade-split">
                     <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
                     <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
+                    <span class="scanner-last-data-date">最終データ日: ${escapeHtml(lastDataDate)}</span>
                   </div>
                 </td>
                 <td id="scanChange-${escapeHtml(record.code)}" class="num">
@@ -2901,7 +2995,7 @@
         </div>
         <div class="scanner-item-links">
           <div id="scanLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
-            <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">Detail</a>
+            ${renderScannerItemLinks(record, record, state)}
           </div>
           ${strategyBar ? `<div class="scanner-item-links-center">${strategyBar}</div>` : '<div class="scanner-item-links-center"></div>'}
           <label class="scanner-pick-toggle">
@@ -2943,6 +3037,39 @@
           : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
       )
       .join('<span class="scanner-link-separator">|</span>');
+  }
+
+  function summarizeScannerRecordQuality(record, selectedDate) {
+    const quality = record && typeof record.dataQuality === "object" ? record.dataQuality : {};
+    const reasonCodes = Array.isArray(quality.reasonCodes) ? [...new Set(quality.reasonCodes.map((item) => String(item || "").trim()).filter(Boolean))] : [];
+    const staleBusinessDays = Number.isFinite(Number(quality.staleBusinessDays)) ? Number(quality.staleBusinessDays) : 0;
+    const fallbackLastDataDate = String(record?.date || "").trim();
+    const lastDataDate = String(quality.lastDataDate || fallbackLastDataDate || "").trim();
+    const isStale = reasonCodes.includes("STALE_ND") && staleBusinessDays > Number(STALE_TOLERANCE_BUSINESS_DAYS || 1);
+    return {
+      lastDataDate,
+      reasonCodes,
+      staleBusinessDays,
+      isStale,
+      selectedDate: String(selectedDate || "").trim(),
+    };
+  }
+
+  function renderScannerQualityBadges(quality) {
+    const badges = [];
+    if (quality.isStale) {
+      badges.push(`<span class="scanner-quality-badge scanner-quality-badge--stale">遅延</span>`);
+    }
+    quality.reasonCodes.forEach((reasonCode) => {
+      if (reasonCode === "STALE_ND") {
+        return;
+      }
+      badges.push(`<span class="scanner-quality-badge scanner-quality-badge--reason">${escapeHtml(reasonCode)}</span>`);
+    });
+    if (!badges.length) {
+      return "";
+    }
+    return `<span class="scanner-quality-badges">${badges.join("")}</span>`;
   }
 
   function renderPickedItemLinks(payload, record, state) {
@@ -3086,6 +3213,23 @@
       return String(date.getMonth() + 1);
     }
     return `${date.getMonth() + 1}/${date.getDate()}`;
+  }
+
+  function appendWhitespaceAnchorRow(rows, anchorDate) {
+    const normalizedDate = String(anchorDate || "").trim();
+    if (!normalizedDate || !rows.length) {
+      return rows;
+    }
+    const lastRow = rows[rows.length - 1];
+    if (!lastRow || String(lastRow.date || "") >= normalizedDate) {
+      return rows;
+    }
+    return [
+      ...rows,
+      {
+        time: normalizedDate,
+      },
+    ];
   }
 
   function renderCompactStyleChart(element, rows, selectedDate, rangeValue, options = {}) {
@@ -3273,11 +3417,18 @@
     if (!element) {
       return;
     }
+    const initialRowOverride =
+      options.initialRowOverride && typeof options.initialRowOverride === "object"
+        ? {
+            ...options.initialRowOverride,
+            date: String(options.initialRowOverride.date || selectedDate || "").trim(),
+          }
+        : null;
     renderCompactStyleChart(element, rows, selectedDate, rangeValue, {
       ...options,
       code,
       height: 208,
-      onInitialRow: (row) => setScannerTableValues(code, row),
+      onInitialRow: (row) => setScannerTableValues(code, initialRowOverride || row),
       onRowSelect: (row) => setScannerTableValues(code, row),
     });
   }

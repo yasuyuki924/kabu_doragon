@@ -19,6 +19,7 @@ OVERVIEW_DIR = DATA_DIR / "overview"
 MANIFEST_JSON = DATA_DIR / "manifest.json"
 JQUANTS_SYNC_STATE_JSON = DATA_DIR / "jquants_sync_state.json"
 UPDATE_STATE_JSON = DATA_DIR / "update_state.json"
+UPDATE_SUMMARY_JSON = DATA_DIR / "update_summary.json"
+RETRY_PENDING_JSON = DATA_DIR / "retry_pending.json"
 LOGS_DIR = ROOT / "logs"
 OUTPUT_DIR = ROOT / "output"
-

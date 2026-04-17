@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from numbers import Real
 
 from common import (
     MANIFEST_JSON,
@@ -15,6 +16,67 @@ from common import (
     write_json,
 )
 from src.app.shared_view_data import load_records_by_date, resolve_explicit_dates, resolve_selected_dates
+from src.app.shared_view_data import STALE_TOLERANCE_BUSINESS_DAYS
+
+
+def build_data_quality_summary(records: list[dict[str, object]], stale_tolerance_business_days: int) -> dict[str, int]:
+    matched_count = 0
+    stale_count = 0
+    empty_count = 0
+    stale_1d_count = 0
+    stale_2p_count = 0
+    for record in records:
+        quality = record.get("dataQuality") if isinstance(record, dict) else None
+        quality = quality if isinstance(quality, dict) else {}
+        reasons = quality.get("reasonCodes")
+        reason_codes = {str(item) for item in reasons} if isinstance(reasons, list) else set()
+        stale_days = quality.get("staleBusinessDays")
+        stale_days = int(stale_days) if isinstance(stale_days, Real) and stale_days >= 0 else 0
+        if "NO_OHLCV" in reason_codes:
+            empty_count += 1
+            continue
+        if "STALE_ND" in reason_codes and stale_days > stale_tolerance_business_days:
+            stale_count += 1
+            if stale_days == 1:
+                stale_1d_count += 1
+            elif stale_days >= 2:
+                stale_2p_count += 1
+            continue
+        matched_count += 1
+    return {
+        "matchedCount": matched_count,
+        "staleCount": stale_count,
+        "emptyCount": empty_count,
+        "stale1dCount": stale_1d_count,
+        "stale2pCount": stale_2p_count,
+    }
+
+
+def with_default_data_quality(records: list[dict[str, object]], selected_date: str) -> list[dict[str, object]]:
+    normalized: list[dict[str, object]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        if isinstance(record.get("dataQuality"), dict):
+            normalized.append(record)
+            continue
+        row_date = str(record.get("date") or "").strip()
+        reason_codes: list[str] = []
+        stale_days = 0
+        if row_date and selected_date and row_date < selected_date:
+            reason_codes.append("STALE_ND")
+            stale_days = 1
+        normalized.append(
+            {
+                **record,
+                "dataQuality": {
+                    "lastDataDate": row_date or None,
+                    "reasonCodes": reason_codes,
+                    "staleBusinessDays": stale_days,
+                },
+            }
+        )
+    return normalized
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,8 +108,11 @@ def main() -> int:
             cached = load_daily_records(date_value + suffix, codes)
             if cached is None:
                 continue
-            
-            records = sorted(cached, key=lambda item: str(item.get("code") or ""))
+
+            if suffix == "":
+                records = sorted(per_date.get(date_value, []), key=lambda item: str(item.get("code") or ""))
+            else:
+                records = sorted(with_default_data_quality(cached, date_value), key=lambda item: str(item.get("code") or ""))
             rise_count = sum(1 for item in records if float(item.get("changePercent") or 0) > 0)
             fall_count = sum(1 for item in records if float(item.get("changePercent") or 0) < 0)
             flat_count = len(records) - rise_count - fall_count
@@ -60,6 +125,7 @@ def main() -> int:
             )
             payload = {
                 "date": date_value,
+                "staleToleranceBusinessDays": STALE_TOLERANCE_BUSINESS_DAYS,
                 "recordCount": len(records),
                 "riseCount": rise_count,
                 "fallCount": fall_count,
@@ -72,6 +138,7 @@ def main() -> int:
                 "sectorBreadth": summarize_sector_strength(records)[:12],
                 "themeBreadth": summarize_theme_counts(records)[:12],
                 "tagBreadth": summarize_tag_counts(records)[:12],
+                "dataQualitySummary": build_data_quality_summary(records, STALE_TOLERANCE_BUSINESS_DAYS),
                 "records": records,
             }
             write_json(OVERVIEW_DIR / date_value / f"market_pulse{suffix}.json", payload)

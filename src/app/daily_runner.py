@@ -13,6 +13,7 @@ SCRIPT_FETCH = "scripts/fetch_prices.py"
 SCRIPT_TICKERS = "scripts/build_ticker_data.py"
 SCRIPT_RANKINGS = "scripts/build_rankings.py"
 SCRIPT_OVERVIEW = "scripts/build_market_overview.py"
+SCRIPT_UPDATE_SUMMARY = "scripts/generate_update_summary.py"
 
 
 def run_step(*args: str) -> float:
@@ -67,13 +68,17 @@ def build_daily_pipeline(args) -> int:
         print(f"timing rankings={rankings_elapsed:.1f}s")
         overview_elapsed = run_step(*overview_args)
         print(f"timing overview={overview_elapsed:.1f}s")
+        summary_elapsed = run_step(SCRIPT_UPDATE_SUMMARY)
+        print(f"timing update_summary={summary_elapsed:.1f}s")
     else:
         if codes_mode:
             print("timing rankings=0.0s (skipped: --codes safe mode)")
             print("timing overview=0.0s (skipped: --codes safe mode)")
+            print("timing update_summary=0.0s (skipped: --codes safe mode)")
         else:
             print("timing rankings=0.0s (skipped)")
             print("timing overview=0.0s (skipped)")
+            print("timing update_summary=0.0s (skipped)")
 
     print(f"timing total={perf_counter() - total_start:.1f}s")
     return 0

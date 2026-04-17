@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT="/Users/okamoto/kabu_doragon"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${ROOT}/.venv/bin/python"
 PENDING_EXIT_CODE=10
 UPDATE_STATE_JSON="${ROOT}/data/update_state.json"
@@ -12,6 +13,7 @@ LOCK_DIR="${ROOT}/logs/run_yfinance_close_retry.lock"
 LOCK_TTL_SECONDS=$((20 * 60))
 FINAL_STALE_HOUR=16
 FINAL_STALE_MINUTE=15
+export KABU_DORAGON_ROOT="${ROOT}"
 
 mkdir -p "${ROOT}/logs"
 cd "${ROOT}"
@@ -96,8 +98,9 @@ now_minutes="$(current_minutes)"
 read_state=$("${PYTHON_BIN}" - <<'PY'
 import json
 from pathlib import Path
+import os
 
-root = Path("/Users/okamoto/kabu_doragon/data")
+root = Path(os.environ["KABU_DORAGON_ROOT"]) / "data"
 
 def load(path: Path) -> dict:
     if not path.exists():
@@ -122,6 +125,10 @@ snapshot_type=$(printf '%s' "${read_state}" | jq -r '.snapshotType')
 snapshot_status=$(printf '%s' "${read_state}" | jq -r '.snapshotStatus')
 
 if [ "${manifest_latest}" = "${target_date}" ] && [ "${sync_latest}" = "${target_date}" ]; then
+  log "RETRY_PHASE: pending symbols preflight"
+  if ! "${PYTHON_BIN}" scripts/retry_missing_symbols.py --provider yfinance; then
+    log "WARN: retry preflight failed"
+  fi
   if [ "${snapshot_type}" != "daily" ] || [ "${snapshot_status}" != "finalized" ]; then
     write_snapshot_state "daily" "finalized" "False" ""
     "${PYTHON_BIN}" scripts/build_market_overview.py --dates "${target_date}" >/dev/null
@@ -178,11 +185,17 @@ print(f"updatedCodes={len(payload.get('updatedCodes') or [])} updatedDates={len(
 PY
 )
 
+log "RETRY_PHASE: missing/stale symbols"
+if ! "${PYTHON_BIN}" scripts/retry_missing_symbols.py --provider yfinance --selected-date "${target_date}"; then
+  log "WARN: retry phase failed"
+fi
+
 post_state=$("${PYTHON_BIN}" - <<'PY'
 import json
 from pathlib import Path
+import os
 
-root = Path("/Users/okamoto/kabu_doragon/data")
+root = Path(os.environ["KABU_DORAGON_ROOT"]) / "data"
 
 def load(path: Path) -> dict:
     if not path.exists():

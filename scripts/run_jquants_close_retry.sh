@@ -1,10 +1,12 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT="/Users/okamoto/kabu_doragon"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${ROOT}/.venv/bin/python"
 PENDING_EXIT_CODE=10
 UPDATE_STATE_JSON="${ROOT}/data/update_state.json"
+export KABU_DORAGON_ROOT="${ROOT}"
 
 mkdir -p "${ROOT}/logs"
 cd "${ROOT}"
@@ -17,6 +19,10 @@ fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] check start"
 
 if "${PYTHON_BIN}" scripts/check_jquants_latest.py; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] retry phase: pending symbols preflight"
+  if ! "${PYTHON_BIN}" scripts/retry_missing_symbols.py --provider jquants; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: retry preflight failed" >&2
+  fi
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] OK: already reflected, skipping fetch"
   exit 0
 else
@@ -73,13 +79,19 @@ print(f"updatedCodes={len(payload.get('updatedCodes') or [])} updatedDates={len(
 PY
 )
 
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] retry phase: missing/stale symbols"
+if ! "${PYTHON_BIN}" scripts/retry_missing_symbols.py --provider jquants --selected-date "$(date '+%Y-%m-%d')"; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: retry phase failed" >&2
+fi
+
 if "${PYTHON_BIN}" scripts/check_jquants_latest.py; then
   "${PYTHON_BIN}" - <<'PY'
 from datetime import datetime
 from pathlib import Path
 import json
+import os
 
-root = Path("/Users/okamoto/kabu_doragon/data")
+root = Path(os.environ["KABU_DORAGON_ROOT"]) / "data"
 sync_state = json.loads((root / "jquants_sync_state.json").read_text(encoding="utf-8"))
 snapshot_date = str(sync_state.get("lastSuccessfulDate") or "").strip() or datetime.now().astimezone().date().isoformat()
 payload = {
