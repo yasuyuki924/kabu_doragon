@@ -27,6 +27,48 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _reason_codes(record: dict[str, object]) -> set[str]:
+    data_quality = record.get("dataQuality")
+    if not isinstance(data_quality, dict):
+        return set()
+    raw_codes = data_quality.get("reasonCodes")
+    if not isinstance(raw_codes, list):
+        return set()
+    return {str(item).strip() for item in raw_codes if str(item).strip()}
+
+
+def is_fresh_record(record: dict[str, object], selected_date: str) -> bool:
+    if str(record.get("date") or "").strip() != selected_date:
+        return False
+    reason_codes = _reason_codes(record)
+    return "NO_OHLCV" not in reason_codes and "STALE_ND" not in reason_codes
+
+
+def summarize_data_quality(records: list[dict[str, object]], selected_date: str) -> dict[str, object]:
+    total = len(records)
+    matched = 0
+    stale = 0
+    no_ohlcv = 0
+    for record in records:
+        reason_codes = _reason_codes(record)
+        if "NO_OHLCV" in reason_codes:
+            no_ohlcv += 1
+            continue
+        if is_fresh_record(record, selected_date):
+            matched += 1
+            continue
+        stale += 1
+    ratio = (matched / total) if total > 0 else 0.0
+    return {
+        "targetDate": selected_date,
+        "totalCount": total,
+        "matchedCount": matched,
+        "staleCount": stale,
+        "noOhlcvCount": no_ohlcv,
+        "matchedRatio": round(ratio, 6),
+    }
+
+
 def main() -> int:
     args = parse_args()
     codes = parse_codes(args.codes)
@@ -46,8 +88,14 @@ def main() -> int:
             cached = load_daily_records(date_value + suffix, codes)
             if cached is None:
                 continue
-            
-            records = sorted(cached, key=lambda item: str(item.get("code") or ""))
+
+            raw_records = list(per_date.get(date_value) or [])
+            quality_summary = summarize_data_quality(raw_records, date_value) if suffix == "" else None
+            if suffix == "":
+                records = [record for record in raw_records if is_fresh_record(record, date_value)]
+            else:
+                records = list(cached)
+            records = sorted(records, key=lambda item: str(item.get("code") or ""))
             rise_count = sum(1 for item in records if float(item.get("changePercent") or 0) > 0)
             fall_count = sum(1 for item in records if float(item.get("changePercent") or 0) < 0)
             flat_count = len(records) - rise_count - fall_count
@@ -72,6 +120,8 @@ def main() -> int:
                 "sectorBreadth": summarize_sector_strength(records)[:12],
                 "themeBreadth": summarize_theme_counts(records)[:12],
                 "tagBreadth": summarize_tag_counts(records)[:12],
+                "totalUniverseCount": len(raw_records) if suffix == "" else len(records),
+                "dataQualitySummary": quality_summary,
                 "records": records,
             }
             write_json(OVERVIEW_DIR / date_value / f"market_pulse{suffix}.json", payload)

@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT="/Users/okamoto/kabu_doragon"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${ROOT}/.venv/bin/python"
 PENDING_EXIT_CODE=10
 UPDATE_STATE_JSON="${ROOT}/data/update_state.json"

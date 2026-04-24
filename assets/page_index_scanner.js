@@ -61,11 +61,12 @@
       
         const state = {
           manifest: null,
+          updateHealth: null,
           overview: null,
           sort: "gainers",
           tag: "",
           theme: "",
-          turnover: 0,
+          turnover: 500000000,
           limit: 100,
           timeframe: "daily",
           rangeMonths: 3,
@@ -124,7 +125,7 @@
         state.selectedStrategies = params.get("strategy") ? [params.get("strategy")] : [];
         state.turnover = INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
           ? Number(params.get("turnover"))
-          : 0;
+          : state.turnover;
         state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
         state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
         state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
@@ -823,6 +824,7 @@
           updateHeaderStatus();
           await runRefreshAction(refreshButton, errorBox, async () => {
             state.manifest = nextManifest || state.pendingManifest || await loadManifest();
+            state.updateHealth = await loadUpdateHealth();
             state.pendingManifest = null;
             state.hasFreshUpdate = false;
             await loadDate(state.selectedDate || state.manifest.latestDate);
@@ -836,9 +838,23 @@
         refreshButton?.addEventListener("click", async () => {
           await refreshIndexScanner();
         });
+
+        async function loadUpdateHealth() {
+          try {
+            const response = await fetch("./data/update_health.json", { cache: "no-store" });
+            if (!response.ok) {
+              return null;
+            }
+            const payload = await response.json();
+            return payload && typeof payload === "object" ? payload : null;
+          } catch (_error) {
+            return null;
+          }
+        }
       
         try {
           state.manifest = await loadManifest();
+          state.updateHealth = await loadUpdateHealth();
           state.themeOrder = await loadThemeOrder();
           await loadDate(params.get("date") || state.manifest.latestDate);
           await render();
@@ -930,6 +946,7 @@
             return;
           }
           const currentSnapshot = state.manifest?.currentSnapshot || {};
+          const health = state.updateHealth && typeof state.updateHealth === "object" ? state.updateHealth : null;
           const statusState = resolveHeaderStatusState(currentSnapshot?.generatedAt, {
             snapshot: currentSnapshot,
             hasFreshUpdate: state.hasFreshUpdate,
@@ -938,6 +955,27 @@
             isJapaneseHoliday,
           });
           const timeParts = formatSnapshotGeneratedAtParts(currentSnapshot?.generatedAt);
+          const checkedAtMs = Date.parse(String(health?.checkedAt || ""));
+          const manifestGeneratedAtMs = Date.parse(String(state.manifest?.generatedAt || ""));
+          const healthStale =
+            !Number.isFinite(checkedAtMs) ||
+            (Number.isFinite(checkedAtMs) && Date.now() - checkedAtMs > 6 * 60 * 60 * 1000) ||
+            (Number.isFinite(checkedAtMs) &&
+              Number.isFinite(manifestGeneratedAtMs) &&
+              checkedAtMs + 60 * 1000 < manifestGeneratedAtMs);
+          const reasonCodes = Array.isArray(health?.reasonCodes) ? health.reasonCodes.map((item) => String(item || "")) : [];
+          const launchRegistered = health?.launchAgent?.registered === true;
+          const hasDelayedReason = ["STALE_MANIFEST", "STALE_UPDATE_STATE", "LOG_NOT_UPDATED", "RECOVERY_FAILED"].some((code) =>
+            reasonCodes.includes(code)
+          );
+          const healthLabel = !launchRegistered ? "自動更新未登録" : hasDelayedReason ? "更新遅延" : "自動更新: 正常";
+          const healthLatestDate = String(health?.manifest?.latestDate || state.manifest?.latestDate || "").trim();
+          const healthGenerated = formatSnapshotGeneratedAtParts(health?.manifest?.generatedAt || state.manifest?.generatedAt);
+          const useHealth = Boolean(health && !healthStale);
+          const labelText = useHealth ? healthLabel : statusState.label;
+          const dateText = useHealth ? `最新:${healthLatestDate || "--"}` : timeParts.date || "--/--";
+          const hmText = useHealth ? `生成:${healthGenerated.hm || "--:--"}` : timeParts.hm || "--:--";
+          const secondsText = useHealth ? "" : timeParts.seconds || "";
           updatedStatus.className = [
             "index-header-status",
             `index-header-status--${statusState.tone}`,
@@ -950,9 +988,9 @@
           updatedStatus.setAttribute(
             "title",
             [
-              statusState.label,
+              labelText,
               statusState.marketPhase,
-              timeParts.full || "--",
+              useHealth ? `${healthLatestDate || "--"} / ${healthGenerated.full || "--"}` : timeParts.full || "--",
               statusState.pending ? "new data ready" : "",
               statusState.refreshing ? "refreshing" : "",
             ]
@@ -963,14 +1001,14 @@
             <span class="index-header-status-dot" aria-hidden="true"></span>
             <span class="index-header-status-body">
               <span class="index-header-status-topline">
-                <span class="index-header-status-label">${escapeHtml(statusState.label)}</span>
+                <span class="index-header-status-label">${escapeHtml(labelText)}</span>
                 <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
               </span>
               <span class="index-header-status-bottomline">
-                <span class="index-header-status-date">${escapeHtml(timeParts.date || "--/--")}</span>
+                <span class="index-header-status-date">${escapeHtml(dateText)}</span>
                 <span class="index-header-status-time">
-                  <span class="index-header-status-hm">${escapeHtml(timeParts.hm || "--:--")}</span>
-                  <span class="index-header-status-seconds">${escapeHtml(timeParts.seconds || "")}</span>
+                  <span class="index-header-status-hm">${escapeHtml(hmText)}</span>
+                  <span class="index-header-status-seconds">${escapeHtml(secondsText)}</span>
                 </span>
               </span>
             </span>
@@ -1180,6 +1218,7 @@
         async function checkForManifestUpdate() {
           try {
             const latestManifest = await loadManifest();
+            state.updateHealth = await loadUpdateHealth();
             if (isManifestNewer(latestManifest, state.manifest)) {
               state.pendingManifest = latestManifest;
               state.hasFreshUpdate = false;

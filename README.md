@@ -73,13 +73,13 @@
 
 最も簡単な方法:
 
-- Finder で [`/Users/okamoto/kabu_doragon/open_kabu_doragon.command`](/Users/okamoto/kabu_doragon/open_kabu_doragon.command) をダブルクリック
+- Finder で [`/Users/okamoto/My Project/kabu_doragon/open_kabu_doragon.command`](/Users/okamoto/My Project/kabu_doragon/open_kabu_doragon.command) をダブルクリック
 - 自動でローカルサーバーを起動し、[http://127.0.0.1:8010/index.html](http://127.0.0.1:8010/index.html) を既定ブラウザで開きます
 
 毎回サクッと開きたい場合:
 
 - `open_kabu_doragon.command` を Dock やデスクトップに置いておくと、1回のクリックで起動できます
-- さらに常駐化したい場合は [`/Users/okamoto/kabu_doragon/launchd/com.okamoto.kabu_doragon_http_server.plist`](/Users/okamoto/kabu_doragon/launchd/com.okamoto.kabu_doragon_http_server.plist) を `~/Library/LaunchAgents/` に配置して読み込むと、ログイン中は `http://127.0.0.1:8010/index.html` をすぐ開けます
+- さらに常駐化したい場合は [`/Users/okamoto/My Project/kabu_doragon/launchd/com.okamoto.kabu_doragon_http_server.plist`](/Users/okamoto/My Project/kabu_doragon/launchd/com.okamoto.kabu_doragon_http_server.plist) を `~/Library/LaunchAgents/` に配置して読み込むと、ログイン中は `http://127.0.0.1:8010/index.html` をすぐ開けます
 
 ## 構成整理メモ
 
@@ -100,7 +100,7 @@
 - `src/exports/`
   - JSON 出力の薄い exporter 層
 
-互換性のため [`/Users/okamoto/kabu_doragon/scripts/common.py`](/Users/okamoto/kabu_doragon/scripts/common.py) は残してあり、既存の `from common import ...` は当面そのまま動く前提です。
+互換性のため [`/Users/okamoto/My Project/kabu_doragon/scripts/common.py`](/Users/okamoto/My Project/kabu_doragon/scripts/common.py) は残してあり、既存の `from common import ...` は当面そのまま動く前提です。
 
 ### 今回の整理で意図的に据え置いたもの
 
@@ -127,7 +127,7 @@
 手動で起動する場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 python3 -m http.server 8010
 ```
 
@@ -137,13 +137,13 @@ python3 -m http.server 8010
 http://127.0.0.1:8010/index.html
 ```
 
-`/Users/okamoto/kabu_doragon/index.html` を Finder から直接開く `file://` 方式は非対応です。`fetch()` が失敗して、カレンダーやチャートが表示されません。
+`/Users/okamoto/My Project/kabu_doragon/index.html` を Finder から直接開く `file://` 方式は非対応です。`fetch()` が失敗して、カレンダーやチャートが表示されません。
 必ず [http://127.0.0.1:8010/index.html](http://127.0.0.1:8010/index.html) を開いてください。
 
 ### テーマフィルターについて
 
 - `index.html` のテーマプルダウン先頭は常に `すべて` です
-- テーマ定義の正本は PDF ですが、アプリが読む実データは [`/Users/okamoto/kabu_doragon/data/theme_map.json`](/Users/okamoto/kabu_doragon/data/theme_map.json) です
+- テーマ定義の正本は PDF ですが、アプリが読む実データは [`/Users/okamoto/My Project/kabu_doragon/data/theme_map.json`](/Users/okamoto/My Project/kabu_doragon/data/theme_map.json) です
 - テーマデータには `すべて` を入れません。`すべて` は UI 固定項目です
 - テーマの追加・修正は画面 UI ではなく `data/theme_map.json` を正本として管理します
 - `theme_map.json` の正式形式は `themes[].name` と `themes[].codes[]` です
@@ -157,53 +157,51 @@ http://127.0.0.1:8010/index.html
 - テーマを追加・修正したら、少なくとも以下を実行して `tickers / rankings / overview / manifest` を再生成してください
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/validate_theme_map.py
 ./.venv/bin/python scripts/run_daily.py --skip-fetch --days 60
 ```
 
 ## データ更新方法
 
-### 標準経路: Yahoo Finance
+### 標準経路: J-Quants Light
 
-標準の取得経路は `yfinance` です。通常運用では J-Quants の設定は不要です。
+標準の取得経路は `J-Quants` です。通常運用では `.env` に認証情報を設定してください。
 
 通常の更新:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/fetch_prices.py \
   --universe tse \
   --segments prime,standard,growth \
-  --history-years 5 \
-  --batch-size 50
+  --history-years 5
 ```
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py
 ```
 
 初回 5 年同期をやり直したい場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/fetch_prices.py \
   --universe tse \
   --segments prime,standard,growth \
   --history-years 5 \
-  --batch-size 50 \
   --full-refresh
 ```
 
-`run_daily.py` の既定 provider も `yfinance` です。何も指定しなければ Yahoo 経路で取得と再生成を行います。
+`run_daily.py` と `fetch_prices.py` の既定 provider は `jquants` です。何も指定しなければ J-Quants 経路で取得と再生成を行います。
 
-### J-Quants を明示利用する場合
+### J-Quants 認証設定
 
-J-Quants は予備経路として残しています。明示的に使う場合だけ `.env.example` をコピーして `.env` を作成してください。
+J-Quants を使うために `.env.example` をコピーして `.env` を作成してください。
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 cp .env.example .env
 ```
 
@@ -219,14 +217,11 @@ JQUANTS_API_REFRESH_TOKEN=
 
 運用ルール:
 
-- 標準運用は Yahoo Finance です
-- J-Quants は旧運用の互換経路として残しています
-- J-Quants を解約する場合は、旧 launchd ジョブを停止してからにしてください
-
+- 標準運用は J-Quants です
+- `.env` は git に入れません（認証情報の漏洩防止）
 - 推奨は `JQUANTS_API_KEY` を入れる方法です
-- `JQUANTS_API_KEY` があればそれを優先します
-- API キーがない場合だけ、`JQUANTS_API_REFRESH_TOKEN` または `MAIL_ADDRESS + PASSWORD` を使います
-- `.env` は git に入れません
+- API キー未設定時のみ `JQUANTS_API_REFRESH_TOKEN` または `MAIL_ADDRESS + PASSWORD` を使います
+- yfinance は手動の緊急用途だけに限定します
 
 J-Quants のプラン差:
 
@@ -237,10 +232,8 @@ J-Quants のプラン差:
 
 ### J-Quants で価格データを取得する場合
 
-この経路は旧運用です。通常は使いません。
-
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/fetch_prices.py \
   --provider jquants \
   --universe tse \
@@ -251,7 +244,7 @@ cd "/Users/okamoto/kabu_doragon"
 初回 5 年同期をやり直したい場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/fetch_prices.py \
   --provider jquants \
   --universe tse \
@@ -265,7 +258,7 @@ cd "/Users/okamoto/kabu_doragon"
 この経路も旧運用です。通常の build は Yahoo Finance 前提で `--provider yfinance` または既定値を使ってください。
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py --provider jquants
 ```
 
@@ -274,14 +267,14 @@ cd "/Users/okamoto/kabu_doragon"
 取得済み CSV から JSON だけ再生成したい場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py --skip-fetch
 ```
 
 全件再生成が必要なときだけ:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py --skip-fetch --full-rebuild --days 60
 ```
 
@@ -294,7 +287,7 @@ full rebuild では `tickers` 全件を再生成した上で、カレンダー�
 ### 少数銘柄でのテスト
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py \
   --skip-fetch \
   --days 10 \
@@ -303,8 +296,10 @@ cd "/Users/okamoto/kabu_doragon"
 
 ### Yahoo Finance の日足取得
 
+`yfinance` は手動の緊急用途専用です。自動更新ジョブは既定で無効化しています。
+
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/fetch_prices.py \
   --provider yfinance \
   --universe tse \
@@ -314,21 +309,19 @@ cd "/Users/okamoto/kabu_doragon"
 ```
 
 `yfinance` は `auto_adjust=False` の raw 日足を `data/ohlcv_raw/*.csv` に差分マージし、既存の分割・併合補正ロジックを通して `data/ohlcv/*.csv` を再生成します。  
-J-Quants の取得に失敗した場合、自動で `yfinance` には切り替わりません。標準経路そのものを Yahoo にしているため、通常は J-Quants を経由しません。
+J-Quants の取得に失敗した場合でも、自動で `yfinance` には切り替わりません。
 
 `run_daily.py` を使う場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/run_daily.py --provider yfinance
 ```
 
-### 場中5分更新と引け後確定
+### yfinance 自動ジョブについて
 
-通常運用の自動更新は次の 2 本です。
-
-- 場中5分更新: `scripts/run_yfinance_intraday_update.sh`
-- 引け後確定: `scripts/run_yfinance_close_retry.sh`
+`launchd/com.okamoto.kabu_doragon_yfinance_intraday.plist` と `launchd/com.okamoto.kabu_doragon_yfinance_close_retry.plist` は `Disabled=true` で配布しています。  
+必要時のみ手動実行し、常時運用には使わないでください。
 
 ### yfinance の場中データ
 
@@ -337,7 +330,7 @@ cd "/Users/okamoto/kabu_doragon"
 手動で取得する場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/zsh scripts/run_yfinance_intraday_update.sh
 ```
 
@@ -349,14 +342,15 @@ cd "/Users/okamoto/kabu_doragon"
 - 取れなければ前営業日の正式データ表示を維持します
 - 引け後に正式な日足が反映された場合は `daily` が優先されます
 
-自宅Macで場中に自動更新したい場合:
+自宅Macで一時的に自動更新したい場合（推奨しない）:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 mkdir -p ~/Library/LaunchAgents
 cp "launchd/com.okamoto.kabu_doragon_yfinance_intraday.plist" ~/Library/LaunchAgents/
-launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_intraday.plist 2>/dev/null || true
-launchctl load -w ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_intraday.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_intraday.plist
+launchctl enable "gui/$(id -u)/com.okamoto.kabu_doragon_yfinance_intraday"
+launchctl kickstart -k "gui/$(id -u)/com.okamoto.kabu_doragon_yfinance_intraday"
 ```
 
 補足:
@@ -377,6 +371,8 @@ launchctl load -w ~/Library/LaunchAgents/com.okamoto.kabu_doragon_yfinance_intra
 平日 `15:35` に当日分の日足を取得し、まだ未反映なら `15:40`、`16:00`、`16:15` に再試行します。  
 成功した回で `current_snapshot_state.json` を `daily` に切り替え、画面上の当日表示も正式日足に移行します。  
 `16:15` でも未反映なら、その日は `暫定データ（引け後未確定）` として固定し、翌営業日の通常更新へ戻します。
+
+注: この yfinance 引け後ジョブは通常運用では無効です。標準の引け後更新は `com.okamoto.kabu_doragon_close_retry`（J-Quants）を使います。
 
 登録/解除コマンド:
 
@@ -407,7 +403,7 @@ J-Quants の公式ドキュメント上では、株価（四本値）の日次�
 当日分がすでに repo に入っているかは、次のコマンドで確認できます。
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/check_jquants_latest.py
 ```
 
@@ -420,17 +416,18 @@ cd "/Users/okamoto/kabu_doragon"
 
 ### J-Quants の引け後再試行（旧運用 / 予備）
 
-この経路は残していますが、通常運用は Yahoo 側の場中5分更新と引け後確定を使ってください。
+この経路は現在の標準運用です。
 
-- 平日 `16:30` から `20:00` まで 30 分おき
-- 平日 `08:00` に 1 回
+- 平日 `16:45`
+- 平日 `17:15`
+- 平日 `18:00`
 
-`08:00` の実行は、前営業日の上場銘柄一覧などの再更新を拾うためです。
+更新が未反映なら `PENDING` で終了し、次の枠で再試行します。
 
 手動で同じ処理を走らせる場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/zsh scripts/run_jquants_close_retry.sh
 ```
 
@@ -452,7 +449,7 @@ cd "/Users/okamoto/kabu_doragon"
 当日分の前場スナップショットが有効かは、次のコマンドで確認できます。
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/python scripts/check_jquants_am_snapshot.py
 ```
 
@@ -468,7 +465,7 @@ cd "/Users/okamoto/kabu_doragon"
 手動で前場更新を走らせる場合:
 
 ```bash
-cd "/Users/okamoto/kabu_doragon"
+cd "/Users/okamoto/My Project/kabu_doragon"
 ./.venv/bin/zsh scripts/run_jquants_am_update.sh
 ```
 
@@ -754,8 +751,7 @@ launchctl unload ~/Library/LaunchAgents/com.okamoto.kabutan_news_daily.plist
 
 - `launchd/com.okamoto.kabu_doragon_close_retry.plist`
 
-平日 `16:30` から `20:00` まで 30 分おきに、当日分の日足が返ってきたかを確認します。  
-加えて、平日 `08:00` に 1 回、前営業日分の上場銘柄一覧などの再更新を拾います。  
+平日 `16:45` / `17:15` / `18:00` に、当日分の日足が返ってきたかを確認します。  
 まだ返ってきていなければ `PENDING` として終了し、次の枠で再試行します。  
 返ってきた回で `ohlcv / tickers / rankings / overview / manifest` を更新します。
 日足同期時は分割・併合イベントも同時に取り込み、必要なら `adjustedDateFrom` 以降を追加で再生成します。
@@ -777,6 +773,21 @@ launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_close_retry.pli
 
 - `logs/jquants_close_retry.out.log`
 - `logs/jquants_close_retry.err.log`
+
+### 更新ヘルス watchdog（launchd）
+
+設定ファイル:
+
+- `launchd/com.okamoto.kabu_doragon_update_watchdog.plist`
+
+平日 `18:45` に `scripts/watchdog_update_health.sh` を実行します。  
+watchdog は `scripts/check_update_health.sh` で更新状態を判定し、異常時だけ `scripts/run_jquants_close_retry.sh` を 1 回だけ再実行します。  
+結果は `data/update_health.json` に保存され、UI左上ステータスにも反映されます。
+
+ログ:
+
+- `logs/update_watchdog.out.log`
+- `logs/update_watchdog.err.log`
 
 `launchd` は対話シェルと PATH が異なるため、この更新スクリプトは `python` ではなく `./.venv/bin/python` を明示して動かす前提です。
 

@@ -29,6 +29,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--codes", help="Comma separated ticker codes")
     parser.add_argument("--dates", help="Comma separated trading dates to build")
     return parser.parse_args()
+
+
+def _reason_codes(record: dict[str, object]) -> set[str]:
+    data_quality = record.get("dataQuality")
+    if not isinstance(data_quality, dict):
+        return set()
+    raw_codes = data_quality.get("reasonCodes")
+    if not isinstance(raw_codes, list):
+        return set()
+    return {str(item).strip() for item in raw_codes if str(item).strip()}
+
+
+def _is_fresh_record(record: dict[str, object], selected_date: str) -> bool:
+    if str(record.get("date") or "").strip() != selected_date:
+        return False
+    reason_codes = _reason_codes(record)
+    return "NO_OHLCV" not in reason_codes and "STALE_ND" not in reason_codes
+
+
 def main() -> int:
     args = parse_args()
     codes = parse_codes(args.codes)
@@ -44,7 +63,8 @@ def main() -> int:
     per_date = load_records_by_date(selected_dates, codes)
 
     for date_value in selected_dates:
-        records = per_date[date_value]
+        source_records = list(per_date[date_value] or [])
+        records = [record for record in source_records if _is_fresh_record(record, date_value)]
         gainers = pick_top(records, "changePercent", True, args.limit)
         losers = pick_top(records, "changePercent", False, args.limit)
         volume_spike = pick_top(records, "volumeRatio25", True, args.limit)
@@ -112,7 +132,8 @@ def main() -> int:
             output_dir / "strategy_rsi2.json",
             build_ranking_payload(date_value, "RSI(2) Pullback", strategy_rsi2),
         )
-        print(f"built rankings: {date_value} ({len(records)} records)")
+        stale_count = max(0, len(source_records) - len(records))
+        print(f"built rankings: {date_value} ({len(records)} records, stale_excluded={stale_count})")
 
     return 0
 

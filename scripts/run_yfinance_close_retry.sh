@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-ROOT="/Users/okamoto/kabu_doragon"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${ROOT}/.venv/bin/python"
 PENDING_EXIT_CODE=10
 UPDATE_STATE_JSON="${ROOT}/data/update_state.json"
@@ -93,11 +94,12 @@ target_date=$(date '+%Y-%m-%d')
 now_iso=$(date '+%Y-%m-%dT%H:%M:%S%z' | sed 's/\\([0-9][0-9]\\)$/:\\1/')
 now_minutes="$(current_minutes)"
 
-read_state=$("${PYTHON_BIN}" - <<'PY'
+read_state=$(ROOT="${ROOT}" "${PYTHON_BIN}" - <<'PY'
 import json
+import os
 from pathlib import Path
 
-root = Path("/Users/okamoto/kabu_doragon/data")
+root = Path(os.environ["ROOT"]) / "data"
 
 def load(path: Path) -> dict:
     if not path.exists():
@@ -178,11 +180,12 @@ print(f"updatedCodes={len(payload.get('updatedCodes') or [])} updatedDates={len(
 PY
 )
 
-post_state=$("${PYTHON_BIN}" - <<'PY'
+post_state=$(ROOT="${ROOT}" "${PYTHON_BIN}" - <<'PY'
 import json
+import os
 from pathlib import Path
 
-root = Path("/Users/okamoto/kabu_doragon/data")
+root = Path(os.environ["ROOT"]) / "data"
 
 def load(path: Path) -> dict:
     if not path.exists():
