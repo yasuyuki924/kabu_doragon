@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch OHLCV CSVs and refresh watchlist from the existing fetcher")
-    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="yfinance")
+    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="jquants")
     parser.add_argument("--universe", choices=["nikkei225", "tse"], default="tse")
     parser.add_argument("--segments", default="prime,standard,growth")
     parser.add_argument("--period", default="5y")

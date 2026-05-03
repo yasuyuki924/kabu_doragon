@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from common import MANIFEST_JSON, OVERVIEW_DIR, RETRY_PENDING_JSON, ROOT, WATCHLIST_JSON, load_json_dict, write_json
+from src.data_source.inactive_codes import load_inactive_lookup
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,6 +46,7 @@ def load_watchlist_codes() -> list[str]:
 
 
 def classify_retry_targets(selected_date: str) -> dict[str, str]:
+    inactive_lookup = load_inactive_lookup()
     target_map: dict[str, str] = {}
     overview = load_json_dict(OVERVIEW_DIR / selected_date / "market_pulse.json")
     records = overview.get("records")
@@ -65,6 +67,8 @@ def classify_retry_targets(selected_date: str) -> dict[str, str]:
             target_map[code] = reason
 
     for code, record in record_by_code.items():
+        if code in inactive_lookup:
+            continue
         quality = record.get("dataQuality")
         quality = quality if isinstance(quality, dict) else {}
         reasons = quality.get("reasonCodes")
@@ -77,6 +81,8 @@ def classify_retry_targets(selected_date: str) -> dict[str, str]:
             set_reason(code, "STALE_ND")
 
     for code in load_watchlist_codes():
+        if code in inactive_lookup:
+            continue
         if code not in record_by_code:
             set_reason(code, "FETCH_FAIL")
     return target_map
@@ -144,6 +150,8 @@ def main() -> int:
         return 0
 
     pending = load_retry_pending()
+    inactive_lookup = load_inactive_lookup()
+    pending = {code: item for code, item in pending.items() if code not in inactive_lookup}
     pending_codes = sorted(pending.keys())
     initial_targets = classify_retry_targets(selected_date)
     for code in pending_codes:

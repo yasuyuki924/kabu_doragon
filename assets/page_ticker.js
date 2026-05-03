@@ -47,7 +47,12 @@
     const periodButtons = document.getElementById("periodButtons");
     const tickerDatePicker = document.getElementById("tickerDatePicker");
     const tickerRankMeta = document.getElementById("tickerRankMeta");
-    const chartEl = document.getElementById("chart");
+    const dailyChartEl = document.getElementById("dailyChart");
+    const weeklyChartEl = document.getElementById("weeklyChart");
+    const monthlyChartEl = document.getElementById("monthlyChart");
+    const dailyChartMeta = document.getElementById("dailyChartMeta");
+    const weeklyChartMeta = document.getElementById("weeklyChartMeta");
+    const monthlyChartMeta = document.getElementById("monthlyChartMeta");
     const noteArea = document.getElementById("tickerNote");
     const noteStatus = document.getElementById("noteStatus");
     const saveNoteButton = document.getElementById("saveNoteButton");
@@ -70,7 +75,6 @@
     const techVolumeRatio = document.getElementById("techVolumeRatio");
     const techRciSummary = document.getElementById("techRciSummary");
     const techRangePosition = document.getElementById("techRangePosition");
-    const tickerCardRank = document.getElementById("tickerCardRank");
     const tickerCardCode = document.getElementById("tickerCardCode");
     const tickerCardTradeDate = document.getElementById("tickerCardTradeDate");
     const tickerCardTradePrice = document.getElementById("tickerCardTradePrice");
@@ -113,18 +117,9 @@
 
     let stopAutoRefreshPolling = null;
 
-    periodButtons.innerHTML = TICKER_CHART_MODES.map(
-      (mode) =>
-        `<button class="period-button${mode.key === state.selectedChartMode ? " active" : ""}" data-chart-mode="${mode.key}">${mode.label}</button>`
-    ).join("");
-
-    Array.from(periodButtons.querySelectorAll(".period-button")).forEach((button) => {
-      button.addEventListener("click", () => {
-        state.selectedChartMode = normalizeTickerChartMode(button.dataset.chartMode);
-        updatePeriodButtonState(periodButtons, state.selectedChartMode);
-        renderTicker();
-      });
-    });
+    if (periodButtons) {
+      periodButtons.hidden = true;
+    }
 
     noteArea.value = loadTickerNote(code);
     noteStatus.textContent = noteArea.value ? "保存済み" : "未保存";
@@ -344,9 +339,6 @@
       syncSnapshotStatusUi(snapshotBadge, refreshMeta, state.selectedDate, resolveTickerSnapshot(state));
 
       summaryRank.textContent = state.rankingItem ? `${state.rankingItem.rank}位` : "-";
-      if (tickerCardRank) {
-        tickerCardRank.textContent = state.rankingItem ? `${state.rankingItem.rank}` : "-";
-      }
       if (tickerCardCode) {
         tickerCardCode.innerHTML = renderTickerIdentity(code, state.payload.name || code, {
           href: buildTickerUrl(code, state.selectedDate, state.rankingKey),
@@ -396,10 +388,12 @@
           .join('<span class="scanner-link-separator">|</span>');
       }
 
-      renderTickerChart(chartEl, rows, selectedIndex, state.selectedChartMode, chartMeta, (chartRow) => {
+      renderTickerChart(dailyChartEl, rows, selectedIndex, "3m", dailyChartMeta, (chartRow) => {
         setTickerSummaryValues(chartRow);
         setTickerCardValues(chartRow);
       });
+      renderTickerChart(weeklyChartEl, rows, selectedIndex, "weekly", weeklyChartMeta);
+      renderTickerChart(monthlyChartEl, rows, selectedIndex, "monthly", monthlyChartMeta);
     }
 
     function resolveTickerSnapshot(currentState) {

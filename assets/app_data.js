@@ -1,10 +1,35 @@
 (function () {
+  async function requestWithDesktopFallback(path) {
+    const requestPath = String(path || "");
+    let response = await fetch(requestPath, { cache: "no-store" });
+    const shouldFallback = window.KabuAppUtils?.shouldUseDesktopPortFallback?.(requestPath);
+    if (!response.ok && response.status === 404 && shouldFallback) {
+      const fallbackUrl = window.KabuAppUtils?.buildDesktopPortFallbackUrl?.(requestPath);
+      if (fallbackUrl && fallbackUrl !== requestPath) {
+        response = await fetch(fallbackUrl, { cache: "no-store" });
+      }
+    }
+    return response;
+  }
+
   async function loadManifestData(fetchJson, manifestPath) {
     const payload = await fetchJson(manifestPath);
     if (!Array.isArray(payload.availableDates) || !payload.latestDate) {
       throw new Error("manifest.json の形式が不正です。");
     }
     return payload;
+  }
+
+  async function loadUpdateHealthData(updateHealthPath) {
+    const response = await requestWithDesktopFallback(updateHealthPath);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`JSON 読み込み失敗: ${updateHealthPath} (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload && typeof payload === "object" ? payload : null;
   }
 
   async function loadThemeOrderData(fetchJson, themeMapPath) {
@@ -22,7 +47,7 @@
 
   async function loadRankingData(date, key, rankingLabel) {
     const path = `./data/rankings/${date}/${key}.json`;
-    const response = await fetch(path);
+    const response = await requestWithDesktopFallback(path);
     if (!response.ok) {
       if (key === "lower_shadow" && response.status === 404) {
         return { date, ranking: rankingLabel(key), count: 0, items: [] };
@@ -37,6 +62,10 @@
 
   async function loadTickerPayloadData(fetchJson, code) {
     return fetchJson(`./data/tickers/${code}.json`);
+  }
+
+  async function loadTickerSummaryData(fetchJson, date) {
+    return fetchJson(`./data/cache/ticker_summary/${date}.json`);
   }
 
   function normalizeYahooMetric(value) {
@@ -114,10 +143,12 @@
 
   window.KabuAppData = Object.freeze({
     loadManifestData,
+    loadUpdateHealthData,
     loadOverviewData,
     loadRankingData,
     loadThemeOrderData,
     loadTickerPayloadData,
+    loadTickerSummaryData,
     loadYahooFinanceProfileData,
     readJsonStorage,
     writeJsonStorage,

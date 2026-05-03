@@ -1,6 +1,7 @@
 (function () {
   const {
     MANIFEST_PATH,
+    UPDATE_HEALTH_PATH,
     THEME_MAP_PATH,
     WATCHLIST_PATH,
     WATCHLIST_STORAGE_KEY,
@@ -47,6 +48,7 @@
   } = window.KabuAppUtils;
   const {
     loadManifestData,
+    loadUpdateHealthData,
     loadOverviewData,
     loadRankingData,
     loadThemeOrderData,
@@ -116,6 +118,7 @@
       isLowerShadowCandidate,
       loadManifest,
       loadOverview,
+      loadUpdateHealth,
       loadRanking,
       loadRegisteredPicks,
       loadScannerPicks,
@@ -798,6 +801,14 @@
 
   async function loadManifest() {
     return loadManifestData(fetchJson, MANIFEST_PATH);
+  }
+
+  async function loadUpdateHealth() {
+    try {
+      return await loadUpdateHealthData(UPDATE_HEALTH_PATH);
+    } catch (_error) {
+      return null;
+    }
   }
 
   function manifestRevisionKey(manifest) {
@@ -2664,7 +2675,7 @@
     const visibleRows = rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 10);
     const chart = window.LightweightCharts.createChart(element, {
       height: 280,
-      layout: { background: { color: "#111827" }, textColor: "#8899ae" },
+      layout: { background: { color: "#111827" }, textColor: "#b8c7d9" },
       rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.3 }, borderColor: "rgba(30, 58, 95, 0.4)" },
       timeScale: { borderColor: "rgba(30, 58, 95, 0.4)" },
       grid: { vertLines: { color: "rgba(30, 58, 95, 0.2)" }, horzLines: { color: "rgba(30, 58, 95, 0.2)" } },
@@ -2847,18 +2858,18 @@
                     })}
                   </div>
                 </td>
-                <td class="scanner-trade-cell">
+                <td class="scanner-trade-cell scanner-primary-price-cell">
                   <div class="scanner-trade-split">
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
+                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price scanner-primary-price">${formatNumber(record.close)}</span>
+                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
                   </div>
                 </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num">
+                <td id="scanChange-${escapeHtml(record.code)}" class="num scanner-change-cell ${getChangeClass(record.changePercent)}">
                   ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
                 </td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
+                <td id="scanVolume-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.volume, 0)}</td>
+                <td id="scanHigh-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.high)}</td>
+                <td id="scanLow-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.low)}</td>
               </tr>
             </tbody>
           </table>
@@ -2904,16 +2915,16 @@
                     })}
                   </div>
                 </td>
-                <td class="scanner-trade-cell">
+                <td class="scanner-trade-cell scanner-primary-price-cell">
                   <div class="scanner-trade-split">
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
+                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price scanner-primary-price">${formatNumber(record.close)}</span>
+                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
                   </div>
                 </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num">${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}</td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
+                <td id="scanChange-${escapeHtml(record.code)}" class="num scanner-change-cell ${getChangeClass(record.changePercent)}">${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}</td>
+                <td id="scanVolume-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.volume, 0)}</td>
+                <td id="scanHigh-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.high)}</td>
+                <td id="scanLow-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.low)}</td>
               </tr>
             </tbody>
           </table>
@@ -2943,7 +2954,6 @@
       : "";
     const quality = summarizeScannerRecordQuality(record, state.selectedDate);
     const qualityBadges = renderScannerQualityBadges(quality);
-    const lastDataDate = quality.lastDataDate ? formatScannerTradeDate(quality.lastDataDate) : "--/--";
     const strategyBar = renderScannerStrategyBar(record);
     return `
       <article class="scanner-item${stopHighClass}">
@@ -2973,19 +2983,18 @@
                     ${qualityBadges}
                   </div>
                 </td>
-                <td class="scanner-trade-cell">
+                <td class="scanner-trade-cell scanner-primary-price-cell">
                   <div class="scanner-trade-split">
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
-                    <span class="scanner-last-data-date">最終データ日: ${escapeHtml(lastDataDate)}</span>
+                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price scanner-primary-price">${formatNumber(record.close)}</span>
+                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
                   </div>
                 </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num">
+                <td id="scanChange-${escapeHtml(record.code)}" class="num scanner-change-cell ${getChangeClass(record.changePercent)}">
                   ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
                 </td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
+                <td id="scanVolume-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.volume, 0)}</td>
+                <td id="scanHigh-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.high)}</td>
+                <td id="scanLow-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.low)}</td>
               </tr>
             </tbody>
           </table>
@@ -3168,7 +3177,7 @@
     return rows.find((row) => row.date === timeValue) || null;
   }
 
-  function setScannerTableValues(code, row) {
+  function setScannerTableValues(code, row, options = {}) {
     if (!row) {
       return;
     }
@@ -3178,15 +3187,16 @@
     const volume = document.getElementById(`scanVolume-${code}`);
     const high = document.getElementById(`scanHigh-${code}`);
     const low = document.getElementById(`scanLow-${code}`);
-    if (tradeDate) {
-      tradeDate.textContent = formatScannerTradeDate(row.date);
-    }
     if (tradePrice) {
       tradePrice.textContent = formatNumber(row.close);
     }
+    if (tradeDate) {
+      tradeDate.textContent = formatScannerTradeDate(row.date);
+      tradeDate.hidden = !options.showDate;
+    }
     if (change) {
       change.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent)}`;
-      change.className = "num";
+      change.className = `num scanner-change-cell ${getChangeClass(row.changePercent)}`.trim();
     }
     if (volume) {
       volume.textContent = formatNumber(row.volume, 0);
@@ -3289,13 +3299,13 @@
     }
     const chart = window.LightweightCharts.createChart(element, {
       height: options.height || 173,
-      layout: { background: { color: "#111827" }, textColor: "#8899ae", fontSize: 8 },
+      layout: { background: { color: "#111827" }, textColor: "#d2def0", fontSize: 9 },
       rightPriceScale: {
-        borderColor: "rgba(30, 58, 95, 0.4)",
+        borderColor: "rgba(96, 132, 182, 0.64)",
         scaleMargins: { top: 0.05, bottom: 0.22 },
       },
       timeScale: {
-        borderColor: "rgba(30, 58, 95, 0.4)",
+        borderColor: "rgba(96, 132, 182, 0.64)",
         rightOffset: 0,
         barSpacing: 7,
         minBarSpacing: 5,
@@ -3328,6 +3338,9 @@
       wickUpColor: "#ef4444",
       wickDownColor: "#3b82f6",
       crosshairMarkerVisible: false,
+      lastValueVisible: true,
+      priceLineVisible: true,
+      priceLineColor: "rgba(252, 165, 165, 0.9)",
     });
     candleSeries.setData(
       visibleRows.map((row) => ({
@@ -3396,7 +3409,10 @@
         return;
       }
       const clickedRow = resolveRowByTime(chartRows, param.time);
-      if (clickedRow && typeof options.onRowSelect === "function") {
+      if (!clickedRow) {
+        return;
+      }
+      if (typeof options.onRowSelect === "function") {
         options.onRowSelect(clickedRow);
       }
     });
@@ -3429,18 +3445,18 @@
       code,
       height: 208,
       onInitialRow: (row) => setScannerTableValues(code, initialRowOverride || row),
-      onRowSelect: (row) => setScannerTableValues(code, row),
+      onRowSelect: (row) => setScannerTableValues(code, row, { showDate: true }),
     });
   }
 
-  function renderTickerChart(element, rows, selectedIndex, modeKey, chartMeta, onRowSelect) {
+  function renderTickerChart(element, rows, selectedIndex, modeKey, chartMeta, onRowSelect, options = {}) {
     const selectedRow = rows[selectedIndex];
-    if (!selectedRow) {
+    if (!element || !selectedRow) {
       return;
     }
     const mode = getTickerChartMode(modeKey);
     renderCompactStyleChart(element, rows, selectedRow.date, mode.rangeValue, {
-      height: 346,
+      height: options.height || 224,
       code: chartMeta?.dataset?.code || null,
       metaTarget: chartMeta,
       extendToLatest: true,

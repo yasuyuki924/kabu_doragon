@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -11,10 +12,23 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from fetch_nikkei225 import load_nikkei225_components, load_tse_components, normalize_history
+from src.data_source.inactive_codes import (
+    build_inactive_registry,
+    fetch_jpx_delisted_lookup,
+    load_existing_watchlist_candidates,
+    load_inactive_lookup,
+    load_retry_pending_candidates,
+    write_inactive_codes,
+)
 from jquants_provider import (
     ProviderPaths,
     apply_corporate_actions,
+    build_inactive_candidate_entries,
     build_theme_lookup,
     build_watchlist,
     current_repo_latest_date,
@@ -407,14 +421,37 @@ def run_sync(args: argparse.Namespace) -> int:
     selected_segments = parse_segments(args.segments)
     selected_codes = parse_codes(args.codes)
     components = normalize_components(args.universe, selected_segments, selected_codes, args.max_tickers)
+    current_components_all = normalize_components(args.universe, selected_segments, [], 0)
+    jpx_lookup = fetch_jpx_delisted_lookup()
+    inactive_items = build_inactive_registry(
+        candidate_entries=build_inactive_candidate_entries(
+            current_components_all,
+            load_existing_watchlist_candidates(paths.watchlist_json),
+            load_retry_pending_candidates(paths.retry_pending_json),
+        ),
+        active_codes={str(item["code"]) for item in current_components_all},
+        as_of_date=datetime.now().astimezone().date().isoformat(),
+        existing_lookup=load_inactive_lookup(paths.inactive_codes_json),
+        jpx_lookup=jpx_lookup,
+        checked_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+    )
+    write_inactive_codes(
+        inactive_items,
+        as_of_date=datetime.now().astimezone().date().isoformat(),
+        jpx_fetch_ok=bool(jpx_lookup),
+        path=paths.inactive_codes_json,
+    )
+    inactive_codes = {str(item["code"]) for item in inactive_items}
+    components = [row for row in components if str(row.get("code") or "") not in inactive_codes]
+    current_components_all = [row for row in current_components_all if str(row.get("code") or "") not in inactive_codes]
     if not components:
-        raise ValueError("No components matched the selected universe/segments.")
+        raise ValueError("No active components matched the selected universe/segments.")
 
     theme_lookup = build_theme_lookup(load_theme_map(paths.theme_map_json))
     sync_watchlist = build_watchlist(components, args.universe, theme_lookup)
     persisted_watchlist = sync_watchlist
     if selected_codes:
-        persisted_components = normalize_components(args.universe, selected_segments, [], 0)
+        persisted_components = current_components_all
         persisted_watchlist = build_watchlist(persisted_components, args.universe, theme_lookup)
     paths.watchlist_json.write_text(json.dumps(persisted_watchlist, ensure_ascii=False, indent=2), encoding="utf-8")
 

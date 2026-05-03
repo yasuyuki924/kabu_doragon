@@ -15,7 +15,7 @@ from common import (
     summarize_theme_counts,
     write_json,
 )
-from src.app.shared_view_data import load_records_by_date, resolve_explicit_dates, resolve_selected_dates
+from src.app.shared_view_data import load_inactive_summary, load_records_by_date, resolve_explicit_dates, resolve_selected_dates
 from src.app.shared_view_data import STALE_TOLERANCE_BUSINESS_DAYS
 
 
@@ -79,6 +79,20 @@ def with_default_data_quality(records: list[dict[str, object]], selected_date: s
     return normalized
 
 
+def is_fresh_record(record: dict[str, object], selected_date: str) -> bool:
+    row_date = str(record.get("date") or "").strip()
+    if not row_date or row_date != selected_date:
+        return False
+    quality = record.get("dataQuality")
+    if not isinstance(quality, dict):
+        return True
+    reasons = quality.get("reasonCodes")
+    reason_codes = {str(item).strip() for item in reasons} if isinstance(reasons, list) else set()
+    if "NO_OHLCV" in reason_codes or "STALE_ND" in reason_codes:
+        return False
+    return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build date-based market overview JSON files")
     parser.add_argument("--days", type=int, default=60, help="Recent trading dates to build")
@@ -110,9 +124,14 @@ def main() -> int:
                 continue
 
             if suffix == "":
-                records = sorted(per_date.get(date_value, []), key=lambda item: str(item.get("code") or ""))
+                raw_records = sorted(per_date.get(date_value, []), key=lambda item: str(item.get("code") or ""))
+                records = [record for record in raw_records if is_fresh_record(record, date_value)]
+                data_quality_summary = build_data_quality_summary(raw_records, STALE_TOLERANCE_BUSINESS_DAYS)
+                inactive_summary = load_inactive_summary(date_value)
             else:
                 records = sorted(with_default_data_quality(cached, date_value), key=lambda item: str(item.get("code") or ""))
+                data_quality_summary = build_data_quality_summary(records, STALE_TOLERANCE_BUSINESS_DAYS)
+                inactive_summary = {"count": 0, "confirmedCount": 0, "candidateCount": 0, "codes": [], "sample": []}
             rise_count = sum(1 for item in records if float(item.get("changePercent") or 0) > 0)
             fall_count = sum(1 for item in records if float(item.get("changePercent") or 0) < 0)
             flat_count = len(records) - rise_count - fall_count
@@ -138,7 +157,11 @@ def main() -> int:
                 "sectorBreadth": summarize_sector_strength(records)[:12],
                 "themeBreadth": summarize_theme_counts(records)[:12],
                 "tagBreadth": summarize_tag_counts(records)[:12],
-                "dataQualitySummary": build_data_quality_summary(records, STALE_TOLERANCE_BUSINESS_DAYS),
+                "dataQualitySummary": data_quality_summary,
+                "inactiveSummary": inactive_summary,
+                "inactiveCount": int(inactive_summary.get("count") or 0),
+                "activeUniverseCount": len(raw_records) if suffix == "" else len(records),
+                "totalUniverseCount": len(raw_records) if suffix == "" else len(records),
                 "records": records,
             }
             write_json(OVERVIEW_DIR / date_value / f"market_pulse{suffix}.json", payload)

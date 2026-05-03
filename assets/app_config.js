@@ -1,6 +1,7 @@
 (function () {
   window.KabuAppConfig = Object.freeze({
     MANIFEST_PATH: "./data/manifest.json",
+    UPDATE_HEALTH_PATH: "./data/update_health.json",
     THEME_MAP_PATH: "./data/theme_map.json",
     WATCHLIST_PATH: "./data/watchlist.json",
     WATCHLIST_STORAGE_KEY: "local-stock-dashboard.watchlist.v6",

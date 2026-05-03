@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from src.common.utils import select_dates
+from src.data_source.inactive_codes import summarize_inactive_codes
 from src.data_source.local_data import (
     build_daily_record,
     discover_available_dates,
@@ -84,6 +85,14 @@ def _build_data_quality(
     }
 
 
+def _filter_cached_records(records: list[dict[str, object]], target_codes: set[str]) -> list[dict[str, object]]:
+    return [
+        item
+        for item in records
+        if isinstance(item, dict) and str(item.get("code") or "").strip() in target_codes
+    ]
+
+
 def resolve_selected_dates(
     days: int,
     end_date: str | None = None,
@@ -117,6 +126,7 @@ def load_records_by_date(selected_dates: list[str], codes: list[str] | None = No
         code_filter = {str(code).strip() for code in codes if str(code).strip()}
         watchlist = [item for item in watchlist if str(item.get("ticker") or "").strip() in code_filter]
     target_codes = [str(item.get("ticker") or "").strip() for item in watchlist if str(item.get("ticker") or "").strip()]
+    target_code_set = set(target_codes)
     watchlist_meta = {
         str(item.get("ticker") or "").strip(): {
             "code": str(item.get("ticker") or "").strip(),
@@ -141,6 +151,7 @@ def load_records_by_date(selected_dates: list[str], codes: list[str] | None = No
 
     for date_value in selected_dates:
         cached = load_daily_records(date_value, codes) or []
+        cached = _filter_cached_records(cached, target_code_set)
         merged: dict[str, dict[str, object]] = {}
 
         for record in cached:
@@ -227,3 +238,7 @@ def load_records_by_date(selected_dates: list[str], codes: list[str] | None = No
         per_date[date_value] = sorted(merged.values(), key=lambda item: str(item.get("code") or ""))
 
     return per_date
+
+
+def load_inactive_summary(selected_date: str) -> dict[str, object]:
+    return summarize_inactive_codes(selected_date)

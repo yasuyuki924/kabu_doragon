@@ -16,6 +16,7 @@ from src.common.paths import (
     DAILY_RECORDS_DIR,
     DATA_DIR,
     INTRADAY_DIR,
+    INACTIVE_CODES_JSON,
     JQUANTS_SYNC_STATE_JSON,
     MANIFEST_JSON,
     OHLCV_DIR,

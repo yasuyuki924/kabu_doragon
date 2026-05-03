@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ローカル株分析ボード | 銘柄詳細</title>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.76" />
+    <script>
+      (function () {
+        var host = window.location.hostname || "";
+        var port = window.location.port || "";
+        var protocol = window.location.protocol || "";
+        var path = window.location.pathname || "/";
+        if (protocol === "file:" || ((host === "127.0.0.1" || host === "localhost") && port === "")) {
+          var nextPath = path === "/" ? "/index.html" : path;
+          var nextUrl = "http://127.0.0.1:8010" + nextPath + (window.location.search || "") + (window.location.hash || "");
+          window.location.replace(nextUrl);
+        }
+      })();
+    </script>
+    <script src="./assets/desktop_bootstrap.js?v=1.4.81"></script>
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.94" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="ticker">
@@ -181,42 +195,54 @@
 
       <section class="panel ticker-analysis-panel">
         <div id="detailErrorBox" class="status-box error" hidden></div>
-        <article class="scanner-item scanner-item--detail">
-          <div class="scanner-rank-table">
-            <table>
-              <thead>
-                <tr>
-                  <th class="num scanner-col-rank">順位</th>
-                  <th class="scanner-col-code">コード</th>
-                  <th class="num scanner-col-close">取引値</th>
-                  <th class="num scanner-col-change">前日比</th>
-                  <th class="num scanner-col-volume">出来高</th>
-                  <th class="num scanner-col-high">高値</th>
-                  <th class="num scanner-col-low">安値</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td id="tickerCardRank" class="num">-</td>
-                  <td id="tickerCardCode" class="scanner-name-cell">-</td>
-                  <td class="scanner-trade-cell">
-                    <div class="scanner-trade-split">
-                      <span id="tickerCardTradeDate" class="scanner-trade-date">-</span>
-                      <span id="tickerCardTradePrice" class="scanner-trade-price">-</span>
-                    </div>
-                  </td>
-                  <td id="tickerCardChange" class="num">-</td>
-                  <td id="tickerCardVolume" class="num">-</td>
-                  <td id="tickerCardHigh" class="num">-</td>
-                  <td id="tickerCardLow" class="num">-</td>
-                </tr>
-              </tbody>
-            </table>
+        <article class="ticker-compare-shell">
+          <div class="ticker-compare-summary">
+            <div id="tickerCardCode" class="ticker-compare-identity">-</div>
+            <div class="ticker-compare-metric">
+              <span class="ticker-compare-label">基準日</span>
+              <strong id="tickerCardTradeDate">-</strong>
+            </div>
+            <div class="ticker-compare-metric">
+              <span class="ticker-compare-label">取引値</span>
+              <strong id="tickerCardTradePrice">-</strong>
+            </div>
+            <div class="ticker-compare-metric">
+              <span class="ticker-compare-label">前日比</span>
+              <strong id="tickerCardChange">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--sub">
+              <span class="ticker-compare-label">出来高</span>
+              <strong id="tickerCardVolume">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--sub">
+              <span class="ticker-compare-label">高値 / 安値</span>
+              <strong><span id="tickerCardHigh">-</span> / <span id="tickerCardLow">-</span></strong>
+            </div>
           </div>
-          <div class="scanner-item-chart-wrap scanner-item-chart-wrap--detail">
-            <div id="chart" class="chart scanner-chart scanner-chart--detail"></div>
+          <div class="ticker-chart-compare-grid">
+            <section class="ticker-compare-chart-card ticker-compare-chart-card--daily">
+              <div class="ticker-compare-chart-head">
+                <h2>日足</h2>
+                <span id="dailyChartMeta" class="meta"></span>
+              </div>
+              <div id="dailyChart" class="chart scanner-chart ticker-compare-chart"></div>
+            </section>
+            <section class="ticker-compare-chart-card ticker-compare-chart-card--weekly">
+              <div class="ticker-compare-chart-head">
+                <h2>週足</h2>
+                <span id="weeklyChartMeta" class="meta"></span>
+              </div>
+              <div id="weeklyChart" class="chart scanner-chart ticker-compare-chart"></div>
+            </section>
+            <section class="ticker-compare-chart-card ticker-compare-chart-card--monthly">
+              <div class="ticker-compare-chart-head">
+                <h2>月足</h2>
+                <span id="monthlyChartMeta" class="meta"></span>
+              </div>
+              <div id="monthlyChart" class="chart scanner-chart ticker-compare-chart"></div>
+            </section>
           </div>
-          <div class="scanner-item-links scanner-item-links--detail">
+          <div class="scanner-item-links scanner-item-links--detail ticker-compare-links">
             <div id="tickerCardLinks" class="scanner-item-links-main"></div>
             <div class="meta" id="chartMeta"></div>
           </div>
@@ -236,10 +262,10 @@
       </section>
     </main>
 
-    <script src="./assets/app_config.js?v=1.4.77"></script>
-    <script src="./assets/app_utils.js?v=1.4.77"></script>
-    <script src="./assets/app_data.js?v=1.4.77"></script>
-    <script src="./assets/page_ticker.js?v=1.4.77"></script>
-    <script src="./assets/app.js?v=1.4.77"></script>
+    <script src="./assets/app_config.js?v=1.4.81"></script>
+    <script src="./assets/app_utils.js?v=1.4.81"></script>
+    <script src="./assets/app_data.js?v=1.4.81"></script>
+    <script src="./assets/page_ticker.js?v=1.4.94"></script>
+    <script src="./assets/app.js?v=1.4.94"></script>
   </body>
 </html>

@@ -5,7 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${ROOT}/.venv/bin/python"
 PENDING_EXIT_CODE=10
+QUALITY_FAIL_EXIT_CODE=20
 UPDATE_STATE_JSON="${ROOT}/data/update_state.json"
+QUALITY_JSON="${ROOT}/data/update_quality_gate.json"
+LOCK_DIR="${ROOT}/logs/run_jquants_close_retry.lock"
+LOCK_TTL_SECONDS=$((45 * 60))
 export KABU_DORAGON_ROOT="${ROOT}"
 
 mkdir -p "${ROOT}/logs"
@@ -15,6 +19,24 @@ if [ ! -x "${PYTHON_BIN}" ]; then
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: missing python at ${PYTHON_BIN}" >&2
   exit 127
 fi
+
+lock_age_seconds() {
+  /bin/zsh -lc "stat -f %m \"$1\"" 2>/dev/null | awk -v now="$(date +%s)" '{print now - $1}'
+}
+
+if [ -d "${LOCK_DIR}" ]; then
+  lock_age="$(lock_age_seconds "${LOCK_DIR}" || echo 0)"
+  if [ "${lock_age}" -ge "${LOCK_TTL_SECONDS}" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ABANDON: removing stale lock age=${lock_age}s"
+    rmdir "${LOCK_DIR}" 2>/dev/null || rm -rf "${LOCK_DIR}"
+  fi
+fi
+
+if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] SKIP: jquants close retry already running"
+  exit 0
+fi
+trap 'rmdir "${LOCK_DIR}" 2>/dev/null || rm -rf "${LOCK_DIR}" 2>/dev/null || true' EXIT
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] check start"
 
@@ -84,6 +106,28 @@ if ! "${PYTHON_BIN}" scripts/retry_missing_symbols.py --provider jquants --selec
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: retry phase failed" >&2
 fi
 
+quality_target_date=$("${PYTHON_BIN}" - <<'PY'
+import json
+from pathlib import Path
+
+path = Path("data/jquants_sync_state.json")
+payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+print(str(payload.get("lastSuccessfulDate") or "").strip())
+PY
+)
+if [ -z "${quality_target_date}" ]; then
+  quality_target_date="$(date '+%Y-%m-%d')"
+fi
+
+if ! "${PYTHON_BIN}" scripts/check_data_completeness.py --date "${quality_target_date}" --json-path "${QUALITY_JSON}"; then
+  quality_status=$?
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: quality gate failed date=${quality_target_date}" >&2
+  if [ "${quality_status}" -eq "${QUALITY_FAIL_EXIT_CODE}" ]; then
+    exit "${QUALITY_FAIL_EXIT_CODE}"
+  fi
+  exit "${quality_status}"
+fi
+
 if "${PYTHON_BIN}" scripts/check_jquants_latest.py; then
   "${PYTHON_BIN}" - <<'PY'
 from datetime import datetime
@@ -98,6 +142,9 @@ payload = {
     "date": snapshot_date,
     "snapshotType": "daily",
     "active": True,
+    "status": "finalized",
+    "staleAfterClose": False,
+    "finalRetryAt": None,
     "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
 }
 (root / "current_snapshot_state.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

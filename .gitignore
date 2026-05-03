@@ -12,3 +12,24 @@ output/
 data/intraday/*.json
 data/update_state.json
 data/current_snapshot_state.json
+
+# Generated / fetched market data
+data/tickers/
+data/overview/
+data/daily_records/
+data/rankings/
+data/warehouse/
+data/warehouse_test/
+data/public_json/
+data/public_json_test/
+data/cache/
+data/archive/
+
+# Warehouse / database / archive artifacts
+*.parquet
+*.duckdb
+*.db
+*.sqlite
+*.sqlite3
+*.json.gz
+*.tar.gz

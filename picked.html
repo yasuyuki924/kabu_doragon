@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ローカル株分析ボード | 選別銘柄一覧</title>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.68" />
+    <script>
+      (function () {
+        var host = window.location.hostname || "";
+        var port = window.location.port || "";
+        var protocol = window.location.protocol || "";
+        var path = window.location.pathname || "/";
+        if (protocol === "file:" || ((host === "127.0.0.1" || host === "localhost") && port === "")) {
+          var nextPath = path === "/" ? "/index.html" : path;
+          var nextUrl = "http://127.0.0.1:8010" + nextPath + (window.location.search || "") + (window.location.hash || "");
+          window.location.replace(nextUrl);
+        }
+      })();
+    </script>
+    <script src="./assets/desktop_bootstrap.js?v=1.4.81"></script>
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.94" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="picked">
@@ -86,10 +100,10 @@
       </div>
     </div>
 
-    <script src="./assets/app_config.js?v=1.4.77"></script>
-    <script src="./assets/app_utils.js?v=1.4.77"></script>
-    <script src="./assets/app_data.js?v=1.4.77"></script>
-    <script src="./assets/page_picked.js?v=1.4.77"></script>
-    <script src="./assets/app.js?v=1.4.77"></script>
+    <script src="./assets/app_config.js?v=1.4.81"></script>
+    <script src="./assets/app_utils.js?v=1.4.81"></script>
+    <script src="./assets/app_data.js?v=1.4.81"></script>
+    <script src="./assets/page_picked.js?v=1.4.81"></script>
+    <script src="./assets/app.js?v=1.4.94"></script>
   </body>
 </html>

@@ -20,6 +20,20 @@ from src.screening.ranking import (
 )
 
 
+def _is_fresh_record(record: dict[str, object], selected_date: str) -> bool:
+    row_date = str(record.get("date") or "").strip()
+    if not row_date or row_date != selected_date:
+        return False
+    quality = record.get("dataQuality")
+    if not isinstance(quality, dict):
+        return True
+    reasons = quality.get("reasonCodes")
+    reason_codes = {str(item).strip() for item in reasons} if isinstance(reasons, list) else set()
+    if "NO_OHLCV" in reason_codes or "STALE_ND" in reason_codes:
+        return False
+    return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build date-based ranking JSON files")
     parser.add_argument("--days", type=int, default=60, help="Recent trading dates to build")
@@ -29,6 +43,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--codes", help="Comma separated ticker codes")
     parser.add_argument("--dates", help="Comma separated trading dates to build")
     return parser.parse_args()
+
+
 def main() -> int:
     args = parse_args()
     codes = parse_codes(args.codes)
@@ -44,7 +60,7 @@ def main() -> int:
     per_date = load_records_by_date(selected_dates, codes)
 
     for date_value in selected_dates:
-        records = per_date[date_value]
+        records = [record for record in per_date[date_value] if _is_fresh_record(record, date_value)]
         gainers = pick_top(records, "changePercent", True, args.limit)
         losers = pick_top(records, "changePercent", False, args.limit)
         volume_spike = pick_top(records, "volumeRatio25", True, args.limit)

@@ -15,7 +15,7 @@ from src.app.daily_runner import build_daily_pipeline  # noqa: E402
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the local daily build pipeline")
     parser.add_argument("--skip-fetch", action="store_true")
-    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="yfinance")
+    parser.add_argument("--provider", choices=["jquants", "yfinance"], default="jquants")
     parser.add_argument("--full-refresh", action="store_true")
     parser.add_argument("--history-years", type=int, default=5)
     parser.add_argument("--days", type=int, default=60)

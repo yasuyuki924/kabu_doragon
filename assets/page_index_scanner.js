@@ -62,6 +62,7 @@
       
         const state = {
           manifest: null,
+          updateHealth: null,
           overview: null,
           sort: "gainers",
           tag: "",
@@ -851,6 +852,7 @@
         async function loadDate(requestedDate) {
           state.selectedDate = resolveAvailableDate(requestedDate, state.manifest.availableDates);
           state.overview = await loadOverview(state.selectedDate, state.timeframe);
+          state.updateHealth = await loadUpdateHealth();
           state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
           renderTagOptions();
           renderDateControls();
@@ -931,6 +933,37 @@
             return;
           }
           const currentSnapshot = state.manifest?.currentSnapshot || {};
+          const rawHealthPayload = state.updateHealth && typeof state.updateHealth === "object" ? state.updateHealth : null;
+          const healthCheckedAt = String(rawHealthPayload?.checkedAt || "").trim();
+          const healthCheckedAtMs = healthCheckedAt ? Date.parse(healthCheckedAt) : NaN;
+          const manifestGeneratedAtMs = Date.parse(String(state.manifest?.generatedAt || ""));
+          const healthAgeMs = Number.isFinite(healthCheckedAtMs) ? Math.max(0, Date.now() - healthCheckedAtMs) : Number.POSITIVE_INFINITY;
+          const isHealthOutdated =
+            !Number.isFinite(healthCheckedAtMs) ||
+            healthAgeMs > 6 * 60 * 60 * 1000 ||
+            (Number.isFinite(manifestGeneratedAtMs) && healthCheckedAtMs + 60_000 < manifestGeneratedAtMs);
+          const healthPayload = isHealthOutdated ? null : rawHealthPayload;
+          const healthManifest = healthPayload?.manifest || {};
+          const reasonCodes = Array.isArray(healthPayload?.reasonCodes) ? healthPayload.reasonCodes : [];
+          const launchAgentRegistered = healthPayload?.launchAgentRegistered === false
+            ? false
+            : Boolean(healthPayload?.launchAgent?.registered ?? true);
+          const healthLatestDate = String(healthManifest.latestDate || state.manifest?.latestDate || "").trim();
+          const healthGeneratedAt = String(
+            healthManifest.generatedAt || state.manifest?.generatedAt || currentSnapshot?.generatedAt || ""
+          ).trim();
+          const hasDelay = reasonCodes.some((code) =>
+            ["STALE_MANIFEST", "STALE_UPDATE_STATE", "LOG_NOT_UPDATED", "RECOVERY_FAILED"].includes(String(code || ""))
+          );
+          const healthAlerts = [];
+          if (hasDelay) {
+            healthAlerts.push("更新遅延");
+          }
+          if (!launchAgentRegistered) {
+            healthAlerts.push("自動更新未登録");
+          }
+          const healthGeneratedAtParts = formatSnapshotGeneratedAtParts(healthGeneratedAt);
+          const healthGeneratedAtLabel = healthGeneratedAtParts.full || healthGeneratedAt || "--";
           const statusState = resolveHeaderStatusState(currentSnapshot?.generatedAt, {
             snapshot: currentSnapshot,
             hasFreshUpdate: state.hasFreshUpdate,
@@ -953,13 +986,37 @@
             [
               statusState.label,
               statusState.marketPhase,
-              timeParts.full || "--",
+              healthPayload
+                ? `最新データ日 ${healthLatestDate || "--"} / 最終生成 ${healthGeneratedAtLabel} / ${launchAgentRegistered ? "自動更新ジョブ稼働中" : "自動更新未登録"}${healthAlerts.length ? ` / ${healthAlerts.join(",")}` : ""}`
+                : (timeParts.full || "--"),
               statusState.pending ? "new data ready" : "",
               statusState.refreshing ? "refreshing" : "",
             ]
               .filter(Boolean)
               .join(" / ")
           );
+          if (healthPayload) {
+            updatedStatus.innerHTML = `
+              <span class="index-header-status-dot" aria-hidden="true"></span>
+              <span class="index-header-status-body">
+                <span class="index-header-status-topline">
+                  <span class="index-header-status-label">${escapeHtml(statusState.label)}</span>
+                  <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
+                </span>
+                <span class="index-header-status-healthline">
+                  <span class="index-header-status-healthitem">最新データ日 ${escapeHtml(healthLatestDate || "--")}</span>
+                  <span class="index-header-status-healthitem">最終生成 ${escapeHtml(healthGeneratedAtLabel)}</span>
+                </span>
+                <span class="index-header-status-bottomline">
+                  <span class="index-header-status-job ${launchAgentRegistered ? "is-healthy" : "is-alert"}">${escapeHtml(launchAgentRegistered ? "自動更新ジョブ稼働中" : "自動更新未登録")}</span>
+                  <span class="index-header-status-alerts">
+                    ${healthAlerts.length ? healthAlerts.map((item) => `<span class="index-header-status-alert">${escapeHtml(item)}</span>`).join("") : ""}
+                  </span>
+                </span>
+              </span>
+            `;
+            return;
+          }
           updatedStatus.innerHTML = `
             <span class="index-header-status-dot" aria-hidden="true"></span>
             <span class="index-header-status-body">
