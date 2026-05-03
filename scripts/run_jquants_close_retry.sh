@@ -102,21 +102,28 @@ PY
 )
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] retry phase: missing/stale symbols"
-if ! "${PYTHON_BIN}" scripts/retry_missing_symbols.py --provider jquants --selected-date "$(date '+%Y-%m-%d')"; then
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: retry phase failed" >&2
-fi
-
 quality_target_date=$("${PYTHON_BIN}" - <<'PY'
 import json
 from pathlib import Path
 
-path = Path("data/jquants_sync_state.json")
-payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-print(str(payload.get("lastSuccessfulDate") or "").strip())
+def load(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+sync_state = load(Path("data/jquants_sync_state.json"))
+manifest = load(Path("data/manifest.json"))
+target = str(sync_state.get("lastSuccessfulDate") or "").strip()
+if not target:
+    target = str(manifest.get("latestDate") or "").strip()
+print(target)
 PY
 )
-if [ -z "${quality_target_date}" ]; then
-  quality_target_date="$(date '+%Y-%m-%d')"
+if [ -n "${quality_target_date}" ]; then
+  if ! "${PYTHON_BIN}" scripts/retry_missing_symbols.py --provider jquants --selected-date "${quality_target_date}"; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: retry phase failed date=${quality_target_date}" >&2
+  fi
+else
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: latest trading date is unknown; refusing to use calendar date for retry" >&2
+  exit 1
 fi
 
 if ! "${PYTHON_BIN}" scripts/check_data_completeness.py --date "${quality_target_date}" --json-path "${QUALITY_JSON}"; then
