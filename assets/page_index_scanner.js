@@ -1111,7 +1111,7 @@
         }
 
         function getChartCacheKey(record) {
-          return `${state.timeframe}:${state.selectedDate}:${record.code}`;
+          return `${isRecentDataMode() ? "recent" : "legacy"}:${state.timeframe}:${state.selectedDate}:${record.code}`;
         }
 
         async function ensureScannerCardChart(record) {
@@ -1131,7 +1131,7 @@
             if (!state.chartRequestCache.has(cacheKey)) {
               state.chartRequestCache.set(
                 cacheKey,
-                loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate })
+                loadTickerForChartWithFallback(record.code, { selectedDate: state.selectedDate })
                   .then((value) => {
                     state.chartPayloadCache.set(cacheKey, value);
                     return value;
@@ -1150,7 +1150,7 @@
             }
           }
 
-          const { payload, validation, shape, requestUrl, status, responseBody } = inspected;
+          const { payload, chartPayload, validation, shape, requestUrl, status, responseBody } = inspected;
           const reasonCodes = Array.isArray(validation.reasonCodes) ? validation.reasonCodes : [];
           const isNoOhlcv = reasonCodes.includes("NO_OHLCV");
           if (validation.issues.length) {
@@ -1182,7 +1182,7 @@
             state.chartBaselineShape = shape;
           }
 
-          renderScannerCompactChart(chartElementId, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
+          renderScannerCompactChart(chartElementId, record.code, (chartPayload || payload).ohlcv, state.selectedDate, state.rangeMonths, {
             timeframe: state.timeframe,
             useBarCount: false,
             extendToLatest: true,

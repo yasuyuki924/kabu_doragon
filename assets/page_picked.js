@@ -16,7 +16,7 @@
       loadManifest,
       loadRegisteredPicks,
       loadScannerPicks,
-      loadTickerPayloadWithDiagnostics,
+      loadTickerForChartWithFallback,
       mapWithConcurrency,
       registerAllPicks,
       removePickByCode,
@@ -219,7 +219,7 @@
       const failures = [];
       const loadedResults = await mapWithConcurrency(picks, CHART_FETCH_CONCURRENCY, async (pick) => {
         try {
-          const inspected = await loadTickerPayloadWithDiagnostics(pick.code, { selectedDate: state.selectedDate });
+          const inspected = await loadTickerForChartWithFallback(pick.code, { selectedDate: state.selectedDate });
           const record = buildPickedRecordFromPayload(pick, inspected.payload, state.selectedDate);
           if (!record) {
             return { pick, status: "invalid", inspected, reason: "日付に一致する価格データなし" };
@@ -300,7 +300,8 @@
           return;
         }
         const { inspected, record } = entry;
-        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, inspected.payload.ohlcv || [], state.selectedDate, state.bars, {
+        const chartPayload = inspected.chartPayload || inspected.payload;
+        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, chartPayload.ohlcv || [], state.selectedDate, state.bars, {
           timeframe: state.timeframe,
           useBarCount: true,
         });

@@ -127,6 +127,11 @@
       loadTickerPayload,
       loadTickerSummary,
       loadYahooFinanceProfile,
+      isLegacyDataMode,
+      isRecentDataMode,
+      getRecentTickerDataUrl,
+      loadRecentTickerForChart,
+      loadTickerForChartWithFallback,
       loadTickerPayloadWithDiagnostics,
       mapWithConcurrency,
       matchesDeviationFilter,
@@ -717,7 +722,7 @@
           return {
             record,
             status: "fulfilled",
-            value: await loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate }),
+            value: await loadTickerForChartWithFallback(record.code, { selectedDate: state.selectedDate }),
           };
         } catch (error) {
           return { record, status: "rejected", reason: error };
@@ -733,7 +738,7 @@
           showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${result.reason?.message}`);
           return;
         }
-        const { payload, validation, shape, requestUrl, status, responseBody } = result.value;
+        const { payload, chartPayload, validation, shape, requestUrl, status, responseBody } = result.value;
         if (validation.issues.length) {
           console.debug("[ticker-chart:validation]", {
             code: record.code,
@@ -752,7 +757,7 @@
         renderScannerCompactChart(
           `scanChart-${record.code}`,
           record.code,
-          payload.ohlcv,
+          (chartPayload || payload).ohlcv,
           state.selectedDate,
           state.months
         );
@@ -1658,6 +1663,53 @@
     return `./data/tickers/${code}.json`;
   }
 
+  function getDataModeParam() {
+    try {
+      return new URLSearchParams(window.location.search).get("dataMode") || "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function isLegacyDataMode() {
+    return getDataModeParam() === "legacy";
+  }
+
+  function isRecentDataMode() {
+    return !isLegacyDataMode();
+  }
+
+  function getRecentTickerDataUrl(code) {
+    return `./data/public_json/ticker_recent/1y/ohlcv_ma/${code}.json`;
+  }
+
+  function normalizeRecentTickerPayload(code, payload) {
+    const ohlcv = Array.isArray(payload) ? payload : Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
+    const enrichedOhlcv = ohlcv.map((row, index) => {
+      if (!row || typeof row !== "object") {
+        return row;
+      }
+      const close = Number(row.close);
+      const previousClose = index > 0 ? Number(ohlcv[index - 1]?.close) : NaN;
+      const change = Number.isFinite(Number(row.change)) ? Number(row.change) : Number.isFinite(close) && Number.isFinite(previousClose) ? close - previousClose : null;
+      const changePercent = Number.isFinite(Number(row.changePercent))
+        ? Number(row.changePercent)
+        : change != null && Number.isFinite(previousClose) && previousClose !== 0
+          ? (change / previousClose) * 100
+          : null;
+      return {
+        ...row,
+        change,
+        changePercent,
+      };
+    });
+    return {
+      code: String(code || payload?.code || ""),
+      snapshotType: "recent_1y_ohlcv_ma",
+      ohlcv: enrichedOhlcv,
+    };
+  }
+
   function summarizeTickerPayloadShape(payload) {
     const ohlcv = Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
     const sampleRow = ohlcv.find((row) => row && typeof row === "object") || null;
@@ -1757,6 +1809,7 @@
         responseBody,
         payload,
         validation,
+        chartPayload: payload,
         shape: summarizeTickerPayloadShape(payload),
       };
     } catch (error) {
@@ -1769,6 +1822,72 @@
         message: error.message,
       });
       throw error;
+    }
+  }
+
+  async function loadRecentTickerForChart(code, options = {}) {
+    const requestUrl = getRecentTickerDataUrl(code);
+    let response;
+    let responseBody = "";
+    try {
+      response = await fetch(requestUrl, { cache: "no-store" });
+      responseBody = await response.text();
+      if (!response.ok) {
+        throw new Error(`recent JSON 読み込み失敗: ${requestUrl} (${response.status})`);
+      }
+      const rawPayload = JSON.parse(responseBody);
+      const payload = normalizeRecentTickerPayload(code, rawPayload);
+      const validation = validateTickerPayloadForChart(payload, options.selectedDate);
+      if (!validation.parsedCandleCount) {
+        throw new Error("ohlcv missing or empty");
+      }
+      if (validation.issues.length) {
+        throw new Error(validation.issues.join(", "));
+      }
+      if (validation.selectedDateMissing) {
+        throw new Error(`selected date ${options.selectedDate} missing`);
+      }
+      return {
+        code,
+        requestUrl,
+        status: response.status,
+        responseBody,
+        payload,
+        validation,
+        chartPayload: payload,
+        shape: summarizeTickerPayloadShape(payload),
+      };
+    } catch (error) {
+      error.recentFallbackReason = error.message || String(error);
+      throw error;
+    }
+  }
+
+  async function loadTickerForChartWithFallback(code, options = {}) {
+    if (isLegacyDataMode()) {
+      return loadTickerPayloadWithDiagnostics(code, options);
+    }
+    try {
+      const recentInspected = await loadRecentTickerForChart(code, options);
+      console.info("[ticker-chart:recent]", {
+        code,
+        requestUrl: recentInspected.requestUrl,
+        parsedCandleCount: recentInspected.validation.parsedCandleCount,
+      });
+      return {
+        ...recentInspected,
+        chartSource: "recent",
+      };
+    } catch (error) {
+      const reason = error?.recentFallbackReason || error?.message || String(error);
+      console.info("[ticker-chart:recent:fallback]", { code, reason });
+      const legacyInspected = await loadTickerPayloadWithDiagnostics(code, options);
+      return {
+        ...legacyInspected,
+        chartPayload: legacyInspected.payload,
+        chartSource: "legacy-fallback",
+        fallbackReason: reason,
+      };
     }
   }
 

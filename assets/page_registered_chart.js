@@ -5,7 +5,7 @@
       buildTickerUrl,
       CHART_FETCH_CONCURRENCY,
       diffShapeAgainstBaseline,
-      loadTickerPayloadWithDiagnostics,
+      loadTickerForChartWithFallback,
       mapWithConcurrency,
       renderChartFetchFailedItem,
       renderRegisteredScannerItem,
@@ -28,7 +28,7 @@
     const failures = [];
     const loadedResults = await mapWithConcurrency(items, CHART_FETCH_CONCURRENCY, async (item) => {
       try {
-        const inspected = await loadTickerPayloadWithDiagnostics(item.code, { selectedDate: state.selectedDate });
+        const inspected = await loadTickerForChartWithFallback(item.code, { selectedDate: state.selectedDate });
         const record = buildPickedRecordFromPayload(item, inspected.payload, state.selectedDate);
         if (!record) {
           return { item, status: "invalid", inspected, reason: "日付に一致する価格データなし" };
@@ -94,10 +94,11 @@
         return;
       }
       const { inspected, record } = entry;
+      const chartPayload = inspected.chartPayload || inspected.payload;
       renderScannerCompactChart(
         `registeredChart-${record.code}`,
         record.code,
-        inspected.payload.ohlcv || [],
+        chartPayload.ohlcv || [],
         state.selectedDate,
         state.bars,
         { timeframe: state.timeframe, useBarCount: true }
