@@ -17,6 +17,7 @@
       getSignedValueClass,
       loadManifest,
       loadTickerNote,
+      loadTickerForChartWithFallback,
       loadTickerPayload,
       loadYahooFinanceProfile,
       loadRanking,
@@ -108,6 +109,8 @@
     const state = {
       manifest: null,
       payload: null,
+      chartPayload: null,
+      chartSource: "",
       rankingKey,
       rankingItem: null,
       selectedChartMode: normalizeTickerChartMode(params.get("chart") || "3m"),
@@ -145,6 +148,7 @@
         state.payload.ohlcv.map((row) => row.date),
         state.selectedDate
       );
+      await refreshChartPayload();
       await refreshRankContext();
       renderTicker();
     });
@@ -159,6 +163,7 @@
         state.selectedDate = resolveAvailableDate(state.selectedDate || state.manifest.latestDate, availableDates);
         tickerDatePicker.min = availableDates[0];
         tickerDatePicker.max = availableDates.at(-1);
+        await refreshChartPayload();
         await refreshRankContext();
         renderTicker();
       });
@@ -177,6 +182,7 @@
       state.selectedDate = resolveAvailableDate(params.get("date") || state.manifest.latestDate, availableDates);
       tickerDatePicker.min = availableDates[0];
       tickerDatePicker.max = availableDates.at(-1);
+      await refreshChartPayload();
       await refreshRankContext();
       renderTicker();
       stopAutoRefreshPolling = startAutoRefreshPolling({
@@ -200,6 +206,25 @@
       } catch (_error) {
         state.rankingItem = null;
       }
+    }
+
+    async function refreshChartPayload() {
+      try {
+        const inspected = await loadTickerForChartWithFallback(code, { selectedDate: state.selectedDate });
+        state.chartPayload = inspected.chartPayload || inspected.payload || null;
+        state.chartSource = inspected.chartSource || "legacy";
+      } catch (_error) {
+        state.chartPayload = state.payload;
+        state.chartSource = "legacy-error";
+      }
+    }
+
+    function resolveDetailRowForChartRow(chartRow) {
+      if (!chartRow || !state.payload?.ohlcv?.length) {
+        return chartRow;
+      }
+      const detailRow = state.payload.ohlcv.find((row) => row?.date === chartRow.date);
+      return detailRow ? { ...detailRow, ...chartRow } : chartRow;
     }
 
     function setTickerCardValues(row) {
@@ -309,11 +334,13 @@
 
     function renderTicker() {
       const rows = state.payload.ohlcv || [];
+      const chartRows = state.chartPayload?.ohlcv?.length ? state.chartPayload.ohlcv : rows;
       const selectedIndex = findSelectedIndex(rows, state.selectedDate);
       if (selectedIndex < 0) {
         showError(errorBox, `${code} の ${state.selectedDate} 時点データがありません。`);
         return;
       }
+      const chartSelectedIndex = findSelectedIndex(chartRows, state.selectedDate);
       const row = rows[selectedIndex];
       const latestRow = rows.at(-1) || row;
       state.selectedDate = row.date;
@@ -388,12 +415,13 @@
           .join('<span class="scanner-link-separator">|</span>');
       }
 
-      renderTickerChart(dailyChartEl, rows, selectedIndex, "3m", dailyChartMeta, (chartRow) => {
-        setTickerSummaryValues(chartRow);
-        setTickerCardValues(chartRow);
+      renderTickerChart(dailyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "3m", dailyChartMeta, (chartRow) => {
+        const displayRow = resolveDetailRowForChartRow(chartRow);
+        setTickerSummaryValues(displayRow);
+        setTickerCardValues(displayRow);
       });
-      renderTickerChart(weeklyChartEl, rows, selectedIndex, "weekly", weeklyChartMeta);
-      renderTickerChart(monthlyChartEl, rows, selectedIndex, "monthly", monthlyChartMeta);
+      renderTickerChart(weeklyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "weekly", weeklyChartMeta);
+      renderTickerChart(monthlyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "monthly", monthlyChartMeta);
     }
 
     function resolveTickerSnapshot(currentState) {
