@@ -82,3 +82,30 @@ zsh scripts/run_update_and_build_public_json.sh
 1. `data/warehouse_test` ではなく本番用 `data/warehouse` を作り、J-Quants更新後にwarehouseへ差分追記する。
 2. `build_public_json_candidate.py` に `--updated-codes` を追加し、全件生成ではなく更新銘柄だけ再生成できるようにする。
 3. launchdまたは既存close retry後段で `scripts/run_update_and_build_public_json.sh` を呼ぶ運用に切り替え、ログ監視項目を追加する。
+
+## 8. ローカル完成判定
+
+- ブランチ名: `codex/kabudragon-warehouse-poc`
+- 完成判定日: 2026-05-05
+- 判定: ローカル完成扱いとしてよい。
+- 作業ツリー: clean確認済み。
+- `public_json` 件数: `data/public_json/ticker_recent/1y/ohlcv_ma/` に3,797件。
+- 通常URLの挙動: 一覧 / picked / registered のチャート描画は `data/public_json/ticker_recent/1y/ohlcv_ma/{code}.json` を優先し、失敗時のみ `data/tickers/{code}.json` にfallbackする。
+- legacyモードの挙動: `?dataMode=legacy` を付けると、チャート描画は従来どおり `data/tickers/{code}.json` 固定になる。
+- 銘柄詳細ページの挙動: `assets/page_ticker.js` は従来どおり `loadTickerPayload(code)` を使い、`data/tickers/{code}.json` を読む。今回の軽量チャートJSON切替の対象外。
+- 構文確認: `zsh -n scripts/run_update_and_build_public_json.sh` と `python3 -m py_compile scripts/build_public_json_candidate.py` は確認済み。
+- 実データ: `data/tickers`, `data/overview`, `data/daily_records`, `data/rankings`, `data/ohlcv`, `data/ohlcv_raw`, `data/public_json` はローカルに残し、削除・移動・圧縮はしていない。
+
+main merge前の注意点:
+
+- `bf03f331 chore: stop tracking generated market data` には、巨大データ追跡解除以外の既存変更も含まれている。PR作成前に差分説明へ明記する。
+- `data/tickers` などの削除差分はGit追跡解除であり、ローカル実データ削除ではない。別環境でpullする場合はデータ復元/再生成手順が必要。
+- `.git` 履歴サイズはまだ小さくなっていない。履歴掃除は別ブランチ/別タスクで、バックアップ後に検討する。
+- `build_public_json_candidate.py` は現時点で `data/warehouse_test/prices_by_year/` を入力にする。J-Quants更新直後の完全同期には、本番用 `data/warehouse` への移行が次段階で必要。
+
+今後の次ブランチ候補:
+
+1. `data/warehouse` 本番化とJ-Quants更新後の差分追記。
+2. `build_public_json_candidate.py --updated-codes` による差分生成。
+3. `data/tickers` など巨大JSONのarchive/backup運用設計。
+4. Git履歴掃除の事前計画。ただし `git filter-repo` や `git gc` はこの軽量化ブランチでは実行しない。
