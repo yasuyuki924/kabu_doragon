@@ -52,6 +52,8 @@
     loadOverviewData,
     loadRankingData,
     loadThemeOrderData,
+    loadTickerDetailRecentData,
+    loadTickerMetaData,
     loadTickerPayloadData,
     loadTickerSummaryData,
     loadYahooFinanceProfileData,
@@ -124,6 +126,8 @@
       loadScannerPicks,
       loadThemeOrder,
       loadTickerNote,
+      loadTickerMeta,
+      loadTickerDetailRecent,
       loadTickerPayload,
       loadTickerSummary,
       loadYahooFinanceProfile,
@@ -1019,6 +1023,14 @@
 
   async function loadTickerPayload(code) {
     return loadTickerPayloadData(fetchJson, code);
+  }
+
+  async function loadTickerMeta(code) {
+    return loadTickerMetaData(fetchJson, code);
+  }
+
+  async function loadTickerDetailRecent(code, years = 1) {
+    return loadTickerDetailRecentData(fetchJson, code, years);
   }
 
   async function loadTickerSummary(date) {

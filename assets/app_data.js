@@ -42,7 +42,18 @@
 
   async function loadOverviewData(fetchJson, date, timeframe = "daily") {
     const suffix = timeframe === "weekly" ? "_weekly" : timeframe === "monthly" ? "_monthly" : "";
-    return fetchJson(`./data/overview/${date}/market_pulse${suffix}.json`);
+    const publicPath = `./data/public_json/overview_recent/${date}/market_pulse${suffix}.json`;
+    const legacyPath = `./data/overview/${date}/market_pulse${suffix}.json`;
+    const dataMode = new URLSearchParams(window.location.search).get("dataMode") || "";
+    if (dataMode === "legacy") {
+      return fetchJson(legacyPath);
+    }
+    try {
+      return await fetchJson(publicPath);
+    } catch (error) {
+      console.info("[overview:public_json:fallback]", { date, timeframe, reason: error.message || String(error) });
+      return fetchJson(legacyPath);
+    }
   }
 
   async function loadRankingData(date, key, rankingLabel) {
@@ -62,6 +73,14 @@
 
   async function loadTickerPayloadData(fetchJson, code) {
     return fetchJson(`./data/tickers/${code}.json`);
+  }
+
+  async function loadTickerMetaData(fetchJson, code) {
+    return fetchJson(`./data/public_json/ticker_meta/${code}.json`);
+  }
+
+  async function loadTickerDetailRecentData(fetchJson, code, years = 1) {
+    return fetchJson(`./data/public_json/ticker_detail_recent/${years}y/${code}.json`);
   }
 
   async function loadTickerSummaryData(fetchJson, date) {
@@ -148,6 +167,8 @@
     loadRankingData,
     loadThemeOrderData,
     loadTickerPayloadData,
+    loadTickerMetaData,
+    loadTickerDetailRecentData,
     loadTickerSummaryData,
     loadYahooFinanceProfileData,
     readJsonStorage,

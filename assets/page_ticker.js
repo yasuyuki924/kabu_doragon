@@ -15,9 +15,12 @@
       formatSignedPercentHtml,
       formatSnapshotBaseDate,
       getSignedValueClass,
+      isLegacyDataMode,
       loadManifest,
       loadTickerNote,
       loadTickerForChartWithFallback,
+      loadTickerDetailRecent,
+      loadTickerMeta,
       loadTickerPayload,
       loadYahooFinanceProfile,
       loadRanking,
@@ -155,7 +158,8 @@
 
     async function refreshTickerPage(nextManifest = null) {
       await runRefreshAction(refreshButton, errorBox, async () => {
-        const [manifest, payload] = await Promise.all([nextManifest || loadManifest(), loadTickerPayload(code)]);
+        const manifest = nextManifest || await loadManifest();
+        const payload = await loadTickerPagePayload(manifest, state.selectedDate || manifest.latestDate);
         state.manifest = manifest;
         state.payload = payload;
         state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
@@ -174,7 +178,8 @@
     });
 
     try {
-      const [manifest, payload] = await Promise.all([loadManifest(), loadTickerPayload(code)]);
+      const manifest = await loadManifest();
+      const payload = await loadTickerPagePayload(manifest, params.get("date") || manifest.latestDate);
       state.manifest = manifest;
       state.payload = payload;
       state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
@@ -208,7 +213,56 @@
       }
     }
 
+    async function loadTickerPagePayload(manifest, preferredDate = "") {
+      if (isLegacyDataMode()) {
+        const payload = await loadTickerPayload(code);
+        state.chartPayload = payload;
+        state.chartSource = "legacy";
+        return payload;
+      }
+      try {
+        const [chartInspected, meta, detail] = await Promise.all([
+          loadTickerForChartWithFallback(code, { selectedDate: preferredDate || manifest?.latestDate || "" }),
+          loadTickerMeta(code),
+          loadTickerDetailRecent(code, 1),
+        ]);
+        if (chartInspected.chartSource !== "recent") {
+          state.chartPayload = chartInspected.chartPayload || chartInspected.payload || null;
+          state.chartSource = chartInspected.chartSource || "legacy-fallback";
+          return chartInspected.payload || chartInspected.chartPayload;
+        }
+        const chartRows = chartInspected.chartPayload?.ohlcv || [];
+        const detailRows = Array.isArray(detail?.rows) ? detail.rows : [];
+        const detailByDate = new Map(detailRows.map((row) => [row?.date, row]));
+        const mergedRows = chartRows.map((row) => ({ ...row, ...(detailByDate.get(row.date) || {}) }));
+        const payload = {
+          ...meta,
+          code: String(meta?.code || code),
+          snapshotDate: meta?.snapshotDate || detail?.endDate || chartRows.at(-1)?.date || null,
+          snapshotType: meta?.snapshotType || "public_json_detail_recent",
+          ohlcv: mergedRows,
+        };
+        state.chartPayload = chartInspected.chartPayload;
+        state.chartSource = "public_json";
+        console.info("[ticker-detail:public_json]", {
+          code,
+          chartRows: chartRows.length,
+          detailRows: detailRows.length,
+        });
+        return payload;
+      } catch (error) {
+        console.info("[ticker-detail:public_json:fallback]", { code, reason: error.message || String(error) });
+        const payload = await loadTickerPayload(code);
+        state.chartPayload = payload;
+        state.chartSource = "legacy-fallback";
+        return payload;
+      }
+    }
+
     async function refreshChartPayload() {
+      if (state.chartSource === "public_json" && !isLegacyDataMode()) {
+        return;
+      }
       try {
         const inspected = await loadTickerForChartWithFallback(code, { selectedDate: state.selectedDate });
         state.chartPayload = inspected.chartPayload || inspected.payload || null;
