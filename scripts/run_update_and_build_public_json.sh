@@ -8,6 +8,7 @@ PUBLIC_JSON_DIR="${ROOT}/data/public_json/ticker_recent/1y/ohlcv_ma"
 PUBLIC_JSON_META_DIR="${ROOT}/data/public_json/ticker_meta"
 PUBLIC_JSON_DETAIL_DIR="${ROOT}/data/public_json/ticker_detail_recent/1y"
 PUBLIC_JSON_OVERVIEW_DIR="${ROOT}/data/public_json/overview_recent"
+PUBLIC_JSON_OVERVIEW_LITE_DIR="${ROOT}/data/public_json/overview_lite"
 REQUIRED_CODES=(6327 7162 4772)
 REQUIRED_KEYS=(date open high low close volume ma5 ma25 ma75 ma200)
 
@@ -60,6 +61,7 @@ output_dir = Path("data/public_json/ticker_recent/1y/ohlcv_ma")
 meta_dir = Path("data/public_json/ticker_meta")
 detail_dir = Path("data/public_json/ticker_detail_recent/1y")
 overview_dir = Path("data/public_json/overview_recent")
+overview_lite_dir = Path("data/public_json/overview_lite")
 required_codes = ("6327", "7162", "4772")
 required_keys = {"date", "open", "high", "low", "close", "volume", "ma5", "ma25", "ma75", "ma200"}
 detail_keys = {"date", "rci12", "rci24", "rci48", "strategyScores", "strategyReasons"}
@@ -102,6 +104,9 @@ for code in required_codes:
 overview_files = sorted(overview_dir.glob("*/market_pulse.json"))
 if not overview_files:
     raise SystemExit(f"missing overview_recent market_pulse files: {overview_dir}")
+overview_lite_files = sorted(overview_lite_dir.glob("*/market_pulse.json"))
+if not overview_lite_files:
+    raise SystemExit(f"missing overview_lite market_pulse files: {overview_lite_dir}")
 
 total_bytes = sum(path.stat().st_size for path in json_files)
 print(
@@ -113,6 +118,7 @@ print(
             "tickerMetaCount": len(list(meta_dir.glob("*.json"))),
             "tickerDetailCount": len(list(detail_dir.glob("*.json"))),
             "overviewMarketPulseCount": len(overview_files),
+            "overviewLiteMarketPulseCount": len(overview_lite_files),
             "representativeCodes": list(required_codes),
         },
         ensure_ascii=False,

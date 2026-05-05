@@ -15,6 +15,40 @@ DEFAULT_OVERVIEW_INPUT = Path("data/overview")
 DEFAULT_TICKERS_INPUT = Path("data/tickers")
 DEFAULT_PUBLIC_JSON = Path("data/public_json")
 DETAIL_RANGE = "1y"
+OVERVIEW_RECORD_KEYS = (
+    "code",
+    "name",
+    "market",
+    "sector",
+    "industry",
+    "tags",
+    "themes",
+    "links",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "change",
+    "changePercent",
+    "distanceToMa25",
+    "distanceToMa75",
+    "distanceToMa200",
+    "volumeRatio25",
+    "turnoverMa5",
+    "dataQuality",
+    "newHigh52w",
+    "newHigh20d",
+    "trendTurnCandidate",
+    "trendTurnScore",
+    "trendTurnAboveMa75Ratio",
+    "signalCategory",
+    "strategyMatches",
+    "strategyScores",
+    "strategyReasons",
+    "watchCandidateScore",
+)
 DETAIL_ROW_KEYS = (
     "date",
     "change",
@@ -76,7 +110,9 @@ def replace_json_dir(path: Path) -> None:
 
 def build_overview_recent(overview_input: Path, public_json_dir: Path) -> dict:
     output_root = public_json_dir / "overview_recent"
+    lite_root = public_json_dir / "overview_lite"
     copied = []
+    lite_files = []
     started = time.perf_counter()
     for source in sorted(overview_input.glob("*/market_pulse*.json")):
         date_dir = source.parent.name
@@ -84,10 +120,26 @@ def build_overview_recent(overview_input: Path, public_json_dir: Path) -> dict:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         copied.append(target)
+        payload = read_json(source)
+        if isinstance(payload, dict) and isinstance(payload.get("records"), list):
+            lite_payload = {
+                **{key: value for key, value in payload.items() if key != "records"},
+                "records": [
+                    {key: record.get(key) for key in OVERVIEW_RECORD_KEYS if key in record}
+                    for record in payload["records"]
+                    if isinstance(record, dict)
+                ],
+            }
+            lite_target = lite_root / date_dir / source.name
+            write_compact_json(lite_target, lite_payload)
+            lite_files.append(lite_target)
     return {
         "outputDir": str(output_root),
         "fileCount": len(copied),
         "totalBytes": sum(path.stat().st_size for path in copied),
+        "liteOutputDir": str(lite_root),
+        "liteFileCount": len(lite_files),
+        "liteTotalBytes": sum(path.stat().st_size for path in lite_files),
         "seconds": time.perf_counter() - started,
     }
 

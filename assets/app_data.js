@@ -42,6 +42,7 @@
 
   async function loadOverviewData(fetchJson, date, timeframe = "daily") {
     const suffix = timeframe === "weekly" ? "_weekly" : timeframe === "monthly" ? "_monthly" : "";
+    const litePath = `./data/public_json/overview_lite/${date}/market_pulse${suffix}.json`;
     const publicPath = `./data/public_json/overview_recent/${date}/market_pulse${suffix}.json`;
     const legacyPath = `./data/overview/${date}/market_pulse${suffix}.json`;
     const dataMode = new URLSearchParams(window.location.search).get("dataMode") || "";
@@ -49,10 +50,15 @@
       return fetchJson(legacyPath);
     }
     try {
-      return await fetchJson(publicPath);
-    } catch (error) {
-      console.info("[overview:public_json:fallback]", { date, timeframe, reason: error.message || String(error) });
-      return fetchJson(legacyPath);
+      return await fetchJson(litePath);
+    } catch (liteError) {
+      console.info("[overview:lite:fallback]", { date, timeframe, reason: liteError.message || String(liteError) });
+      try {
+        return await fetchJson(publicPath);
+      } catch (publicError) {
+        console.info("[overview:public_json:fallback]", { date, timeframe, reason: publicError.message || String(publicError) });
+        return fetchJson(legacyPath);
+      }
     }
   }
 
