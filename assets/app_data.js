@@ -47,7 +47,12 @@
     const legacyPath = `./data/overview/${date}/market_pulse${suffix}.json`;
     const dataMode = new URLSearchParams(window.location.search).get("dataMode") || "";
     if (dataMode === "legacy") {
-      return fetchJson(legacyPath);
+      try {
+        return await fetchJson(legacyPath);
+      } catch (legacyError) {
+        console.warn("[overview:legacy:missing]", { date, timeframe, reason: legacyError.message || String(legacyError) });
+        return fetchJson(litePath);
+      }
     }
     try {
       return await fetchJson(litePath);

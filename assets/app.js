@@ -1877,7 +1877,18 @@
 
   async function loadTickerForChartWithFallback(code, options = {}) {
     if (isLegacyDataMode()) {
-      return loadTickerPayloadWithDiagnostics(code, options);
+      try {
+        return await loadTickerPayloadWithDiagnostics(code, options);
+      } catch (legacyError) {
+        const reason = legacyError?.message || String(legacyError);
+        console.warn("[ticker-chart:legacy:missing]", { code, reason });
+        const recentInspected = await loadRecentTickerForChart(code, options);
+        return {
+          ...recentInspected,
+          chartSource: "recent-legacy-fallback",
+          fallbackReason: reason,
+        };
+      }
     }
     try {
       const recentInspected = await loadRecentTickerForChart(code, options);

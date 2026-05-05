@@ -18,6 +18,7 @@
       isLegacyDataMode,
       loadManifest,
       loadTickerNote,
+      loadRecentTickerForChart,
       loadTickerForChartWithFallback,
       loadTickerDetailRecent,
       loadTickerMeta,
@@ -214,23 +215,16 @@
     }
 
     async function loadTickerPagePayload(manifest, preferredDate = "") {
-      if (isLegacyDataMode()) {
-        const payload = await loadTickerPayload(code);
-        state.chartPayload = payload;
-        state.chartSource = "legacy";
-        return payload;
-      }
-      try {
-        const [chartInspected, meta, detail] = await Promise.all([
-          loadTickerForChartWithFallback(code, { selectedDate: preferredDate || manifest?.latestDate || "" }),
+      async function loadPublicJsonPayload(chartInspected = null) {
+        const chartPromise = chartInspected
+          ? Promise.resolve(chartInspected)
+          : loadRecentTickerForChart(code, { selectedDate: preferredDate || manifest?.latestDate || "" });
+        const [resolvedChart, meta, detail] = await Promise.all([
+          chartPromise,
           loadTickerMeta(code),
           loadTickerDetailRecent(code, 1),
         ]);
-        if (chartInspected.chartSource !== "recent") {
-          state.chartPayload = chartInspected.chartPayload || chartInspected.payload || null;
-          state.chartSource = chartInspected.chartSource || "legacy-fallback";
-          return chartInspected.payload || chartInspected.chartPayload;
-        }
+        chartInspected = resolvedChart;
         const chartRows = chartInspected.chartPayload?.ohlcv || [];
         const detailRows = Array.isArray(detail?.rows) ? detail.rows : [];
         const detailByDate = new Map(detailRows.map((row) => [row?.date, row]));
@@ -250,6 +244,27 @@
           detailRows: detailRows.length,
         });
         return payload;
+      }
+
+      if (isLegacyDataMode()) {
+        try {
+          const payload = await loadTickerPayload(code);
+          state.chartPayload = payload;
+          state.chartSource = "legacy";
+          return payload;
+        } catch (legacyError) {
+          console.warn("[ticker-detail:legacy:missing]", { code, reason: legacyError.message || String(legacyError) });
+          return loadPublicJsonPayload();
+        }
+      }
+      try {
+        const chartInspected = await loadTickerForChartWithFallback(code, { selectedDate: preferredDate || manifest?.latestDate || "" });
+        if (chartInspected.chartSource !== "recent") {
+          state.chartPayload = chartInspected.chartPayload || chartInspected.payload || null;
+          state.chartSource = chartInspected.chartSource || "legacy-fallback";
+          return chartInspected.payload || chartInspected.chartPayload;
+        }
+        return loadPublicJsonPayload(chartInspected);
       } catch (error) {
         console.info("[ticker-detail:public_json:fallback]", { code, reason: error.message || String(error) });
         const payload = await loadTickerPayload(code);
@@ -260,7 +275,7 @@
     }
 
     async function refreshChartPayload() {
-      if (state.chartSource === "public_json" && !isLegacyDataMode()) {
+      if (state.chartSource === "public_json") {
         return;
       }
       try {
