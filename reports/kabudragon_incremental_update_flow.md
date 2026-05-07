@@ -80,9 +80,36 @@ manifest.latestDate=2026-05-07
 - 既存の重い更新が残っている場合は、新フローは `legacy update process is running` と出して止まる。
 
 ## 9. launchdに組み込む場合の案
-- 既存のclose retry agentをすぐ置き換えず、まず手動で数回確認する。
-- 問題なければ launchd の実行先を `scripts/run_incremental_public_json_update.sh` に差し替える。
-- 失敗時に旧フローへ自動fallbackするかどうかは別途検討する。自動fallbackすると重い5年分取得に戻るため、最初は手動判断が安全。
+- 既存のclose retry agentは削除せず、通常自動更新では新しい差分更新plistを使う。
+- 早取り更新は `16:40`、本更新は `18:30` に分ける。
+- `16:40` 時点でJ-Quantsの価格データがまだ返らない場合は、`target_data_not_available_yet` として `skipped` 扱いにする。
+- 早取り更新でSKIPしても旧重い5年更新へfallbackしない。
+- 将来必要なら、翌朝 `08:30` の補正リトライplistを追加する。
+
+追加plist:
+
+| plist | 時刻 | 役割 | stdout | stderr |
+|---|---:|---|---|---|
+| `launchd/com.okamoto.kabu_doragon_incremental_update_early.plist` | 16:40 | 早取り差分更新 | `logs/incremental_update_early.out.log` | `logs/incremental_update_early.err.log` |
+| `launchd/com.okamoto.kabu_doragon_incremental_update_main.plist` | 18:30 | 本更新 | `logs/incremental_update_main.out.log` | `logs/incremental_update_main.err.log` |
+
+load/unload例:
+
+```sh
+launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_incremental_update_early.plist 2>/dev/null || true
+launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_incremental_update_main.plist 2>/dev/null || true
+
+cp launchd/com.okamoto.kabu_doragon_incremental_update_early.plist ~/Library/LaunchAgents/
+cp launchd/com.okamoto.kabu_doragon_incremental_update_main.plist ~/Library/LaunchAgents/
+
+launchctl load ~/Library/LaunchAgents/com.okamoto.kabu_doragon_incremental_update_early.plist
+launchctl load ~/Library/LaunchAgents/com.okamoto.kabu_doragon_incremental_update_main.plist
+```
+
+注意:
+- 今回はplist作成までで、`launchctl load/unload` は実行しない。
+- Macがスリープ中の場合、launchdは予定時刻ぴったりには実行できないことがある。
+- 旧 `com.okamoto.kabu_doragon_close_retry.plist` は `run_jquants_close_retry.sh` を呼ぶため、差分更新運用へ移行する場合は無効化候補にする。
 
 ## 10. まだ残る課題
 - 実行中の旧 `fetch_prices.py` / `jquants_provider.py` が残っている場合、新フローは衝突回避のため実行しない。
