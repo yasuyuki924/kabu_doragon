@@ -1325,6 +1325,8 @@
             scannerBase = scannerBase.filter((record) => getStopHighStatus(record) !== "none");
           } else if (state.sort === "new_high_20d") {
             scannerBase = scannerBase.filter((record) => record.newHigh20d === true);
+          } else if (state.sort === "bullish_close_breakout_20d") {
+            scannerBase = scannerBase.filter((record) => record.bullishCloseBreakout20d === true);
           } else if (isDeviationSort(state.sort)) {
             const deviationFilter = getActiveDeviationFilter(state);
             scannerBase = scannerBase.filter((record) => {

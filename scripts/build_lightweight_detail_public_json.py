@@ -40,6 +40,7 @@ OVERVIEW_RECORD_KEYS = (
     "dataQuality",
     "newHigh52w",
     "newHigh20d",
+    "bullishCloseBreakout20d",
     "trendTurnCandidate",
     "trendTurnScore",
     "trendTurnAboveMa75Ratio",
@@ -108,6 +109,77 @@ def replace_json_dir(path: Path) -> None:
         child.unlink()
 
 
+def compute_bullish_close_breakout_20d(rows: list[dict], index: int) -> bool:
+    today = rows[index]
+    close_today = float(today["close"])
+    open_today = float(today["open"])
+    if close_today < open_today:
+        return False
+    past_valid_closes = [
+        float(row["close"])
+        for row in rows[max(0, index - 20) : index]
+        if float(row["close"]) >= float(row["open"])
+    ]
+    return bool(past_valid_closes and close_today > max(past_valid_closes))
+
+
+def load_bullish_close_breakout_flags(public_json_dir: Path) -> dict[tuple[str, str], bool]:
+    ticker_recent_dir = public_json_dir / "ticker_recent" / "1y" / "ohlcv_ma"
+    flags: dict[tuple[str, str], bool] = {}
+    for ticker_path in sorted(ticker_recent_dir.glob("*.json")):
+        payload = read_json(ticker_path)
+        rows = payload.get("ohlcv") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            continue
+        valid_rows = [
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and row.get("date")
+            and row.get("open") is not None
+            and row.get("close") is not None
+        ]
+        for index, row in enumerate(valid_rows):
+            flags[(ticker_path.stem, str(row["date"]))] = compute_bullish_close_breakout_20d(valid_rows, index)
+    return flags
+
+
+def apply_bullish_close_breakout_flags_to_overview_lite(public_json_dir: Path) -> dict:
+    lite_root = public_json_dir / "overview_lite"
+    started = time.perf_counter()
+    flags = load_bullish_close_breakout_flags(public_json_dir)
+    updated_files = 0
+    updated_records = 0
+    for lite_path in sorted(lite_root.glob("*/market_pulse.json")):
+        payload = read_json(lite_path)
+        records = payload.get("records") if isinstance(payload, dict) else None
+        if not isinstance(records, list):
+            continue
+        changed = False
+        date = lite_path.parent.name
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            code = str(record.get("code") or "")
+            key = (code, str(record.get("date") or date))
+            if key not in flags:
+                continue
+            value = bool(flags[key])
+            if record.get("bullishCloseBreakout20d") != value:
+                record["bullishCloseBreakout20d"] = value
+                updated_records += 1
+                changed = True
+        if changed:
+            write_compact_json(lite_path, payload)
+            updated_files += 1
+    return {
+        "flagCount": len(flags),
+        "updatedFiles": updated_files,
+        "updatedRecords": updated_records,
+        "seconds": time.perf_counter() - started,
+    }
+
+
 def build_overview_recent(overview_input: Path, public_json_dir: Path) -> dict:
     output_root = public_json_dir / "overview_recent"
     lite_root = public_json_dir / "overview_lite"
@@ -147,6 +219,14 @@ def build_overview_recent(overview_input: Path, public_json_dir: Path) -> dict:
 def build_ticker_detail(tickers_input: Path, public_json_dir: Path, years: int) -> dict:
     meta_dir = public_json_dir / "ticker_meta"
     detail_dir = public_json_dir / "ticker_detail_recent" / f"{years}y"
+    if not tickers_input.exists():
+        return {
+            "metaOutputDir": str(meta_dir),
+            "detailOutputDir": str(detail_dir),
+            "skipped": True,
+            "reason": f"missing input: {tickers_input}",
+            "seconds": 0,
+        }
     replace_json_dir(meta_dir)
     replace_json_dir(detail_dir)
     started = time.perf_counter()
@@ -203,10 +283,12 @@ def main() -> int:
     started = time.perf_counter()
     overview_metrics = build_overview_recent(args.overview_input, args.public_json_dir)
     ticker_metrics = build_ticker_detail(args.tickers_input, args.public_json_dir, args.years)
+    breakout_metrics = apply_bullish_close_breakout_flags_to_overview_lite(args.public_json_dir)
     metrics = {
         "format": "overview_recent_and_ticker_detail_public_json",
         "overview": overview_metrics,
         "ticker": ticker_metrics,
+        "bullishCloseBreakout20d": breakout_metrics,
         "seconds": time.perf_counter() - started,
     }
     metrics_path = args.public_json_dir / "lightweight_detail_metrics.json"

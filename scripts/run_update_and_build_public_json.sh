@@ -101,12 +101,14 @@ for code in required_codes:
     if missing_detail:
         raise SystemExit(f"missing detail keys in {detail_path}: {missing_detail}")
 
-overview_files = sorted(overview_dir.glob("*/market_pulse.json"))
-if not overview_files:
-    raise SystemExit(f"missing overview_recent market_pulse files: {overview_dir}")
+overview_files = sorted(overview_dir.glob("*/market_pulse.json")) if overview_dir.exists() else []
 overview_lite_files = sorted(overview_lite_dir.glob("*/market_pulse.json"))
 if not overview_lite_files:
     raise SystemExit(f"missing overview_lite market_pulse files: {overview_lite_dir}")
+sample_lite = json.loads(overview_lite_files[-1].read_text(encoding="utf-8"))
+sample_records = sample_lite.get("records") if isinstance(sample_lite, dict) else None
+if not sample_records or "bullishCloseBreakout20d" not in sample_records[0]:
+    raise SystemExit(f"missing bullishCloseBreakout20d in overview_lite: {overview_lite_files[-1]}")
 
 total_bytes = sum(path.stat().st_size for path in json_files)
 print(

@@ -2511,6 +2511,15 @@
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
     }
+    if (sortKey === "bullish_close_breakout_20d") {
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(b.bullishCloseBreakout20d ? 1 : 0, a.bullishCloseBreakout20d ? 1 : 0) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     if (sortKey === "trend_turn") {
       return items.sort(
         (a, b) =>
@@ -2621,6 +2630,7 @@
       code: "Code",
       new_high: "New High",
       new_high_20d: "20D Close High",
+      bullish_close_breakout_20d: "陽線クローズブレイク20",
       trend_turn: "ベース・リカバリー",
       rebound_signal: "Rebound",
       deviation25: "MA25 Dev",
@@ -4124,6 +4134,7 @@
       volume: "volume_spike",
       new_high: "new_high",
       new_high_20d: "",
+      bullish_close_breakout_20d: "",
       trend_turn: "trend_turn",
       rebound_signal: "rebound_signal",
       deviation25: "deviation25",

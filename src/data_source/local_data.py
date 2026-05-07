@@ -180,6 +180,7 @@ def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[
         "recoveryFrom52wLowPct": row.get("recoveryFrom52wLowPct"),
         "newHigh52w": row.get("newHigh52w"),
         "newHigh20d": row.get("newHigh20d"),
+        "bullishCloseBreakout20d": row.get("bullishCloseBreakout20d"),
         "donchian20High": row.get("donchian20High"),
         "donchian55High": row.get("donchian55High"),
         "distanceToDonchian20Pct": row.get("distanceToDonchian20Pct"),

@@ -179,6 +179,17 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         today_bullish = close >= open_price
         highest_20d_bullish_close = max(bullish_closes_20d) if bullish_closes_20d else None
         new_high_20d = bool(today_bullish and highest_20d_bullish_close is not None and close >= highest_20d_bullish_close)
+        past_bullish_closes_20d = [
+            float(rows[pos]["close"])
+            for pos in range(max(0, index - 20), index)
+            if float(rows[pos]["close"]) >= float(rows[pos]["open"])
+        ]
+        highest_past_20d_bullish_close = max(past_bullish_closes_20d) if past_bullish_closes_20d else None
+        bullish_close_breakout_20d = bool(
+            today_bullish
+            and highest_past_20d_bullish_close is not None
+            and close > highest_past_20d_bullish_close
+        )
 
         ma5 = ma_map[5][index]
         ma25 = ma_map[25][index]
@@ -340,6 +351,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
             "recoveryFrom52wLowPct": recovery_from_52w_low_pct,
             "newHigh52w": bool(new_high_52w),
             "newHigh20d": bool(new_high_20d),
+            "bullishCloseBreakout20d": bool(bullish_close_breakout_20d),
             "donchian20High": donchian20_high,
             "donchian55High": donchian55_high,
             "distanceToDonchian20Pct": distance_to_donchian20_pct,
