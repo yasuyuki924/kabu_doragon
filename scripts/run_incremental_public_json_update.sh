@@ -23,11 +23,11 @@ echo "[$(timestamp)] cwd=${ROOT}"
 echo "[$(timestamp)] branch=$(git branch --show-current 2>/dev/null || echo '-')"
 
 "${PYTHON_BIN}" "${ROOT}/scripts/incremental_jquants_update.py" "$@"
-status=$?
+cmd_status=$?
 
-if [ "${status}" -eq 0 ]; then
+if [ "${cmd_status}" -eq 0 ]; then
   echo "[$(timestamp)] [OK] incremental public_json update completed"
 else
-  echo "[$(timestamp)] [ERROR] incremental public_json update failed status=${status}" >&2
+  echo "[$(timestamp)] [ERROR] incremental public_json update failed status=${cmd_status}" >&2
 fi
-exit "${status}"
+exit "${cmd_status}"
