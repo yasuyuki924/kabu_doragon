@@ -18,7 +18,7 @@
       })();
     </script>
     <script src="./assets/desktop_bootstrap.js?v=1.4.81"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.94" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.101" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
@@ -71,82 +71,21 @@
               <option value="50">50</option>
               <option value="100" selected>100</option>
             </select>
-            <div class="index-sticky-filters-wrap index-sticky-filters-wrap--left">
-                <button id="indexStickyFiltersButton" class="text-button index-sticky-action" type="button" aria-expanded="false">Filters</button>
-                <div id="indexStickyFiltersPopover" class="index-sticky-filters-popover" hidden>
-                  <div class="index-sticky-section-title">Filters</div>
-                  <div class="index-sticky-filters-grid">
-                    <label>
-                      <span>Sector</span>
-                      <select id="indexStickyTag">
-                        <option value="">All</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Theme</span>
-                      <select id="indexStickyTheme">
-                        <option value="">All</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Turnover</span>
-                      <select id="indexStickyTurnover">
-                        <option value="0">0</option>
-                        <option value="50000000">50M</option>
-                        <option value="100000000">100M</option>
-                        <option value="500000000">500M</option>
-                        <option value="1000000000">1B</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Strategy</span>
-                      <select id="indexStickyStrategy">
-                        <option value="">All</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div id="indexStickyAdvanced" class="index-sticky-advanced" hidden>
-                    <div class="index-sticky-section-title">Advanced</div>
-                    <div class="index-sticky-advanced-grid index-sticky-advanced-grid--slider">
-                      <div id="indexStickyDeviationTitle" class="index-dev200-popover-title">Deviation (%)</div>
-                      <div class="index-deviation-compact-row">
-                        <label class="index-deviation-input-group">
-                          <span>Min</span>
-                          <div class="index-deviation-input-shell">
-                            <input id="indexStickyDev200MinNumber" type="number" inputmode="decimal" step="0.1" min="-20" max="20" value="" placeholder="-∞" aria-label="Deviation min value" />
-                            <span>%</span>
-                          </div>
-                        </label>
-                        <div class="index-deviation-slider-compact">
-                          <div class="index-deviation-slider-scale index-deviation-slider-scale--compact">
-                            <span>-20</span>
-                            <span>0</span>
-                            <span>+20</span>
-                          </div>
-                          <div class="index-deviation-slider-stack index-deviation-slider-stack--compact">
-                            <div class="index-deviation-slider-track"></div>
-                            <div id="indexStickyDev200RangeFill" class="index-deviation-slider-fill"></div>
-                            <div class="index-deviation-slider-zero"></div>
-                            <input id="indexStickyDev200Min" class="index-deviation-slider index-deviation-slider--min" type="range" min="-20" max="20" step="0.5" value="-5" aria-label="Deviation min" />
-                            <input id="indexStickyDev200Max" class="index-deviation-slider index-deviation-slider--max" type="range" min="-20" max="20" step="0.5" value="8" aria-label="Deviation max" />
-                          </div>
-                        </div>
-                        <label class="index-deviation-input-group">
-                          <span>Max</span>
-                          <div class="index-deviation-input-shell">
-                            <input id="indexStickyDev200MaxNumber" type="number" inputmode="decimal" step="0.1" min="-20" max="20" value="" placeholder="+∞" aria-label="Deviation max value" />
-                            <span>%</span>
-                          </div>
-                        </label>
-                      </div>
-                      <div class="index-dev200-popover-actions index-dev200-popover-actions--compact">
-                        <button id="indexStickyDev200Reset" class="action-button secondary" type="button">Reset</button>
-                        <button id="indexStickyDev200Apply" class="action-button" type="button">Apply</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div class="index-sticky-turnover-wrap" aria-label="売買代金フィルター">
+              <span class="index-sticky-turnover-label">売買代金</span>
+              <select id="indexStickyTurnover" class="index-sticky-select index-sticky-turnover" aria-label="売買代金">
+                <option value="0">指定なし</option>
+                <option value="50000000">5,000万円以上</option>
+                <option value="100000000">1億円以上</option>
+                <option value="500000000">5億円以上</option>
+                <option value="1000000000">10億円以上</option>
+              </select>
+              <div class="index-hidden-filters" hidden>
+                <select id="indexStickyTag"><option value="">すべて</option></select>
+                <select id="indexStickyTheme"><option value="">すべて</option></select>
+                <select id="indexStickyStrategy"><option value="">すべて</option></select>
               </div>
+            </div>
             <div class="index-right-actions">
               <div class="index-selection-actions">
                 <button id="indexSelectAllButton" class="text-button index-sticky-action index-sticky-action--selectall" type="button">Select All</button>
@@ -168,7 +107,7 @@
     <script src="./assets/app_utils.js?v=1.4.85"></script>
     <script src="./assets/app_data.js?v=1.4.100"></script>
     <script src="./assets/page_index_scanner_status.js?v=1.4.85"></script>
-    <script src="./assets/page_index_scanner.js?v=1.4.97"></script>
+    <script src="./assets/page_index_scanner.js?v=1.4.101"></script>
     <script src="./assets/app.js?v=1.4.100"></script>
   </body>
 </html>

@@ -121,9 +121,9 @@
       
         const params = new URLSearchParams(window.location.search);
         state.sort = params.get("sort") || state.sort;
-        state.tag = params.get("tag") || "";
-        state.theme = params.get("theme") || "";
-        state.selectedStrategies = params.get("strategy") ? [params.get("strategy")] : [];
+        state.tag = "";
+        state.theme = "";
+        state.selectedStrategies = [];
         state.turnover = INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
           ? Number(params.get("turnover"))
           : 0;
@@ -131,27 +131,6 @@
         state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
         state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
         state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
-        state.deviationFilters.deviation25 = {
-          mode: normalizeDeviationFilterInputMode(params.get("dev25_mode")),
-          min: normalizeDeviationFilterValue(params.get("dev25_min")),
-          max: normalizeDeviationFilterValue(params.get("dev25_max")),
-        };
-        state.deviationFilters.deviation75 = {
-          mode: normalizeDeviationFilterInputMode(params.get("dev75_mode")),
-          min: normalizeDeviationFilterValue(params.get("dev75_min")),
-          max: normalizeDeviationFilterValue(params.get("dev75_max")),
-        };
-        state.deviationFilters.deviation200 = {
-          mode: normalizeDeviationFilterInputMode(params.get("dev200_mode")),
-          min: normalizeDeviationFilterValue(params.get("dev200_min")),
-          max: normalizeDeviationFilterValue(params.get("dev200_max")),
-        };
-        const genericDevMin = normalizeDeviationFilterValue(params.get("devMin"));
-        const genericDevMax = normalizeDeviationFilterValue(params.get("devMax"));
-        const activeDeviationKeyFromUrl = getActiveDeviationSortKey(state.sort);
-        if (activeDeviationKeyFromUrl && (genericDevMin !== "" || genericDevMax !== "")) {
-          state.deviationFilters[activeDeviationKeyFromUrl] = buildDeviationFilterFromBounds(genericDevMin, genericDevMax);
-        }
         state.deviationDrafts = {
           deviation25: { ...state.deviationFilters.deviation25 },
           deviation75: { ...state.deviationFilters.deviation75 },
@@ -640,7 +619,7 @@
           updateStickyFiltersUi();
           await render();
         });
-      
+
         stickyFiltersButton?.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -871,7 +850,7 @@
                   !MARKET_TAGS.has(industry.toLowerCase())
               )
           )].sort();
-          tagSelect.innerHTML = ['<option value="">All</option>']
+          tagSelect.innerHTML = ['<option value="">すべて</option>']
             .concat(industries.map((industry) => `<option value="${escapeHtml(industry)}">${escapeHtml(industry)}</option>`))
             .join("");
           if (stickyTagSelect) {
@@ -903,7 +882,7 @@
           );
           const themeOptions = ["", ...orderedThemes, ...extraThemes];
           themeSelect.innerHTML = themeOptions
-            .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "All")}</option>`)
+            .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "すべて")}</option>`)
             .join("");
           if (stickyThemeSelect) {
             stickyThemeSelect.innerHTML = themeSelect.innerHTML;
