@@ -218,7 +218,8 @@
       async function loadPublicJsonPayload(chartInspected = null) {
         const chartPromise = chartInspected
           ? Promise.resolve(chartInspected)
-          : loadRecentTickerForChart(code, { selectedDate: preferredDate || manifest?.latestDate || "" });
+          : loadRecentTickerForChart(code, { selectedDate: preferredDate || manifest?.latestDate || "" })
+              .catch(() => loadRecentTickerForChart(code, {}));
         const [resolvedChart, meta, detail] = await Promise.all([
           chartPromise,
           loadTickerMeta(code),
@@ -267,10 +268,15 @@
         return loadPublicJsonPayload(chartInspected);
       } catch (error) {
         console.info("[ticker-detail:public_json:fallback]", { code, reason: error.message || String(error) });
-        const payload = await loadTickerPayload(code);
-        state.chartPayload = payload;
-        state.chartSource = "legacy-fallback";
-        return payload;
+        try {
+          const retryChart = await loadRecentTickerForChart(code, {});
+          return loadPublicJsonPayload(retryChart);
+        } catch (_retryErr) {
+          const payload = await loadTickerPayload(code);
+          state.chartPayload = payload;
+          state.chartSource = "legacy-fallback";
+          return payload;
+        }
       }
     }
 
