@@ -374,6 +374,21 @@ def main() -> int:
         logger.log(f"fetch=OK latestDate={latest_date} updatedDates={len(updated_dates)} updatedCodes={len(updated_codes)} seconds={fetch_seconds}")
 
         if latest_date != target_date:
+            if latest_date is None or str(latest_date) < target_date:
+                logger.log(f"[SKIP] target data is not available yet fetchedLatestDate={latest_date} targetDate={target_date}")
+                write_summary_and_health(
+                    "skipped",
+                    target_date=target_date,
+                    manifest_latest=manifest_latest,
+                    details={
+                        "reason": "target_data_not_available_yet",
+                        "fetchedLatestDate": latest_date,
+                        "dateRange": f"{format_yyyymmdd(start_date)}..{format_yyyymmdd(end_date)}",
+                        "fetchSeconds": fetch_seconds,
+                        "log": str(log_path),
+                    },
+                )
+                return 0
             logger.log(f"[ERROR] fetched latestDate={latest_date}; expected targetDate={target_date}")
             write_summary_and_health(
                 "failed",
