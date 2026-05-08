@@ -101,10 +101,27 @@ git push --force origin main
 - `data/` 以下のファイルを stage する前に、必ず `python3 scripts/preflight_guard.py` を実行すること
 - `data/ohlcv/` または `data/public_json/` が staging area に含まれていたら即座に `git reset HEAD -- data/` すること
 - 「差分更新を実行してください」という依頼に対して `run_update_and_build_public_json.sh` を呼ぶことは禁止。必ず `run_incremental_public_json_update.sh` または `kabu_daily_update.py` を使うこと
-- チャートが1本になるなどの UI 表示異常が出た場合は、`check_ohlcv_integrity.py --summary` で原因を特定してから修復すること。データを全削除して再生成するのは最終手段
+- チャートが1本になるなどの UI 表示異常が出た場合は、`check_ohlcv_integrity.py --check-raw --summary` で原因を特定してから修復すること。データを全削除して再生成するのは最終手段
+
+---
+
+## データ更新の絶対ルール（2026-05-08 制定）
+
+日次更新・データ更新・public_json 再生成に関して以下を絶対ルールとする。
+ユーザーが明示的に別タスクとして指示するまで変更しない。
+
+1. `data/ohlcv` だけを正としない。`data/ohlcv_raw` も必ず同時に確認する。
+2. `sync_prices` / incremental update は `ohlcv_raw` を元に `ohlcv` を再生成する。`ohlcv_raw` が壊れている状態で更新してはいけない。
+3. `public_json` 再生成前に、必ず `python3 scripts/check_ohlcv_integrity.py --check-raw` を実行する。
+4. `check_ohlcv_integrity.py --check-raw` が失敗した場合、`public_json` を再生成してはいけない。`manifest.latestDate` を進めてはいけない。
+5. 旧5年更新（`run_update_and_build_public_json.sh`、`fetch_prices.py --history-years 5`）には戻らない。
+6. `data/tickers` / `data/overview` を復元しない。
+7. Yahoo Finance / yfinance への切替は今は行わない。データソース変更は別ブランチ・別タスクで扱う（`DATA_SOURCE_LOCK.md` 参照）。
 
 ---
 
 データソース変更（Yahoo Finance移行・yfinance導入・provider抽象化など）は `DATA_SOURCE_LOCK.md` を参照し、通常作業中は実施しない。
+
+最終更新: 2026-05-08
 
 最終更新: 2026-05-07

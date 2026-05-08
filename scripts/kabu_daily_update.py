@@ -37,7 +37,8 @@ SYNC_STATE_JSON = ROOT / "data" / "jquants_sync_state.json"
 INCREMENTAL_SHELL = ROOT / "scripts" / "run_incremental_public_json_update.sh"
 INTEGRITY_SCRIPT = ROOT / "scripts" / "check_ohlcv_integrity.py"
 
-REPRESENTATIVE_CODES = ["6327", "7162", "7203", "9983", "8301"]
+# 8301 has known structural gaps; use the same 4-code set as check_ohlcv_integrity.py.
+REPRESENTATIVE_CODES = ["6327", "7162", "7203", "9983"]
 
 LEGACY_PROCESS_PATTERNS = (
     "run_update_and_build_public_json",
@@ -81,6 +82,13 @@ def detect_legacy_processes() -> list[str]:
 def load_manifest_latest() -> str:
     try:
         return str(json.loads(MANIFEST_JSON.read_text()).get("latestDate") or "").strip()
+    except Exception:
+        return ""
+
+
+def load_sync_state_date() -> str:
+    try:
+        return str(json.loads(SYNC_STATE_JSON.read_text()).get("lastSuccessfulDate") or "").strip()
     except Exception:
         return ""
 
@@ -141,10 +149,12 @@ def main() -> int:
         log.close()
         return 3
 
-    # --- Step 2: OHLCV integrity pre-flight ---
-    log.log("[CHECK] OHLCV integrity pre-flight")
+    # --- Step 2: OHLCV integrity pre-flight (ohlcv + ohlcv_raw) ---
+    # ohlcv_raw is the source sync_prices reads from. A gap there will propagate
+    # to ohlcv on the next update even if ohlcv was repaired manually.
+    log.log("[CHECK] OHLCV integrity pre-flight (ohlcv + ohlcv_raw)")
     r = subprocess.run(
-        [sys.executable, str(INTEGRITY_SCRIPT)],
+        [sys.executable, str(INTEGRITY_SCRIPT), "--check-raw"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -154,14 +164,17 @@ def main() -> int:
     if r.returncode != 0:
         for line in r.stderr.splitlines():
             log.log(f"  integrity_err: {line}")
-        log.log("[ERROR] OHLCV integrity check failed — manual inspection required")
-        log.log("  ACTION: run `python3 scripts/check_ohlcv_integrity.py --summary` to diagnose")
+        log.log("[ERROR] OHLCV integrity check failed — update blocked")
+        log.log("  ACTION: run `python3 scripts/check_ohlcv_integrity.py --check-raw --summary`")
+        log.log("  ACTION: if ohlcv_raw has a gap, repair with repair_ohlcv_from_tickers_backup.py --apply --fix-raw")
         log.close()
         return 2
 
-    # --- Step 3: Manifest latestDate ---
+    # --- Step 3: Manifest latestDate and sync state ---
     manifest_latest = load_manifest_latest()
+    sync_last = load_sync_state_date()
     log.log(f"manifest.latestDate={manifest_latest or '-'}")
+    log.log(f"jquants.lastSuccessfulDate={sync_last or '-'}")
     if not manifest_latest:
         log.log("[ERROR] manifest.latestDate is empty — cannot proceed with incremental update")
         log.log("  ACTION: check data/manifest.json and run_incremental_public_json_update.sh manually")
@@ -195,6 +208,22 @@ def main() -> int:
     health = load_update_health()
     log.log(f"  update_summary.status={summary.get('status','-')} date={summary.get('date','-')}")
     log.log(f"  update_health.status={health.get('status','-')}")
+
+    # 5b: post-update OHLCV integrity (ohlcv + ohlcv_raw)
+    log.log("[CHECK] post-update OHLCV integrity (ohlcv + ohlcv_raw)")
+    r2 = subprocess.run(
+        [sys.executable, str(INTEGRITY_SCRIPT), "--check-raw"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    for line in r2.stdout.splitlines():
+        log.log(f"  post_integrity: {line}")
+    if r2.returncode != 0:
+        for line in r2.stderr.splitlines():
+            log.log(f"  post_integrity_err: {line}")
+        log.log("[WARN] post-update OHLCV integrity check failed — public_json may be inconsistent")
+        log.log("  ACTION: run check_ohlcv_integrity.py --check-raw to diagnose")
 
     pj_ok = check_public_json_representative(log)
 

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Check integrity of data/ohlcv CSV files for representative tickers.
+"""Check integrity of data/ohlcv (and optionally data/ohlcv_raw) CSV files.
+
+Use --check-raw to also validate data/ohlcv_raw alongside data/ohlcv.
+This is important because sync_prices reads from ohlcv_raw as its source
+of truth; a gap in ohlcv_raw will be silently propagated to ohlcv on
+the next incremental update even if ohlcv itself was repaired.
 
 Exit codes:
   0 - all checks passed
@@ -18,9 +23,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OHLCV_DIR = ROOT / "data" / "ohlcv"
+OHLCV_RAW_DIR = ROOT / "data" / "ohlcv_raw"
 MANIFEST_JSON = ROOT / "data" / "manifest.json"
 
-REPRESENTATIVE_CODES = ["6327", "7162", "7203", "9983", "8301"]
+# Failure in any of these codes = blocked (exit 1).
+REPRESENTATIVE_CODES = ["6327", "7162", "7203", "9983"]
+# Failure here = warning only (not blocking).
+# 8301 has a known structural gap (2026-03-26〜04-20) caused by data source issues;
+# treating it as a hard blocker would prevent valid updates from running.
+WARN_ONLY_CODES = ["8301"]
 
 # Minimum rows expected for a ticker with ~5y of data.
 # ~250 trading days/year * 5y = 1250. Use 200 as a loose lower bound.
@@ -38,9 +49,9 @@ def load_manifest_latest() -> str:
         return ""
 
 
-def check_ticker(code: str, manifest_latest: str) -> dict:
+def check_ticker(code: str, manifest_latest: str, ohlcv_dir: Path = OHLCV_DIR) -> dict:
     result: dict = {"code": code, "ok": True, "issues": [], "warnings": []}
-    f = OHLCV_DIR / f"{code}.csv"
+    f = ohlcv_dir / f"{code}.csv"
     if not f.exists():
         result["ok"] = False
         result["issues"].append(f"file not found: {f}")
@@ -126,40 +137,24 @@ def check_ticker(code: str, manifest_latest: str) -> dict:
     return result
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Check OHLCV integrity for representative tickers")
-    parser.add_argument(
-        "--codes",
-        nargs="+",
-        default=REPRESENTATIVE_CODES,
-        help="ticker codes to check (default: representative set)",
-    )
-    parser.add_argument("--summary", action="store_true", help="print JSON summary to stdout")
-    parser.add_argument("--quiet", action="store_true", help="suppress non-error output")
-    args = parser.parse_args()
-
-    manifest_latest = load_manifest_latest()
-    results = [check_ticker(code, manifest_latest) for code in args.codes]
-
-    failed = [r for r in results if not r["ok"]]
-    passed = [r for r in results if r["ok"]]
-
-    summary = {
-        "manifest_latest": manifest_latest,
-        "checked": len(results),
-        "passed": len(passed),
-        "failed": len(failed),
-        "results": results,
-    }
-
-    if args.summary:
-        print(json.dumps(summary, ensure_ascii=False, indent=2))
-        return 1 if failed else 0
-
-    if not args.quiet:
-        print(f"[check_ohlcv_integrity] manifest.latestDate={manifest_latest or '-'}")
+def _print_results(
+    results: list[dict],
+    label: str,
+    quiet: bool,
+    warn_only_set: set[str] | None = None,
+) -> list[dict]:
+    """Print results. Returns only the blocking failures (excludes warn-only codes)."""
+    if warn_only_set is None:
+        warn_only_set = set()
+    blocking_failed = []
+    if not quiet:
+        print(f"  --- {label} ---")
         for r in results:
-            status = "OK " if r["ok"] else "NG "
+            is_warn_only = r["code"] in warn_only_set
+            if not r["ok"] and is_warn_only:
+                status = "W! "  # warn-only failure
+            else:
+                status = "OK " if r["ok"] else "NG "
             detail = (
                 f"rows={r.get('row_count','?')} "
                 f"last={r.get('last_date','?')} "
@@ -169,17 +164,112 @@ def main() -> int:
             )
             print(f"  [{status}] {r['code']:6s} {detail}")
             for issue in r.get("issues", []):
-                print(f"         ISSUE: {issue}")
+                tag = "WARN(known)" if is_warn_only else "ISSUE"
+                print(f"         {tag}: {issue}")
             for warn in r.get("warnings", []):
                 print(f"         WARN:  {warn}")
+        if warn_only_set:
+            blocked_codes = sorted(warn_only_set & {r["code"] for r in results})
+            if blocked_codes:
+                print(f"  [NOTE] {','.join(blocked_codes)} is warn-only — failure does not block update")
+    blocking_failed = [r for r in results if not r["ok"] and r["code"] not in warn_only_set]
+    return blocking_failed
 
-    if failed:
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Check OHLCV integrity for representative tickers"
+    )
+    parser.add_argument(
+        "--codes",
+        nargs="+",
+        default=None,
+        help=(
+            "Ticker codes to check (default: REPRESENTATIVE_CODES + WARN_ONLY_CODES). "
+            "When specified explicitly, all codes are treated as blocking."
+        ),
+    )
+    parser.add_argument("--summary", action="store_true", help="print JSON summary to stdout")
+    parser.add_argument("--quiet", action="store_true", help="suppress non-error output")
+    parser.add_argument(
+        "--check-raw",
+        action="store_true",
+        help=(
+            "Also check data/ohlcv_raw alongside data/ohlcv. "
+            "Important: sync_prices uses ohlcv_raw as its source; "
+            "a gap there will re-break ohlcv on the next incremental update."
+        ),
+    )
+    args = parser.parse_args()
+
+    # When --codes is specified, treat all as blocking; otherwise use built-in split.
+    if args.codes:
+        codes_to_check = args.codes
+        effective_warn_only: set[str] = set()
+    else:
+        codes_to_check = REPRESENTATIVE_CODES + WARN_ONLY_CODES
+        effective_warn_only = set(WARN_ONLY_CODES)
+
+    manifest_latest = load_manifest_latest()
+    results = [check_ticker(code, manifest_latest, OHLCV_DIR) for code in codes_to_check]
+
+    raw_results: list[dict] = []
+    if args.check_raw:
+        raw_results = [
+            {**check_ticker(code, manifest_latest, OHLCV_RAW_DIR), "dir": "ohlcv_raw"}
+            for code in codes_to_check
+        ]
+
+    all_failed = [r for r in results if not r["ok"]]
+    all_raw_failed = [r for r in raw_results if not r["ok"]]
+    blocking_failed = [r for r in all_failed if r["code"] not in effective_warn_only]
+    blocking_raw_failed = [r for r in all_raw_failed if r["code"] not in effective_warn_only]
+
+    if args.summary:
+        summary: dict = {
+            "manifest_latest": manifest_latest,
+            "warn_only_codes": sorted(effective_warn_only),
+            "ohlcv": {
+                "checked": len(results),
+                "passed": len([r for r in results if r["ok"]]),
+                "failed": len(all_failed),
+                "blocking_failed": len(blocking_failed),
+                "results": results,
+            },
+        }
+        if args.check_raw:
+            summary["ohlcv_raw"] = {
+                "checked": len(raw_results),
+                "passed": len([r for r in raw_results if r["ok"]]),
+                "failed": len(all_raw_failed),
+                "blocking_failed": len(blocking_raw_failed),
+                "results": raw_results,
+            }
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 1 if (blocking_failed or blocking_raw_failed) else 0
+
+    if not args.quiet:
+        print(f"[check_ohlcv_integrity] manifest.latestDate={manifest_latest or '-'}")
+    _print_results(results, "data/ohlcv", args.quiet, effective_warn_only)
+    if args.check_raw:
+        _print_results(raw_results, "data/ohlcv_raw", args.quiet, effective_warn_only)
+
+    any_blocking_failed = blocking_failed or blocking_raw_failed
+    if any_blocking_failed:
         if not args.quiet:
-            print(f"[check_ohlcv_integrity] FAIL: {len(failed)} ticker(s) have issues")
+            parts = []
+            if blocking_failed:
+                parts.append(f"ohlcv:{len(blocking_failed)}")
+            if blocking_raw_failed:
+                parts.append(f"ohlcv_raw:{len(blocking_raw_failed)}")
+            print(f"[check_ohlcv_integrity] FAIL: {' '.join(parts)} ticker(s) have blocking issues")
         return 1
 
     if not args.quiet:
-        print(f"[check_ohlcv_integrity] OK: all {len(passed)} tickers passed")
+        warn_count = len([r for r in all_failed + all_raw_failed if r["code"] in effective_warn_only])
+        label = "ohlcv+ohlcv_raw" if args.check_raw else "ohlcv"
+        warn_suffix = f" ({warn_count} warn-only)" if warn_count else ""
+        print(f"[check_ohlcv_integrity] OK: all blocking tickers passed ({label}){warn_suffix}")
     return 0
 
 

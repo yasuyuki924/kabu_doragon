@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
-"""Dry-run OHLCV repair from the archived data/tickers backup.
+"""Dry-run / apply OHLCV repair from the archived data/tickers backup.
 
-This script intentionally does not write repaired OHLCV or public_json files.
-It reads the Google Drive tar.gz backup directly, compares it with current
-data/ohlcv CSVs, and writes a dry-run report.
+Default mode (no --apply) is a dry run: no files are written.
+With --apply, repairs data/ohlcv CSVs and rebuilds public_json.
+With --apply --fix-raw, ALSO writes to data/ohlcv_raw CSVs so that
+the next incremental J-Quants update does not overwrite the repaired data.
+
+NOTE: --fix-raw writes backup-sourced (already adjusted) rows into
+data/ohlcv_raw.  For codes with corporate-action events this may cause
+a double-adjustment on the next sync_prices call.  The trade-off is
+intentional: the raw files currently have a 1052-day gap and must be
+filled so that incremental updates work correctly.
+
+Exit codes:
+  0 - completed (dry-run or apply)
+  1 - backup not found or unrecoverable error
 """
 
 from __future__ import annotations
@@ -27,8 +38,8 @@ DEFAULT_BACKUP = Path(
 )
 DEFAULT_REPORT = ROOT / "reports" / "kabudragon_ohlcv_backup_repair_dry_run.md"
 CURRENT_OHLCV_DIR = ROOT / "data" / "ohlcv"
+OHLCV_RAW_DIR = ROOT / "data" / "ohlcv_raw"
 BACKUP_MAX_DATE = "2026-05-01"
-TARGET_DATE = "2026-05-07"
 CSV_FIELDS = ("date", "open", "high", "low", "close", "volume")
 
 
@@ -37,8 +48,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--backup", type=Path, default=DEFAULT_BACKUP)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--sample-limit", type=int, default=20)
-    parser.add_argument("--apply", action="store_true", help="Write repaired data/ohlcv CSVs and rebuild public_json")
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write repaired data/ohlcv CSVs and rebuild public_json",
+    )
+    parser.add_argument(
+        "--fix-raw",
+        action="store_true",
+        help=(
+            "Also write merged rows to data/ohlcv_raw CSVs (requires --apply). "
+            "Use this when ohlcv_raw has a gap that would re-break ohlcv on the next incremental update."
+        ),
+    )
     return parser.parse_args()
+
+
+def resolve_target_date() -> str:
+    """Return manifest.latestDate, or today's date as fallback."""
+    try:
+        manifest = json.loads((ROOT / "data" / "manifest.json").read_text())
+        d = str(manifest.get("latestDate") or "").strip()
+        if d:
+            return d
+    except Exception:
+        pass
+    return datetime.now().strftime("%Y-%m-%d")
 
 
 def date_of(row: dict[str, Any]) -> str:
@@ -80,16 +115,22 @@ def extract_rows_from_payload(payload: Any) -> list[dict[str, str]]:
     return [normalize_row(row) for row in rows if isinstance(row, dict) and date_of(row)]
 
 
-def read_current_rows(code: str) -> list[dict[str, str]]:
-    path = CURRENT_OHLCV_DIR / f"{code}.csv"
+def read_csv_rows(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8", newline="") as fh:
         return [normalize_row(row) for row in csv.DictReader(fh) if date_of(row)]
 
 
-def write_current_rows(code: str, rows: list[dict[str, str]]) -> None:
-    path = CURRENT_OHLCV_DIR / f"{code}.csv"
+def read_current_rows(code: str) -> list[dict[str, str]]:
+    return read_csv_rows(CURRENT_OHLCV_DIR / f"{code}.csv")
+
+
+def read_raw_rows(code: str) -> list[dict[str, str]]:
+    return read_csv_rows(OHLCV_RAW_DIR / f"{code}.csv")
+
+
+def write_csv_rows(path: Path, rows: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=CSV_FIELDS)
@@ -97,7 +138,15 @@ def write_current_rows(code: str, rows: list[dict[str, str]]) -> None:
         writer.writerows(rows)
 
 
-def summarize_dates(rows: list[dict[str, str]]) -> dict[str, Any]:
+def write_current_rows(code: str, rows: list[dict[str, str]]) -> None:
+    write_csv_rows(CURRENT_OHLCV_DIR / f"{code}.csv", rows)
+
+
+def write_raw_rows(code: str, rows: list[dict[str, str]]) -> None:
+    write_csv_rows(OHLCV_RAW_DIR / f"{code}.csv", rows)
+
+
+def summarize_dates(rows: list[dict[str, str]], target_date: str = "") -> dict[str, Any]:
     dates = [row["date"] for row in rows]
     duplicates = sum(count - 1 for count in Counter(dates).values() if count > 1)
     return {
@@ -105,12 +154,22 @@ def summarize_dates(rows: list[dict[str, str]]) -> dict[str, Any]:
         "first": min(dates) if dates else None,
         "last": max(dates) if dates else None,
         "hasBackupMaxDate": BACKUP_MAX_DATE in dates,
-        "hasTargetDate": TARGET_DATE in dates,
+        "hasTargetDate": bool(target_date and target_date in dates),
         "duplicates": duplicates,
     }
 
 
-def merge_rows(backup_rows: list[dict[str, str]], current_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+def merge_rows(
+    backup_rows: list[dict[str, str]],
+    current_rows: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Merge backup (up to BACKUP_MAX_DATE) with current rows (all dates preserved).
+
+    Strategy:
+    - Start with backup rows where date <= BACKUP_MAX_DATE (fills the historical gap)
+    - Override/extend with ALL current rows (preserves every date already in current)
+    - Result: complete history = backup gap-fill + all current dates
+    """
     merged = {row["date"]: row for row in backup_rows if row["date"] <= BACKUP_MAX_DATE}
     for row in current_rows:
         merged[row["date"]] = row
@@ -127,20 +186,29 @@ def append_sample(samples: dict[str, list[str]], key: str, code: str, limit: int
         bucket.append(code)
 
 
-def analyze_backup(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, list[str]], list[tuple[str, list[dict[str, str]]]]]:
+# Each repair entry: (code, ohlcv_merged_rows, raw_merged_rows)
+# raw_merged_rows is non-empty only when --fix-raw is requested.
+RepairEntry = tuple[str, list[dict[str, str]], list[dict[str, str]]]
+
+
+def analyze_backup(
+    args: argparse.Namespace,
+    target_date: str,
+) -> tuple[dict[str, Any], dict[str, list[str]], list[RepairEntry]]:
     current_code_set = current_codes()
     backup_code_set: set[str] = set()
     samples: dict[str, list[str]] = {}
-    repairs: list[tuple[str, list[dict[str, str]]]] = []
+    repairs: list[RepairEntry] = []
     stats: dict[str, Any] = {
+        "targetDate": target_date,
         "targetCodes": 0,
         "backupCodes": 0,
         "currentCodes": len(current_code_set),
         "mergeableCodes": 0,
-        "backupHas20260501": 0,
-        "currentHas20260507": 0,
-        "mergedHas20260501": 0,
-        "mergedHas20260507": 0,
+        "backupHasBackupMaxDate": 0,
+        "currentHasTargetDate": 0,
+        "mergedHasBackupMaxDate": 0,
+        "mergedHasTargetDate": 0,
         "mergedDuplicateDateCodes": 0,
         "mergedRowsIncreasedCodes": 0,
         "backupParseErrors": 0,
@@ -152,6 +220,7 @@ def analyze_backup(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, 
         "totalMergedRows": 0,
         "wouldWriteOhlcvCodes": 0,
         "appliedOhlcvCodes": 0,
+        "appliedRawCodes": 0,
         "touchedOhlcvRaw": False,
         "rebuiltPublicJson": False,
         "publicJsonBuildSeconds": None,
@@ -177,10 +246,16 @@ def analyze_backup(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, 
                 continue
 
             current_rows = read_current_rows(code)
-            backup_summary = summarize_dates(backup_rows)
-            current_summary = summarize_dates(current_rows)
-            merged_rows = merge_rows(backup_rows, current_rows)
-            merged_summary = summarize_dates(merged_rows)
+            backup_summary = summarize_dates(backup_rows, target_date)
+            current_summary = summarize_dates(current_rows, target_date)
+            ohlcv_merged_rows = merge_rows(backup_rows, current_rows)
+            merged_summary = summarize_dates(ohlcv_merged_rows, target_date)
+
+            # For --fix-raw: merge backup with ohlcv_raw current rows
+            raw_merged_rows: list[dict[str, str]] = []
+            if args.fix_raw:
+                raw_current_rows = read_raw_rows(code)
+                raw_merged_rows = merge_rows(backup_rows, raw_current_rows)
 
             stats["totalCurrentRows"] += current_summary["rows"]
             stats["totalMergedRows"] += merged_summary["rows"]
@@ -191,16 +266,16 @@ def analyze_backup(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, 
                 stats["currentEmptyCodes"] += 1
                 append_sample(samples, "current_empty", code, args.sample_limit)
             if backup_summary["hasBackupMaxDate"]:
-                stats["backupHas20260501"] += 1
+                stats["backupHasBackupMaxDate"] += 1
             if current_summary["hasTargetDate"]:
-                stats["currentHas20260507"] += 1
+                stats["currentHasTargetDate"] += 1
             if backup_rows and current_rows:
                 stats["mergeableCodes"] += 1
-                repairs.append((code, merged_rows))
+                repairs.append((code, ohlcv_merged_rows, raw_merged_rows))
             if merged_summary["hasBackupMaxDate"]:
-                stats["mergedHas20260501"] += 1
+                stats["mergedHasBackupMaxDate"] += 1
             if merged_summary["hasTargetDate"]:
-                stats["mergedHas20260507"] += 1
+                stats["mergedHasTargetDate"] += 1
             if merged_summary["duplicates"]:
                 stats["mergedDuplicateDateCodes"] += 1
                 append_sample(samples, "merged_duplicate_dates", code, args.sample_limit)
@@ -213,9 +288,9 @@ def analyze_backup(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, 
             else:
                 append_sample(samples, "no_row_increase", code, args.sample_limit)
             if not merged_summary["hasBackupMaxDate"]:
-                append_sample(samples, "merged_missing_2026_05_01", code, args.sample_limit)
+                append_sample(samples, f"merged_missing_{BACKUP_MAX_DATE}", code, args.sample_limit)
             if not merged_summary["hasTargetDate"]:
-                append_sample(samples, "merged_missing_2026_05_07", code, args.sample_limit)
+                append_sample(samples, f"merged_missing_{target_date}", code, args.sample_limit)
 
     missing_backup = sorted(current_code_set - backup_code_set)
     missing_current = sorted(backup_code_set - current_code_set)
@@ -232,13 +307,23 @@ def analyze_backup(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, 
     return stats, samples, repairs
 
 
-def apply_repairs(repairs: list[tuple[str, list[dict[str, str]]]]) -> int:
-    for code, rows in repairs:
-        write_current_rows(code, rows)
-    return len(repairs)
+def apply_repairs(
+    repairs: list[RepairEntry],
+    fix_raw: bool = False,
+) -> tuple[int, int]:
+    """Write repaired rows. Returns (ohlcv_count, raw_count)."""
+    ohlcv_count = 0
+    raw_count = 0
+    for code, ohlcv_rows, raw_rows in repairs:
+        write_current_rows(code, ohlcv_rows)
+        ohlcv_count += 1
+        if fix_raw and raw_rows:
+            write_raw_rows(code, raw_rows)
+            raw_count += 1
+    return ohlcv_count, raw_count
 
 
-def rebuild_public_json() -> tuple[dict[str, Any], float]:
+def rebuild_public_json(target_date: str) -> tuple[dict[str, Any], float]:
     scripts_dir = ROOT / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
@@ -249,37 +334,45 @@ def rebuild_public_json() -> tuple[dict[str, Any], float]:
     logger = Logger(log_path)
     try:
         codes = discover_codes()
-        metrics = rebuild_public_json_from_ohlcv(codes, TARGET_DATE, logger)
+        metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger)
         metrics["log"] = str(log_path)
         return metrics, round(time.perf_counter() - started, 3)
     finally:
         logger.close()
 
 
-def render_report(args: argparse.Namespace, stats: dict[str, Any], samples: dict[str, list[str]]) -> str:
+def render_report(
+    args: argparse.Namespace,
+    stats: dict[str, Any],
+    samples: dict[str, list[str]],
+    target_date: str,
+) -> str:
     lines = [
-        "# KabuDragon OHLCV Backup Repair Dry Run",
+        "# KabuDragon OHLCV Backup Repair",
         "",
         f"- generatedAt: {datetime.now().astimezone().isoformat(timespec='seconds')}",
         f"- backup: `{args.backup}`",
         f"- currentOhlcvDir: `{CURRENT_OHLCV_DIR}`",
+        f"- ohlcvRawDir: `{OHLCV_RAW_DIR}`",
         f"- dryRunOnly: `{str(not args.apply).lower()}`",
         f"- apply: `{str(args.apply).lower()}`",
+        f"- fixRaw: `{str(args.fix_raw).lower()}`",
         f"- backupMaxDate: `{BACKUP_MAX_DATE}`",
-        f"- targetDate: `{TARGET_DATE}`",
+        f"- targetDate: `{target_date}` (derived from manifest.json)",
         "",
         "## Summary",
         "",
     ]
     summary_keys = [
+        "targetDate",
         "targetCodes",
         "backupCodes",
         "currentCodes",
         "mergeableCodes",
-        "backupHas20260501",
-        "currentHas20260507",
-        "mergedHas20260501",
-        "mergedHas20260507",
+        "backupHasBackupMaxDate",
+        "currentHasTargetDate",
+        "mergedHasBackupMaxDate",
+        "mergedHasTargetDate",
         "mergedDuplicateDateCodes",
         "mergedRowsIncreasedCodes",
         "missingBackupCodes",
@@ -293,6 +386,7 @@ def render_report(args: argparse.Namespace, stats: dict[str, Any], samples: dict
         "maxRowIncreaseCode",
         "wouldWriteOhlcvCodes",
         "appliedOhlcvCodes",
+        "appliedRawCodes",
         "touchedOhlcvRaw",
         "rebuiltPublicJson",
         "publicJsonBuildSeconds",
@@ -312,29 +406,49 @@ def render_report(args: argparse.Namespace, stats: dict[str, Any], samples: dict
             "",
             "- Apply is limited to codes present in both backup and current `data/ohlcv`.",
             "- Duplicate dates are resolved by keeping the current `data/ohlcv` row.",
+            "- `merge_rows` preserves ALL current dates (no date is dropped).",
             "- This run did not restore `data/tickers` or `data/overview`.",
-            "- This run did not touch `data/ohlcv_raw`.",
         ]
     )
+    if args.fix_raw:
+        lines.extend(
+            [
+                "- `--fix-raw` was used: backup-sourced (already adjusted) rows were written to `data/ohlcv_raw`.",
+                "  Codes with corporate-action events may be double-adjusted on the next incremental update.",
+                "  This is an acceptable trade-off to fix the 1052-day gap in `data/ohlcv_raw`.",
+            ]
+        )
+    else:
+        lines.append("- This run did NOT touch `data/ohlcv_raw` (use --fix-raw to also repair raw).")
     return "\n".join(lines) + "\n"
 
 
 def main() -> int:
     args = parse_args()
+    if args.fix_raw and not args.apply:
+        print("WARNING: --fix-raw has no effect without --apply", file=sys.stderr)
     if not args.backup.exists():
-        raise SystemExit(f"backup not found: {args.backup}")
-    stats, samples, repairs = analyze_backup(args)
+        print(f"ERROR: backup not found: {args.backup}", file=sys.stderr)
+        return 1
+
+    target_date = resolve_target_date()
+    stats, samples, repairs = analyze_backup(args, target_date)
+
     if args.apply:
-        stats["appliedOhlcvCodes"] = apply_repairs(repairs)
-        build_metrics, build_seconds = rebuild_public_json()
+        ohlcv_count, raw_count = apply_repairs(repairs, fix_raw=args.fix_raw)
+        stats["appliedOhlcvCodes"] = ohlcv_count
+        stats["appliedRawCodes"] = raw_count
+        stats["touchedOhlcvRaw"] = raw_count > 0
+        build_metrics, build_seconds = rebuild_public_json(target_date)
         stats["rebuiltPublicJson"] = True
         stats["publicJsonBuildSeconds"] = build_seconds
         stats["publicJsonBuild"] = build_metrics
-    report = render_report(args, stats, samples)
+
+    report = render_report(args, stats, samples, target_date)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(report, encoding="utf-8")
     print(report)
-    print(f"Wrote dry-run report: {args.report}")
+    print(f"Wrote report: {args.report}")
     return 0
 
 
