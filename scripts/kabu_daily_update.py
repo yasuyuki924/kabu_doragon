@@ -36,6 +36,7 @@ SYNC_STATE_JSON = ROOT / "data" / "jquants_sync_state.json"
 
 INCREMENTAL_SHELL = ROOT / "scripts" / "run_incremental_public_json_update.sh"
 INTEGRITY_SCRIPT = ROOT / "scripts" / "check_ohlcv_integrity.py"
+POSTCHECK_SCRIPT = ROOT / "scripts" / "check_daily_update_result.py"
 
 # 8301 has known structural gaps; use the same 4-code set as check_ohlcv_integrity.py.
 REPRESENTATIVE_CODES = ["6327", "7162", "7203", "9983"]
@@ -230,6 +231,25 @@ def main() -> int:
     if not pj_ok:
         log.log("[WARN] some public_json tickers are stale after update")
         log.log("  ACTION: check individual ticker files in data/public_json/ticker_recent/")
+
+    # --- Step 5c: Comprehensive post-update result check ---
+    log.log("[CHECK] comprehensive post-update result check (ohlcv + ohlcv_raw + public_json)")
+    r3 = subprocess.run(
+        [sys.executable, str(POSTCHECK_SCRIPT)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    for line in r3.stdout.splitlines():
+        log.log(f"  postcheck: {line}")
+    if r3.returncode != 0:
+        for line in r3.stderr.splitlines():
+            log.log(f"  postcheck_err: {line}")
+        log.log("[ERROR] post-update check FAILED — data may be corrupted or 2-candle bug active")
+        log.log("  ACTION: review logs/daily_update_postcheck_*.log for details")
+        log.log("  ACTION: python3 scripts/check_ohlcv_integrity.py --check-raw --summary")
+        log.close()
+        return 1
 
     log.log(f"[DONE] kabu_daily_update finished manifest.latestDate={new_manifest}")
     log.close()

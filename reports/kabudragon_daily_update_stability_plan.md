@@ -48,7 +48,9 @@ python3 scripts/kabu_daily_update.py
          └─ [5] 更新後ポストチェック
                  ├─ manifest.latestDate (更新後)
                  ├─ update_summary.json / update_health.json
-                 └─ 代表銘柄 public_json (last_date 確認)
+                 ├─ 代表銘柄 public_json (last_date 確認)
+                 ├─ [5b] check_ohlcv_integrity.py --check-raw
+                 └─ [5c] check_daily_update_result.py  ← ohlcv+ohlcv_raw+public_json 行数・ギャップ確認
 ```
 
 ### 自動実行スケジュール（launchd）
@@ -69,11 +71,14 @@ python3 scripts/kabu_daily_update.py
 # 通常の日次更新（手動実行）
 python3 scripts/kabu_daily_update.py
 
-# OHLCV 健全性だけ確認したい
-python3 scripts/check_ohlcv_integrity.py
+# OHLCV 健全性だけ確認したい（ohlcv + ohlcv_raw 両方）
+python3 scripts/check_ohlcv_integrity.py --check-raw
 
 # JSON サマリ出力
-python3 scripts/check_ohlcv_integrity.py --summary
+python3 scripts/check_ohlcv_integrity.py --check-raw --summary
+
+# 更新後データ品質チェック（ohlcv + ohlcv_raw + public_json 行数・ギャップ確認）
+python3 scripts/check_daily_update_result.py
 
 # コミット前の staging area チェック
 python3 scripts/preflight_guard.py
@@ -114,17 +119,22 @@ launchctl list | grep kabu
 
 ## 4. 失敗時に見るログ・対処フロー
 
-### チャートが1本になった
+### チャートが2本（または数本）になった
 
 ```bash
-# 1. OHLCV 健全性確認
-python3 scripts/check_ohlcv_integrity.py --summary
+# 1. post-check で状況確認
+python3 scripts/check_daily_update_result.py
 
-# 2. 穴あき銘柄を特定して差分再生成
-python3 scripts/run_incremental_public_json_update.sh  # 通常これで補完される
+# 2. OHLCV 健全性確認（ohlcv + ohlcv_raw 両方）
+python3 scripts/check_ohlcv_integrity.py --check-raw --summary
 
-# 3. 改善しない場合は repair スクリプト
-python3 scripts/repair_ohlcv_from_tickers_backup.py --dry-run
+# 3. ohlcv_raw に大穴が見つかった場合 → 修復
+python3 scripts/repair_ohlcv_from_tickers_backup.py --dry-run --fix-raw
+python3 scripts/repair_ohlcv_from_tickers_backup.py --apply --fix-raw
+
+# 4. 修復後に再確認してから更新
+python3 scripts/check_daily_update_result.py
+python3 scripts/kabu_daily_update.py
 ```
 
 ### `launchctl list` で exit code が 1 になっている
@@ -193,6 +203,7 @@ launchd が正常動作していれば手動実行は不要です。
 | `scripts/kabu_daily_update.py` | 日次更新統一入口（これを使う） |
 | `scripts/run_incremental_public_json_update.sh` | 差分更新実行（launchd / kabu_daily_update.py が呼ぶ） |
 | `scripts/incremental_jquants_update.py` | J-Quants差分更新本体 |
-| `scripts/check_ohlcv_integrity.py` | OHLCV健全性確認 |
+| `scripts/check_ohlcv_integrity.py` | OHLCV整合性チェック（--check-raw で ohlcv_raw も確認） |
+| `scripts/check_daily_update_result.py` | 更新後データ品質チェック（ohlcv+ohlcv_raw+public_json、2本化検出） |
 | `scripts/preflight_guard.py` | コミット前staging確認 |
-| `scripts/repair_ohlcv_from_tickers_backup.py` | OHLCV修復（障害時のみ） |
+| `scripts/repair_ohlcv_from_tickers_backup.py` | OHLCV修復（障害時のみ、--fix-raw でohlcv_rawも修復） |

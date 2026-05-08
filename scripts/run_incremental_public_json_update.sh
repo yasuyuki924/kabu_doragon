@@ -42,6 +42,17 @@ cmd_status=$?
 
 if [ "${cmd_status}" -eq 0 ]; then
   echo "[$(timestamp)] [OK] incremental public_json update completed"
+
+  echo "[$(timestamp)] [CHECK] post-update result check (ohlcv + ohlcv_raw + public_json)"
+  "${PYTHON_BIN}" "${ROOT}/scripts/check_daily_update_result.py"
+  postcheck_status=$?
+  if [ "${postcheck_status}" -ne 0 ]; then
+    echo "[$(timestamp)] [ERROR] post-update check FAILED (exit=${postcheck_status}) — data may be corrupted" >&2
+    echo "[$(timestamp)]   ACTION: review logs/daily_update_postcheck_*.log for details" >&2
+    echo "[$(timestamp)]   ACTION: python3 scripts/check_ohlcv_integrity.py --check-raw --summary" >&2
+    exit "${postcheck_status}"
+  fi
+  echo "[$(timestamp)] [OK] post-update check passed"
 else
   echo "[$(timestamp)] [ERROR] incremental public_json update failed status=${cmd_status}" >&2
 fi
