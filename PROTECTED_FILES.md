@@ -3,6 +3,12 @@
 このファイルは Claude / Codex などの AI エージェントが参照すること。
 **以下のルールは最優先で遵守すること。**
 
+> **AI必読ファイル（データ更新系を触る前に必ず読むこと）**
+> - `AGENTS.md` — Codex / Claude Code / Cursor 向け完了条件・禁止事項・チェックコマンド
+> - `CLAUDE.md` — Claude Code 向け同等ルール
+> - `DATA_SOURCE_LOCK.md` — データソース変更禁止（Yahoo Finance移行・yfinance導入など）
+> - `.cursor/rules/kabudragon-data-update.mdc` — Cursor 自動認識ルール
+
 ---
 
 ## 絶対に削除・上書きしてはいけないもの

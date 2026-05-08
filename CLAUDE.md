@@ -1,45 +1,10 @@
-# AGENTS.md
-# Codex rules for kabu_doragon
+# CLAUDE.md — KabuDragon Data Update Safety Rules
 
-## Project role
-This repository is a production-grade Japanese stock screening dashboard.
-
-## Primary goals
-- preserve stable ranking flow
-- keep scanner rendering fast
-- maintain TradingView lazy loading
-- avoid regressions in filter apply behavior
-- keep ticker detail pages isolated
-
-## Critical protected files
-- index.html
-- ticker.html
-- scripts/
-- src/
-- assets/
-
-## Do not break
-- existing ranking sort order
-- filter apply event binding
-- date popup visibility
-- off-screen chart cleanup
-- Yahoo/J-Quants parser compatibility
-
-## Safe workflow
-1. implement in feature branch only
-2. verify in codex-test worktree
-3. merge to main after browser validation
-
-## If uncertain
-prefer minimal diff changes
+Claude Code は、KabuDragonでデータ更新系を触る場合、
+**このファイルを必ず読むこと。**
+このルールに反する作業が必要になった場合は、実装せずにユーザーへ確認すること。
 
 ---
-
-# KabuDragon Data Update Safety
-
-Codex / Claude Code / Cursor は、KabuDragonでデータ更新系を触る場合、
-**このセクションを必ず読むこと。**
-このルールに反する作業が必要になった場合は、実装せずにユーザーへ確認すること。
 
 ## 最重要ルール
 
@@ -55,6 +20,8 @@ KabuDragonのデータ更新系では、**画面が一時的に戻っただけ�
 
 この条件を満たさない限り、「修復完了」「大丈夫」「更新成功」と報告してはいけない。
 
+---
+
 ## ohlcv_raw が壊れているときの禁止事項
 
 `data/ohlcv_raw` が壊れている状態では、**絶対に `public_json` を再生成しない。**
@@ -64,6 +31,8 @@ KabuDragonのデータ更新系では、**画面が一時的に戻っただけ�
 - `data/ohlcv` だけ修復しても `data/ohlcv_raw` が壊れていれば、次回更新で再び壊れる
 - この状態で `public_json` を再生成すると、ローソク足が2本・3本になる不具合が発生する
 
+---
+
 ## 更新前チェック（必須）
 
 `public_json` 再生成前に必ず実行:
@@ -72,7 +41,13 @@ KabuDragonのデータ更新系では、**画面が一時的に戻っただけ�
 .venv/bin/python scripts/check_ohlcv_integrity.py --check-raw
 ```
 
-失敗した場合は `public_json` 再生成禁止・`manifest.latestDate` 更新禁止・即停止。
+失敗した場合:
+- `public_json` を再生成しない
+- `manifest.latestDate` を進めない
+- `update_summary` を success 扱いにしない
+- 原因ログを出して停止する
+
+---
 
 ## 更新後チェック（必須）
 
@@ -82,7 +57,12 @@ KabuDragonのデータ更新系では、**画面が一時的に戻っただけ�
 .venv/bin/python scripts/check_daily_update_result.py
 ```
 
-失敗した場合は更新成功扱い禁止・「大丈夫」報告禁止。
+失敗した場合:
+- 更新成功扱いにしない
+- 「大丈夫」と報告しない
+- `logs/daily_update_postcheck_YYYYMMDD.log` を確認する
+
+---
 
 ## 完了判定チェックリスト
 
@@ -96,6 +76,8 @@ KabuDragonのデータ更新系では、**画面が一時的に戻っただけ�
 - [ ] `manifest.latestDate` と `public_json` 最終日が一致
 - [ ] ローソク足 2本化・3本化がない
 
+---
+
 ## 異常時のルール
 
 異常が出た場合:
@@ -105,6 +87,8 @@ KabuDragonのデータ更新系では、**画面が一時的に戻っただけ�
 3. 原因ログを報告する
 4. 修復は最小範囲で1回だけ
 5. 原因が不明なまま `public_json` を再生成しない
+
+---
 
 ## データ更新の禁止事項
 
@@ -123,6 +107,8 @@ KabuDragonのデータ更新系では、**画面が一時的に戻っただけ�
 | `git reset --hard` / `git clean` / `rm -rf data/` | データ消失リスク |
 | `main` ブランチへの直接 push / force push | 禁止 |
 
+---
+
 ## 日次更新の正しい入口
 
 ```bash
@@ -132,12 +118,15 @@ python3 scripts/kabu_daily_update.py
 
 内部で `check_ohlcv_integrity.py --check-raw` と `check_daily_update_result.py` を自動実行する。
 
+---
+
 ## 参照ファイル
 
 | ファイル | 内容 |
 |---|---|
+| `AGENTS.md` | Codex / 全AIエージェント向けルール（フロントエンド含む） |
 | `PROTECTED_FILES.md` | 削除・上書き禁止ファイル一覧、絶対ルール |
-| `CLAUDE.md` | Claude Code 向け同等ルール |
-| `DATA_SOURCE_LOCK.md` | データソース変更禁止 |
+| `DATA_SOURCE_LOCK.md` | データソース変更禁止（Yahoo Finance移行など） |
 | `reports/kabudragon_daily_update_postcheck.md` | post-check 運用ガイド |
 | `reports/kabudragon_ohlcv_raw_repair_plan.md` | ohlcv_raw 修復手順 |
+| `reports/kabudragon_daily_update_stability_plan.md` | 日次更新安定化計画 |

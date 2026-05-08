@@ -1,0 +1,68 @@
+---
+description: KabuDragon データ更新系の必須ルール（Cursor 自動認識用）
+globs:
+  - "scripts/*.py"
+  - "scripts/*.sh"
+  - "data/**"
+  - "launchd/*.plist"
+alwaysApply: true
+---
+
+# KabuDragon Data Update Safety
+
+データ更新系を触る前に必ずこのルールを確認すること。
+
+## 最重要: 画面が戻っただけで完了扱いしない
+
+完了条件（すべて満たすこと）:
+1. `data/ohlcv` が正常
+2. `data/ohlcv_raw` が正常
+3. `data/public_json` が正常
+4. `python3 scripts/check_ohlcv_integrity.py --check-raw` が OK
+5. `python3 scripts/check_daily_update_result.py` が OK
+
+## ohlcv_raw が壊れているときの禁止事項
+
+`data/ohlcv_raw` が壊れている状態では **絶対に `public_json` を再生成しない。**
+
+理由: `sync_prices` は `ohlcv_raw` を元に `ohlcv` を再生成するため、
+`ohlcv` だけ修復しても `ohlcv_raw` が壊れていれば次回更新で再破壊される。
+
+## 更新前チェック（必須）
+
+```bash
+.venv/bin/python scripts/check_ohlcv_integrity.py --check-raw
+```
+
+失敗した場合は `public_json` 再生成禁止・`manifest` 更新禁止・即停止。
+
+## 更新後チェック（必須）
+
+```bash
+.venv/bin/python scripts/check_daily_update_result.py
+```
+
+失敗した場合は更新成功扱い禁止・「大丈夫」報告禁止。
+
+## 日次更新の正しい入口
+
+```bash
+python3 scripts/kabu_daily_update.py
+```
+
+`scripts/run_update_and_build_public_json.sh` は絶対に使わない（旧5年全量更新）。
+
+## 禁止事項
+
+- `scripts/run_update_and_build_public_json.sh` の実行
+- `fetch_prices.py --history-years 5` の実行
+- `data/ohlcv` だけ直して完了扱い
+- `public_json` だけ再生成して完了扱い
+- `data/tickers` / `data/overview` の復元
+- Yahoo Finance / yfinance への切替（`DATA_SOURCE_LOCK.md` 参照）
+- `git reset --hard` / `git clean` / `rm -rf data/`
+- `main` ブランチへの直接 push
+
+## 参照
+
+詳細は `AGENTS.md` / `CLAUDE.md` / `PROTECTED_FILES.md` を参照。
