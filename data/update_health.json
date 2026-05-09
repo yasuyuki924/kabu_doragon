@@ -1,101 +1,14 @@
 {
-  "checkedAt": "2026-04-24T19:31:19+09:00",
-  "context": "manual",
-  "today": "2026-04-24",
-  "weekday": 5,
-  "isBusinessDay": true,
+  "checkedAt": "2026-05-08T18:30:05+09:00",
+  "context": "incremental_jquants_update",
+  "status": "skipped",
   "manifest": {
-    "latestDate": "2026-04-24",
-    "generatedAt": "2026-04-24T19:29:51",
-    "generatedAtDate": "2026-04-24"
+    "latestDate": "2026-05-08"
   },
-  "expectedLatestDate": "2026-04-24",
-  "afterCloseCutoff": true,
-  "closeCutoffTime": "16:45",
-  "updateState": {
-    "lastRunAt": "2026-04-24T19:09:51+09:00",
-    "lastRunDate": "2026-04-24"
+  "jquants": {
+    "targetDate": "2026-05-08"
   },
-  "jquantsSyncState": {
-    "lastSuccessfulDate": "2026-04-24"
-  },
-  "jquantsCloseRetryLog": {
-    "path": "/Users/okamoto/My Project/kabu_doragon/logs/jquants_close_retry.out.log",
-    "exists": true,
-    "lastUpdatedAt": "2026-04-24T19:30:03+09:00",
-    "lastUpdatedDate": "2026-04-24"
-  },
-  "jquantsCloseRetryError": {
-    "path": "/Users/okamoto/My Project/kabu_doragon/logs/jquants_close_retry.err.log",
-    "exists": true,
-    "lastUpdatedAt": "2026-04-24T18:00:03+09:00",
-    "authErrorCode": "INVALID_OR_EXPIRED_API_KEY",
-    "active": false
-  },
-  "updateSummary": {
-    "generatedAt": "2026-04-24T19:30:57+09:00",
-    "date": "2026-04-24",
-    "totalSymbols": 3758,
-    "inactiveCount": 0,
-    "inactiveCodesSample": [],
-    "matchedCount": 3754,
-    "staleCount": 4,
-    "stale1dCount": 0,
-    "stale2pCount": 4,
-    "emptyCount": 0,
-    "topFailures": [],
-    "retry": {
-      "attempts": 0,
-      "improvedCount": 0,
-      "remainingCount": 0
-    }
-  },
-  "universe": {
-    "activeCount": 3758,
-    "inactiveCount": 0
-  },
-  "qualityGate": {
-    "checkedAt": "2026-04-24T19:30:41+09:00",
-    "passed": false,
-    "thresholds": {
-      "minMatchRatio": 0.98,
-      "minMatchCount": 0,
-      "maxStaleCount": 0
-    },
-    "summary": {
-      "date": "2026-04-24",
-      "totalCount": 3758,
-      "activeCount": 3758,
-      "inactiveCount": 0,
-      "matchedCount": 3733,
-      "staleCount": 25,
-      "emptyCount": 0,
-      "matchRatio": 0.993348
-    }
-  },
-  "launchAgent": {
-    "label": "com.okamoto.kabu_doragon_close_retry",
-    "registered": true,
-    "checkCommandOk": true,
-    "checkError": "",
-    "bootstrapAttempted": false,
-    "bootstrapSucceeded": false,
-    "bootstrapExitCode": null,
-    "bootstrapMessage": "",
-    "plistPath": "/Users/okamoto/Library/LaunchAgents/com.okamoto.kabu_doragon_close_retry.plist"
-  },
-  "launchAgentRegistered": true,
-  "reasonCodes": [
-    "RECOVERY_FAILED"
-  ],
-  "activeIssueCodes": [
-    "RECOVERY_FAILED"
-  ],
-  "isHealthy": false,
-  "watchdog": {
-    "abnormal": true,
-    "triggerCodes": [
-      "RECOVERY_FAILED"
-    ]
+  "details": {
+    "reason": "already_up_to_date"
   }
 }
