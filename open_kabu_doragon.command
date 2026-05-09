@@ -5,6 +5,7 @@ set -u
 PROJECT_DIR="/Users/okamoto/kabu_doragon"
 PORT="8010"
 URL="http://127.0.0.1:${PORT}/index.html"
+OPEN_URL="http://127.0.0.1:${PORT}/index.html?ts=$(date +%s)"
 LOG_DIR="${PROJECT_DIR}/.tmp"
 LOG_FILE="${LOG_DIR}/http-server-${PORT}.log"
 
@@ -35,7 +36,7 @@ cd "${PROJECT_DIR}" || {
 
 if is_server_responding; then
   print_status "既存サーバーを検出しました。ブラウザで開きます。"
-  open "${URL}"
+  open "${OPEN_URL}"
   exit 0
 fi
 
@@ -58,7 +59,7 @@ nohup python3 -m http.server "${PORT}" --bind 127.0.0.1 >"${LOG_FILE}" 2>&1 &
 for _ in {1..20}; do
   if is_server_responding; then
     print_status "起動しました。ブラウザで開きます。"
-    open "${URL}"
+    open "${OPEN_URL}"
     exit 0
   fi
   sleep 0.5
