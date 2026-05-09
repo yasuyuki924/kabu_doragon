@@ -64,7 +64,7 @@
           manifest: null,
           updateHealth: null,
           overview: null,
-          sort: "gainers",
+          sort: "strategy_turtle",
           tag: "",
           theme: "",
           turnover: 0,
@@ -118,9 +118,23 @@
         if (stickyFiltersPopover && stickyBar && stickyFiltersPopover.parentElement !== stickyBar.parentElement) {
           stickyBar.insertAdjacentElement("afterend", stickyFiltersPopover);
         }
+
+        function renderSortOptions(select) {
+          if (!select) {
+            return;
+          }
+          select.innerHTML = INDEX_SCANNER_SORT_OPTIONS.map(
+            (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
+          ).join("");
+        }
+
+        renderSortOptions(sortSelect);
+        renderSortOptions(stickySortSelect);
       
         const params = new URLSearchParams(window.location.search);
-        state.sort = params.get("sort") || state.sort;
+        const coreStrategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
+        const requestedSort = params.get("sort") || state.sort;
+        state.sort = coreStrategySortKeys.has(requestedSort) ? requestedSort : "strategy_turtle";
         state.tag = "";
         state.theme = "";
         state.selectedStrategies = [];
@@ -153,10 +167,10 @@
           stickyTurnoverSelect.value = String(state.turnover);
         }
         if (stickyStrategySelect) {
-          stickyStrategySelect.innerHTML = STRATEGY_CONFIG.map(
+          stickyStrategySelect.innerHTML = INDEX_SCANNER_SORT_OPTIONS.map(
             (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
           ).join("");
-          stickyStrategySelect.value = state.selectedStrategies[0] || "";
+          stickyStrategySelect.value = state.sort;
         }
         const initialDeviationFilter = getActiveDeviationFilter(state);
         if (dev200ModeSelect) {
