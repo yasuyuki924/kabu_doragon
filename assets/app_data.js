@@ -43,6 +43,7 @@
   async function loadOverviewData(fetchJson, date, timeframe = "daily") {
     const suffix = timeframe === "weekly" ? "_weekly" : timeframe === "monthly" ? "_monthly" : "";
     const litePath = `./data/public_json/overview_lite/${date}/market_pulse${suffix}.json`;
+    const dailyLitePath = `./data/public_json/overview_lite/${date}/market_pulse.json`;
     const publicPath = `./data/public_json/overview_recent/${date}/market_pulse${suffix}.json`;
     const legacyPath = `./data/overview/${date}/market_pulse${suffix}.json`;
     const dataMode = new URLSearchParams(window.location.search).get("dataMode") || "";
@@ -51,7 +52,15 @@
         return await fetchJson(legacyPath);
       } catch (legacyError) {
         console.warn("[overview:legacy:missing]", { date, timeframe, reason: legacyError.message || String(legacyError) });
-        return fetchJson(litePath);
+        try {
+          return await fetchJson(litePath);
+        } catch (liteError) {
+          if (timeframe !== "daily") {
+            console.warn("[overview:timeframe:fallback]", { date, timeframe, reason: liteError.message || String(liteError) });
+            return fetchJson(dailyLitePath);
+          }
+          throw liteError;
+        }
       }
     }
     try {
@@ -62,7 +71,15 @@
         return await fetchJson(publicPath);
       } catch (publicError) {
         console.info("[overview:public_json:fallback]", { date, timeframe, reason: publicError.message || String(publicError) });
-        return fetchJson(legacyPath);
+        try {
+          return await fetchJson(legacyPath);
+        } catch (legacyError) {
+          if (timeframe !== "daily") {
+            console.warn("[overview:timeframe:fallback]", { date, timeframe, reason: legacyError.message || String(legacyError) });
+            return fetchJson(dailyLitePath);
+          }
+          throw legacyError;
+        }
       }
     }
   }
