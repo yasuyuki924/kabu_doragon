@@ -67,7 +67,7 @@
           sort: "strategy_turtle",
           tag: "",
           theme: "",
-          turnover: 0,
+          turnover: 1000000000,
           limit: 100,
           timeframe: "daily",
           rangeMonths: 3,
@@ -138,9 +138,9 @@
         state.tag = "";
         state.theme = "";
         state.selectedStrategies = [];
-        state.turnover = INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
+        state.turnover = params.has("turnover") && INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
           ? Number(params.get("turnover"))
-          : 0;
+          : state.turnover;
         state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
         state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
         state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
@@ -965,6 +965,11 @@
             isJapaneseHoliday,
           });
           const timeParts = formatSnapshotGeneratedAtParts(currentSnapshot?.generatedAt);
+          const headerLatestDate = String(healthLatestDate || currentSnapshot?.date || state.manifest?.latestDate || "").trim();
+          const headerTargetDate = String(state.selectedDate || headerLatestDate || "").trim();
+          const headerDateLabel = headerTargetDate ? headerTargetDate.replace(/-/g, ".") : "--";
+          const headerIsUpdated = Boolean(headerTargetDate && headerLatestDate && headerTargetDate <= headerLatestDate && !hasDelay);
+          const headerLabel = headerIsUpdated ? "更新済み" : "待機";
           updatedStatus.className = [
             "index-header-status",
             `index-header-status--${statusState.tone}`,
@@ -980,49 +985,20 @@
               statusState.label,
               statusState.marketPhase,
               healthPayload
-                ? `最新データ日 ${healthLatestDate || "--"} / 最終生成 ${healthGeneratedAtLabel} / ${launchAgentRegistered ? "自動更新ジョブ稼働中" : "自動更新未登録"}${healthAlerts.length ? ` / ${healthAlerts.join(",")}` : ""}`
-                : (timeParts.full || "--"),
+                ? `${headerDateLabel} ${headerLabel} / 最新データ日 ${healthLatestDate || "--"} / 最終生成 ${healthGeneratedAtLabel} / ${launchAgentRegistered ? "自動更新ジョブ稼働中" : "自動更新未登録"}${healthAlerts.length ? ` / ${healthAlerts.join(",")}` : ""}`
+                : `${headerDateLabel} ${headerLabel} / ${timeParts.full || "--"}`,
               statusState.pending ? "new data ready" : "",
               statusState.refreshing ? "refreshing" : "",
             ]
               .filter(Boolean)
               .join(" / ")
           );
-          if (healthPayload) {
-            updatedStatus.innerHTML = `
-              <span class="index-header-status-dot" aria-hidden="true"></span>
-              <span class="index-header-status-body">
-                <span class="index-header-status-topline">
-                  <span class="index-header-status-label">${escapeHtml(statusState.label)}</span>
-                  <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
-                </span>
-                <span class="index-header-status-healthline">
-                  <span class="index-header-status-healthitem">最新データ日 ${escapeHtml(healthLatestDate || "--")}</span>
-                  <span class="index-header-status-healthitem">最終生成 ${escapeHtml(healthGeneratedAtLabel)}</span>
-                </span>
-                <span class="index-header-status-bottomline">
-                  <span class="index-header-status-job ${launchAgentRegistered ? "is-healthy" : "is-alert"}">${escapeHtml(launchAgentRegistered ? "自動更新ジョブ稼働中" : "自動更新未登録")}</span>
-                  <span class="index-header-status-alerts">
-                    ${healthAlerts.length ? healthAlerts.map((item) => `<span class="index-header-status-alert">${escapeHtml(item)}</span>`).join("") : ""}
-                  </span>
-                </span>
-              </span>
-            `;
-            return;
-          }
           updatedStatus.innerHTML = `
             <span class="index-header-status-dot" aria-hidden="true"></span>
             <span class="index-header-status-body">
               <span class="index-header-status-topline">
-                <span class="index-header-status-label">${escapeHtml(statusState.label)}</span>
-                <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
-              </span>
-              <span class="index-header-status-bottomline">
-                <span class="index-header-status-date">${escapeHtml(timeParts.date || "--/--")}</span>
-                <span class="index-header-status-time">
-                  <span class="index-header-status-hm">${escapeHtml(timeParts.hm || "--:--")}</span>
-                  <span class="index-header-status-seconds">${escapeHtml(timeParts.seconds || "")}</span>
-                </span>
+                <span class="index-header-status-label">${escapeHtml(headerDateLabel)}</span>
+                <span class="index-header-status-market">${escapeHtml(headerLabel)}</span>
               </span>
             </span>
           `;
