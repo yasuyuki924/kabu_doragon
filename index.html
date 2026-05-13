@@ -11,14 +11,22 @@
         var protocol = window.location.protocol || "";
         var path = window.location.pathname || "/";
         if (protocol === "file:" || ((host === "127.0.0.1" || host === "localhost") && port === "")) {
-          var nextPath = path === "/" ? "/index.html" : path;
+          var decoded = "";
+          try {
+            decoded = decodeURIComponent(path || "");
+          } catch (_) {
+            decoded = path || "";
+          }
+          var marker = "/kabu_doragon/";
+          var markerIndex = decoded.indexOf(marker);
+          var nextPath = markerIndex >= 0 ? "/" + decoded.slice(markerIndex + marker.length).replace(/^\/+/, "") : path === "/" ? "/index.html" : path;
           var nextUrl = "http://127.0.0.1:8010" + nextPath + (window.location.search || "") + (window.location.hash || "");
           window.location.replace(nextUrl);
         }
       })();
     </script>
-    <script src="./assets/desktop_bootstrap.js?v=1.4.81"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.101" />
+    <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.102" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
@@ -47,13 +55,18 @@
               </div>
             </div>
             <select id="indexSort" class="index-sticky-select" aria-label="Sort">
+              <option value="">ストラテジー</option>
               <option value="strategy_minervini">成長ブレイク（Minervini）</option>
               <option value="strategy_stage2">中期上昇入り（Stage 2）</option>
               <option value="strategy_turtle">高値ブレイク（Turtle）</option>
               <option value="strategy_rsi2">上昇中の押し目（RSI(2)）</option>
               <option value="trend_turn">75日線回復（ベース・リカバリー）</option>
             </select>
+            <select id="indexExtraFilter" class="index-sticky-select index-sticky-extra-filter" aria-label="追加フィルター">
+              <option value="" selected>フィルター</option>
+            </select>
             <select id="indexLimit" class="index-sticky-select index-sticky-limit" aria-label="Rows">
+              <option value="">表示件数</option>
               <option value="50">50</option>
               <option value="100" selected>100</option>
             </select>
@@ -92,7 +105,7 @@
     <script src="./assets/app_utils.js?v=1.4.85"></script>
     <script src="./assets/app_data.js?v=1.4.104"></script>
     <script src="./assets/page_index_scanner_status.js?v=1.4.85"></script>
-    <script src="./assets/page_index_scanner.js?v=1.4.104"></script>
+    <script src="./assets/page_index_scanner.js?v=1.4.107"></script>
     <script src="./assets/app.js?v=1.4.103"></script>
   </body>
 </html>

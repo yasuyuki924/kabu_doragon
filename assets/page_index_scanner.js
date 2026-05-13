@@ -106,9 +106,30 @@
           chartObserver: null,
           chartPayloadCache: new Map(),
           chartRequestCache: new Map(),
+          fullChartPayloadCache: new Map(),
+          fullChartRequestCache: new Map(),
           chartRenderedCodes: new Set(),
           chartBaselineShape: null,
         };
+        const DEFAULT_INDEX_SORT = "strategy_turtle";
+        const DEFAULT_INDEX_LIMIT = 100;
+
+        function sortControlValue() {
+          return state.sort === DEFAULT_INDEX_SORT ? "" : state.sort;
+        }
+
+        function limitControlValue() {
+          return String(state.limit);
+        }
+
+        function readSortControlValue(control) {
+          return String(control?.value || "").trim() || DEFAULT_INDEX_SORT;
+        }
+
+        function readLimitControlValue(control) {
+          const value = Number(control?.value || DEFAULT_INDEX_LIMIT);
+          return INDEX_SCANNER_LIMITS.includes(value) ? value : DEFAULT_INDEX_LIMIT;
+        }
 
         let stopAutoRefreshPolling = null;
       
@@ -123,9 +144,12 @@
           if (!select) {
             return;
           }
-          select.innerHTML = INDEX_SCANNER_SORT_OPTIONS.map(
-            (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
-          ).join("");
+          select.innerHTML = [
+            '<option value="">ストラテジー</option>',
+            ...INDEX_SCANNER_SORT_OPTIONS.map(
+              (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
+            ),
+          ].join("");
         }
 
         renderSortOptions(sortSelect);
@@ -134,7 +158,7 @@
         const params = new URLSearchParams(window.location.search);
         const coreStrategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
         const requestedSort = params.get("sort") || state.sort;
-        state.sort = coreStrategySortKeys.has(requestedSort) ? requestedSort : "strategy_turtle";
+        state.sort = coreStrategySortKeys.has(requestedSort) ? requestedSort : DEFAULT_INDEX_SORT;
         state.tag = "";
         state.theme = "";
         state.selectedStrategies = [];
@@ -152,16 +176,16 @@
         };
         state.picks = loadScannerPicks();
         if (sortSelect) {
-          sortSelect.value = state.sort;
+          sortSelect.value = sortControlValue();
         }
         themeSelect.value = state.theme;
         turnoverSelect.value = String(state.turnover);
-        limitSelect.value = String(state.limit);
+        limitSelect.value = limitControlValue();
         if (stickySortSelect) {
-          stickySortSelect.value = state.sort;
+          stickySortSelect.value = sortControlValue();
         }
         if (stickyLimitSelect) {
-          stickyLimitSelect.value = String(state.limit);
+          stickyLimitSelect.value = limitControlValue();
         }
         if (stickyTurnoverSelect) {
           stickyTurnoverSelect.value = String(state.turnover);
@@ -551,21 +575,21 @@
         [...new Set([sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
           .forEach((control) => {
           control.addEventListener("change", async () => {
-            state.sort = stickySortSelect?.matches(":focus") ? stickySortSelect.value : sortSelect.value;
+            state.sort = readSortControlValue(stickySortSelect?.matches(":focus") ? stickySortSelect : sortSelect);
             state.tag = stickyTagSelect?.matches(":focus") ? stickyTagSelect.value : tagSelect.value;
             state.theme = stickyThemeSelect?.matches(":focus") ? stickyThemeSelect.value : themeSelect.value;
             state.turnover = Number(stickyTurnoverSelect?.matches(":focus") ? stickyTurnoverSelect.value : turnoverSelect.value);
-            state.limit = Number(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect.value : limitSelect.value);
-            if (sortSelect) sortSelect.value = state.sort;
-            if (stickySortSelect) stickySortSelect.value = state.sort;
+            state.limit = readLimitControlValue(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect : limitSelect);
+            if (sortSelect) sortSelect.value = sortControlValue();
+            if (stickySortSelect) stickySortSelect.value = sortControlValue();
             if (tagSelect) tagSelect.value = state.tag;
             if (stickyTagSelect) stickyTagSelect.value = state.tag;
             if (themeSelect) themeSelect.value = state.theme;
             if (stickyThemeSelect) stickyThemeSelect.value = state.theme;
             if (turnoverSelect) turnoverSelect.value = String(state.turnover);
             if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(state.turnover);
-            if (limitSelect) limitSelect.value = String(state.limit);
-            if (stickyLimitSelect) stickyLimitSelect.value = String(state.limit);
+            if (limitSelect) limitSelect.value = limitControlValue();
+            if (stickyLimitSelect) stickyLimitSelect.value = limitControlValue();
             const activeDeviationKey = getActiveDeviationSortKey(state.sort);
             if (activeDeviationKey) {
               state.deviationDrafts[activeDeviationKey] = { ...state.deviationFilters[activeDeviationKey] };
@@ -761,6 +785,7 @@
                 return;
               }
               if (state.timeframe === nextTimeframe && !state.timeframePopoverOpen) {
+                openTimeframePopover();
                 return;
               }
               state.timeframe = nextTimeframe;
@@ -973,6 +998,7 @@
           updatedStatus.className = [
             "index-header-status",
             `index-header-status--${statusState.tone}`,
+            headerIsUpdated ? "index-header-status--updated" : "index-header-status--waiting",
             statusState.pending ? "index-header-status--pending" : "",
             statusState.refreshing ? "index-header-status--refreshing" : "",
             statusState.flash ? "index-header-status--flash" : "",
@@ -1083,6 +1109,58 @@
           return `${isRecentDataMode() ? "recent" : "legacy"}:${state.timeframe}:${state.selectedDate}:${record.code}`;
         }
 
+        function shouldUseFullChartRows() {
+          return state.timeframe === "monthly" || (state.timeframe === "weekly" && Number(state.rangeMonths) > 12);
+        }
+
+        function parseOhlcvCsv(text) {
+          return String(text || "")
+            .trim()
+            .split(/\r?\n/)
+            .slice(1)
+            .map((line) => {
+              const [date, open, high, low, close, volume] = line.split(",");
+              return {
+                date,
+                open: Number(open),
+                high: Number(high),
+                low: Number(low),
+                close: Number(close),
+                volume: Number(volume),
+              };
+            })
+            .filter((row) => row.date && Number.isFinite(row.close));
+        }
+
+        async function loadFullChartRows(code) {
+          const cacheKey = `${state.selectedDate}:${code}`;
+          const cached = state.fullChartPayloadCache.get(cacheKey);
+          if (cached) {
+            return cached;
+          }
+          if (!state.fullChartRequestCache.has(cacheKey)) {
+            state.fullChartRequestCache.set(
+              cacheKey,
+              fetch(`./data/ohlcv/${code}.csv`, { cache: "no-store" })
+                .then(async (response) => {
+                  if (!response.ok) {
+                    throw new Error(`CSV 読み込み失敗: ${code} (${response.status})`);
+                  }
+                  const rows = parseOhlcvCsv(await response.text());
+                  if (!rows.length) {
+                    throw new Error(`CSVに価格データがありません: ${code}`);
+                  }
+                  state.fullChartPayloadCache.set(cacheKey, rows);
+                  return rows;
+                })
+                .finally(() => {
+                  state.fullChartRequestCache.delete(cacheKey);
+                })
+            );
+          }
+          return state.fullChartRequestCache.get(cacheKey);
+        }
+
         async function ensureScannerCardChart(record) {
           const cacheKey = getChartCacheKey(record);
           if (state.chartRenderedCodes.has(cacheKey)) {
@@ -1151,7 +1229,16 @@
             state.chartBaselineShape = shape;
           }
 
-          renderScannerCompactChart(chartElementId, record.code, (chartPayload || payload).ohlcv, state.selectedDate, state.rangeMonths, {
+          let chartRows = (chartPayload || payload).ohlcv;
+          if (shouldUseFullChartRows()) {
+            try {
+              chartRows = await loadFullChartRows(record.code);
+            } catch (error) {
+              console.warn("[scanner-chart:full-range:fallback]", { code: record.code, reason: error?.message || String(error) });
+            }
+          }
+
+          renderScannerCompactChart(chartElementId, record.code, chartRows, state.selectedDate, state.rangeMonths, {
             timeframe: state.timeframe,
             useBarCount: false,
             extendToLatest: true,
@@ -1353,10 +1440,10 @@
             state.selectedStrategies
           );
           if (stickySortSelect) {
-            stickySortSelect.value = state.sort;
+            stickySortSelect.value = sortControlValue();
           }
           if (stickyLimitSelect) {
-            stickyLimitSelect.value = String(state.limit);
+            stickyLimitSelect.value = limitControlValue();
           }
           if (stickyTurnoverSelect) {
             stickyTurnoverSelect.value = String(state.turnover);

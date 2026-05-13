@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/Users/okamoto/kabu_doragon"
+PROJECT_DIR="/Users/okamoto/My Project/kabu_doragon"
 PORT="8010"
 HOST="127.0.0.1"
 

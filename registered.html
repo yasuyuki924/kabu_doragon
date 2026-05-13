@@ -11,13 +11,21 @@
         var protocol = window.location.protocol || "";
         var path = window.location.pathname || "/";
         if (protocol === "file:" || ((host === "127.0.0.1" || host === "localhost") && port === "")) {
-          var nextPath = path === "/" ? "/index.html" : path;
+          var decoded = "";
+          try {
+            decoded = decodeURIComponent(path || "");
+          } catch (_) {
+            decoded = path || "";
+          }
+          var marker = "/kabu_doragon/";
+          var markerIndex = decoded.indexOf(marker);
+          var nextPath = markerIndex >= 0 ? "/" + decoded.slice(markerIndex + marker.length).replace(/^\/+/, "") : path === "/" ? "/index.html" : path;
           var nextUrl = "http://127.0.0.1:8010" + nextPath + (window.location.search || "") + (window.location.hash || "");
           window.location.replace(nextUrl);
         }
       })();
     </script>
-    <script src="./assets/desktop_bootstrap.js?v=1.4.81"></script>
+    <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
     <link rel="stylesheet" href="./assets/style.css?v=1.4.68" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>

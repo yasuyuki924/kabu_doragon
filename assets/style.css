@@ -238,11 +238,11 @@ select option {
 .index-header-status {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 32px;
   gap: 8px;
-  padding: 4px 11px 4px 9px;
+  padding: 5px 12px 5px 10px;
   color: #eadcca;
-  font-size: 0.74rem;
+  font-size: 0.86rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   white-space: nowrap;
@@ -292,17 +292,17 @@ select option {
 }
 
 .index-header-status-label {
-  font-size: 0.58rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  opacity: 0.88;
+  letter-spacing: 0.08em;
+  opacity: 0.95;
 }
 
 .index-header-status-market {
-  font-size: 0.55rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  opacity: 0.7;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  opacity: 0.96;
 }
 
 .index-header-status-date,
@@ -403,6 +403,18 @@ select option {
   color: #8fd8ff;
   border-color: rgba(117, 188, 234, 0.44);
   background: linear-gradient(180deg, rgba(31, 51, 69, 0.72) 0%, rgba(19, 31, 46, 0.86) 100%);
+}
+
+.index-header-status--updated {
+  color: #bdf7ca;
+  border-color: rgba(79, 199, 118, 0.5);
+  background: linear-gradient(180deg, rgba(25, 73, 42, 0.78) 0%, rgba(18, 48, 31, 0.92) 100%);
+}
+
+.index-header-status--waiting {
+  color: #ffb5aa;
+  border-color: rgba(230, 96, 82, 0.5);
+  background: linear-gradient(180deg, rgba(85, 34, 29, 0.78) 0%, rgba(55, 22, 23, 0.92) 100%);
 }
 
 .index-header-status--critical .index-header-status-market,
@@ -640,8 +652,12 @@ body[data-page="index-scanner"] .page-header {
   min-width: 132px;
 }
 
+.index-sticky-extra-filter {
+  min-width: 112px;
+}
+
 .index-sticky-limit {
-  min-width: 78px;
+  min-width: 92px;
 }
 
 .index-sticky-turnover-wrap {

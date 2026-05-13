@@ -2,7 +2,7 @@
 
 set -u
 
-PROJECT_DIR="/Users/okamoto/kabu_doragon"
+PROJECT_DIR="/Users/okamoto/My Project/kabu_doragon"
 PORT="8010"
 URL="http://127.0.0.1:${PORT}/index.html"
 OPEN_URL="http://127.0.0.1:${PORT}/index.html?ts=$(date +%s)"
