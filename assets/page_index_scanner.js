@@ -980,8 +980,9 @@
           if (!launchAgentRegistered) {
             healthAlerts.push("自動更新未登録");
           }
-          const healthGeneratedAtParts = formatSnapshotGeneratedAtParts(healthGeneratedAt);
-          const healthGeneratedAtLabel = healthGeneratedAtParts.full || healthGeneratedAt || "--";
+          const healthUpdatedAt = healthCheckedAt || healthGeneratedAt;
+          const healthUpdatedAtParts = formatSnapshotGeneratedAtParts(healthUpdatedAt);
+          const healthUpdatedAtLabel = healthUpdatedAtParts.hm || healthUpdatedAtParts.full || healthUpdatedAt || "--";
           const statusState = resolveHeaderStatusState(currentSnapshot?.generatedAt, {
             snapshot: currentSnapshot,
             hasFreshUpdate: state.hasFreshUpdate,
@@ -989,41 +990,43 @@
             flash: state.headerStatusFlashActive,
             isJapaneseHoliday,
           });
-          const timeParts = formatSnapshotGeneratedAtParts(currentSnapshot?.generatedAt);
           const headerLatestDate = String(healthLatestDate || currentSnapshot?.date || state.manifest?.latestDate || "").trim();
-          const headerTargetDate = String(state.selectedDate || headerLatestDate || "").trim();
-          const headerDateLabel = headerTargetDate ? headerTargetDate.replace(/-/g, ".") : "--";
-          const headerIsUpdated = Boolean(headerTargetDate && headerLatestDate && headerTargetDate <= headerLatestDate && !hasDelay);
-          const headerLabel = headerIsUpdated ? "更新済み" : "待機";
+          const headerLatestDateLabel = headerLatestDate ? headerLatestDate.replace(/-/g, ".") : "--";
+          const healthStatus = String(rawHealthPayload?.status || "").trim().toLowerCase();
+          const isUpdateFailed = healthStatus === "failed" || reasonCodes.some((code) => String(code || "").includes("FAILED"));
+          const isUpdating = Boolean(statusState.pending || statusState.refreshing || hasDelay);
+          const headerStateClass = isUpdateFailed
+            ? "failed"
+            : isUpdating
+              ? "updating"
+              : "latest";
+          const headerLabel = isUpdateFailed ? "更新失敗" : isUpdating ? (statusState.refreshing ? "更新中" : "更新待ち") : "最新";
+          const autoUpdateLabel = launchAgentRegistered && !isUpdateFailed && !isUpdating ? "自動更新 OK" : launchAgentRegistered ? "自動更新 要確認" : "自動更新 未登録";
           updatedStatus.className = [
             "index-header-status",
             `index-header-status--${statusState.tone}`,
-            headerIsUpdated ? "index-header-status--updated" : "index-header-status--waiting",
+            `index-header-status--${headerStateClass}`,
             statusState.pending ? "index-header-status--pending" : "",
             statusState.refreshing ? "index-header-status--refreshing" : "",
             statusState.flash ? "index-header-status--flash" : "",
           ]
             .filter(Boolean)
             .join(" ");
-          updatedStatus.setAttribute(
-            "title",
-            [
-              statusState.label,
-              statusState.marketPhase,
-              healthPayload
-                ? `${headerDateLabel} ${headerLabel} / 最新データ日 ${healthLatestDate || "--"} / 最終生成 ${healthGeneratedAtLabel} / ${launchAgentRegistered ? "自動更新ジョブ稼働中" : "自動更新未登録"}${healthAlerts.length ? ` / ${healthAlerts.join(",")}` : ""}`
-                : `${headerDateLabel} ${headerLabel} / ${timeParts.full || "--"}`,
-              statusState.pending ? "new data ready" : "",
-              statusState.refreshing ? "refreshing" : "",
-            ]
-              .filter(Boolean)
-              .join(" / ")
-          );
+          const headerTooltip = [
+            `最新データ日 ${headerLatestDateLabel}`,
+            `最終更新 ${healthUpdatedAtLabel}`,
+            `${autoUpdateLabel}${healthAlerts.length ? ` / ${healthAlerts.join(",")}` : ""}`,
+            statusState.pending ? "new data ready" : "",
+            statusState.refreshing ? "refreshing" : "",
+          ]
+            .filter(Boolean)
+            .join(" / ");
+          updatedStatus.setAttribute("title", headerTooltip);
+          updatedStatus.setAttribute("data-status-tooltip", headerTooltip);
           updatedStatus.innerHTML = `
             <span class="index-header-status-dot" aria-hidden="true"></span>
             <span class="index-header-status-body">
               <span class="index-header-status-topline">
-                <span class="index-header-status-label">${escapeHtml(headerDateLabel)}</span>
                 <span class="index-header-status-market">${escapeHtml(headerLabel)}</span>
               </span>
             </span>

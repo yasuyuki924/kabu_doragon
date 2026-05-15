@@ -238,6 +238,7 @@ select option {
 .index-header-status {
   display: inline-flex;
   align-items: center;
+  position: relative;
   min-height: 32px;
   gap: 8px;
   padding: 5px 12px 5px 10px;
@@ -256,6 +257,37 @@ select option {
     inset 0 1px 0 rgba(255, 238, 211, 0.06),
     inset 0 -1px 0 rgba(140, 98, 49, 0.14),
     0 0 0 1px rgba(38, 23, 14, 0.35);
+}
+
+.index-header-status::after {
+  content: attr(data-status-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  width: max-content;
+  max-width: min(420px, 80vw);
+  padding: 8px 10px;
+  color: #eaf2ff;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  letter-spacing: 0;
+  white-space: normal;
+  text-shadow: none;
+  border: 1px solid rgba(124, 163, 213, 0.45);
+  border-radius: 8px;
+  background: rgba(14, 24, 40, 0.96);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.index-header-status:hover::after,
+.index-header-status:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .index-header-status-dot {
@@ -415,6 +447,30 @@ select option {
   color: #ffb5aa;
   border-color: rgba(230, 96, 82, 0.5);
   background: linear-gradient(180deg, rgba(85, 34, 29, 0.78) 0%, rgba(55, 22, 23, 0.92) 100%);
+}
+
+.index-header-status--latest {
+  color: #bdf7ca;
+  border-color: rgba(79, 199, 118, 0.5);
+  background: linear-gradient(180deg, rgba(25, 73, 42, 0.78) 0%, rgba(18, 48, 31, 0.92) 100%);
+}
+
+.index-header-status--history {
+  color: #a9d7ff;
+  border-color: rgba(83, 157, 221, 0.5);
+  background: linear-gradient(180deg, rgba(24, 57, 88, 0.78) 0%, rgba(17, 39, 67, 0.92) 100%);
+}
+
+.index-header-status--updating {
+  color: #ffe08a;
+  border-color: rgba(231, 177, 69, 0.55);
+  background: linear-gradient(180deg, rgba(92, 66, 22, 0.8) 0%, rgba(62, 43, 17, 0.94) 100%);
+}
+
+.index-header-status--failed {
+  color: #ffb5aa;
+  border-color: rgba(230, 96, 82, 0.58);
+  background: linear-gradient(180deg, rgba(85, 34, 29, 0.8) 0%, rgba(55, 22, 23, 0.94) 100%);
 }
 
 .index-header-status--critical .index-header-status-market,
