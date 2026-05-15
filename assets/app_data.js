@@ -32,6 +32,18 @@
     return payload && typeof payload === "object" ? payload : null;
   }
 
+  async function loadOverviewDateIndexData(indexPath) {
+    const response = await requestWithDesktopFallback(indexPath);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`JSON 読み込み失敗: ${indexPath} (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload && typeof payload === "object" ? payload : null;
+  }
+
   async function loadThemeOrderData(fetchJson, themeMapPath) {
     const payload = await fetchJson(themeMapPath);
     const items = Array.isArray(payload?.themes) ? payload.themes : [];
@@ -191,6 +203,7 @@
   window.KabuAppData = Object.freeze({
     loadManifestData,
     loadUpdateHealthData,
+    loadOverviewDateIndexData,
     loadOverviewData,
     loadRankingData,
     loadThemeOrderData,

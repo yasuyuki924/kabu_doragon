@@ -659,7 +659,8 @@ body[data-page="index-scanner"] .page-header {
   min-height: 30px;
   min-width: 40px;
   padding: 0 11px;
-  font-size: 0.76rem;
+  font-size: 0.86rem;
+  font-weight: 800;
   background: linear-gradient(180deg, rgba(63, 43, 26, 0.9) 0%, rgba(45, 31, 20, 0.96) 100%);
   border-color: rgba(145, 99, 44, 0.34);
   color: #efe5d9;
@@ -688,7 +689,7 @@ body[data-page="index-scanner"] .page-header {
 
 .index-sticky-select {
   width: auto;
-  min-width: 118px;
+  min-width: 96px;
   padding-top: 0;
   padding-bottom: 0;
   background-color: rgba(56, 39, 25, 0.97);
@@ -705,15 +706,18 @@ body[data-page="index-scanner"] .page-header {
 }
 
 #indexSort.index-sticky-select {
-  min-width: 132px;
+  min-width: 104px;
+  max-width: 118px;
 }
 
 .index-sticky-extra-filter {
-  min-width: 112px;
+  min-width: 92px;
+  max-width: 108px;
 }
 
 .index-sticky-limit {
-  min-width: 92px;
+  min-width: 70px;
+  max-width: 82px;
 }
 
 .index-sticky-turnover-wrap {
@@ -730,7 +734,8 @@ body[data-page="index-scanner"] .page-header {
 }
 
 .index-sticky-turnover {
-  min-width: 136px;
+  min-width: 104px;
+  max-width: 118px;
 }
 
 .index-right-actions {
@@ -3021,6 +3026,46 @@ body[data-page="index-scanner"] .index-scanner-list {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.scanner-card-timeframe {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid rgba(62, 88, 126, 0.32);
+  border-radius: 999px;
+  background: rgba(9, 17, 30, 0.72);
+  flex: 0 0 auto;
+}
+
+.scanner-card-timeframe-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  color: #9ab0ca;
+  background: transparent;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.scanner-card-timeframe-btn:hover,
+.scanner-card-timeframe-btn:focus-visible {
+  color: #e7f3ff;
+  outline: none;
+}
+
+.scanner-card-timeframe-btn.is-active {
+  color: #102033;
+  background: linear-gradient(180deg, #8fd3ff 0%, #5ca9e6 100%);
+  box-shadow: 0 0 0 1px rgba(150, 211, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .scanner-item-links a {

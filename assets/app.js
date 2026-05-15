@@ -2,6 +2,7 @@
   const {
     MANIFEST_PATH,
     UPDATE_HEALTH_PATH,
+    OVERVIEW_LITE_INDEX_PATH,
     THEME_MAP_PATH,
     WATCHLIST_PATH,
     WATCHLIST_STORAGE_KEY,
@@ -51,6 +52,7 @@
   const {
     loadManifestData,
     loadUpdateHealthData,
+    loadOverviewDateIndexData,
     loadOverviewData,
     loadRankingData,
     loadThemeOrderData,
@@ -98,6 +100,7 @@
       findSelectedIndex,
       filterByMinimumClose,
       filterByTurnover,
+      formatDateKey,
       formatNumber,
       formatPercent,
       formatPickedDateTime,
@@ -122,6 +125,7 @@
       isDeviationSort,
       isLowerShadowCandidate,
       loadManifest,
+      loadOverviewDateIndex,
       loadOverview,
       loadUpdateHealth,
       loadRanking,
@@ -813,6 +817,10 @@
 
   async function loadManifest() {
     return loadManifestData(fetchJson, MANIFEST_PATH);
+  }
+
+  async function loadOverviewDateIndex() {
+    return loadOverviewDateIndexData(OVERVIEW_LITE_INDEX_PATH);
   }
 
   async function loadUpdateHealth() {
@@ -1859,7 +1867,7 @@
       if (validation.issues.length) {
         throw new Error(validation.issues.join(", "));
       }
-      if (validation.selectedDateMissing) {
+      if (validation.selectedDateMissing && !options.allowStaleSelectedDate) {
         throw new Error(`selected date ${options.selectedDate} missing`);
       }
       return {
@@ -2891,7 +2899,8 @@
     if (!rows.length) {
       return null;
     }
-    const selectedIndex = findSelectedIndex(rows, selectedDate);
+    const exactIndex = findSelectedIndex(rows, selectedDate);
+    const selectedIndex = exactIndex >= 0 ? exactIndex : rows.length - 1;
     const row = rows[selectedIndex];
     if (!row) {
       return null;
@@ -2906,6 +2915,7 @@
       tags: Array.isArray(payload.tags) ? payload.tags : [],
       links: payload.links && typeof payload.links === "object" ? payload.links : {},
       close: row.close,
+      date: row.date,
       change: row.change,
       changePercent: row.changePercent,
       volume: row.volume,
@@ -3095,6 +3105,7 @@
     const rank = index + 1;
     const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
     const picked = Boolean(state.picks[record.code]);
+    const cardChartTimeframe = String(state.cardChartTimeframes?.get?.(String(record.code)) || state.timeframe || "daily");
     const stopHighStatus = getStopHighStatus(record);
     const hasStopHighBadge = stopHighStatus !== "none";
     const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
@@ -3157,6 +3168,23 @@
             ${renderScannerItemLinks(record, record, state)}
           </div>
           ${strategyBar ? `<div class="scanner-item-links-center">${strategyBar}</div>` : '<div class="scanner-item-links-center"></div>'}
+          <div class="scanner-card-timeframe" aria-label="チャート表示足">
+            ${["daily", "weekly", "monthly"]
+              .map((timeframe) => {
+                const label = { daily: "日", weekly: "週", monthly: "月" }[timeframe];
+                const isActive = cardChartTimeframe === timeframe;
+                return `
+                  <button
+                    type="button"
+                    class="scanner-card-timeframe-btn${isActive ? " is-active" : ""}"
+                    data-card-chart-code="${escapeHtml(record.code)}"
+                    data-card-chart-timeframe="${timeframe}"
+                    aria-pressed="${isActive ? "true" : "false"}"
+                  >${label}</button>
+                `;
+              })
+              .join("")}
+          </div>
           <label class="scanner-pick-toggle">
             <input type="checkbox" data-pick-code="${escapeHtml(record.code)}"${picked ? " checked" : ""} />
             <span>Pick</span>

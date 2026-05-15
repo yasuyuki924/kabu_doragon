@@ -2,6 +2,7 @@
   window.KabuAppConfig = Object.freeze({
     MANIFEST_PATH: "./data/manifest.json",
     UPDATE_HEALTH_PATH: "./data/update_health.json",
+    OVERVIEW_LITE_INDEX_PATH: "./data/public_json/overview_lite/index.json",
     THEME_MAP_PATH: "./data/theme_map.json",
     WATCHLIST_PATH: "./data/watchlist.json",
     WATCHLIST_STORAGE_KEY: "local-stock-dashboard.watchlist.v6",
@@ -87,7 +88,6 @@
         { months: 36, label: "3Y" },
       ],
       monthly: [
-        { months: 36, label: "3Y" },
         { months: 60, label: "5Y" },
       ],
     },

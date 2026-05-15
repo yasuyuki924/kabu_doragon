@@ -219,7 +219,7 @@
       const failures = [];
       const loadedResults = await mapWithConcurrency(picks, CHART_FETCH_CONCURRENCY, async (pick) => {
         try {
-          const inspected = await loadTickerForChartWithFallback(pick.code, { selectedDate: state.selectedDate });
+          const inspected = await loadTickerForChartWithFallback(pick.code, { selectedDate: state.selectedDate, allowStaleSelectedDate: true });
           const record = buildPickedRecordFromPayload(pick, inspected.payload, state.selectedDate);
           if (!record) {
             return { pick, status: "invalid", inspected, reason: "日付に一致する価格データなし" };
@@ -301,7 +301,7 @@
         }
         const { inspected, record } = entry;
         const chartPayload = inspected.chartPayload || inspected.payload;
-        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, chartPayload.ohlcv || [], state.selectedDate, state.bars, {
+        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, chartPayload.ohlcv || [], record.date || state.selectedDate, state.bars, {
           timeframe: state.timeframe,
           useBarCount: true,
         });
