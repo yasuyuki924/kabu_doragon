@@ -26,7 +26,7 @@
       })();
     </script>
     <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.106" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.107" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
@@ -34,7 +34,6 @@
       <header class="page-header">
         <div id="indexStickyBar" class="index-sticky-bar" aria-label="Primary controls">
           <div class="index-sticky-bar-inner">
-            <a id="indexPickedLink" class="action-button secondary scanner-picked-link index-sticky-action" href="./picked.html">Picks</a>
             <span id="indexUpdatedStatus" class="index-header-status">Updated --</span>
             <div class="index-sticky-date-wrap">
               <button id="indexStickyDateButton" class="text-button index-sticky-action" type="button" aria-expanded="false">Date</button>
@@ -85,9 +84,13 @@
               </div>
             </div>
             <div class="index-right-actions">
-              <div class="index-selection-actions">
-                <button id="indexSelectAllButton" class="text-button index-sticky-action index-sticky-action--selectall" type="button">Select All</button>
-                <button id="indexResetPicksButton" class="text-button index-sticky-action index-sticky-action--clear" type="button">Clear</button>
+              <div class="index-picked-split">
+                <a id="indexPickedLink" class="action-button secondary scanner-picked-link index-sticky-action index-picked-main" href="./picked.html">Picks</a>
+                <button id="indexPicksMenuButton" class="text-button index-sticky-action index-picked-menu-button" type="button" aria-label="Picks menu" aria-expanded="false">▼</button>
+                <div id="indexPicksMenu" class="index-picked-menu" hidden>
+                  <button id="indexSelectAllButton" class="index-picked-menu-item index-picked-menu-item--selectall" type="button">Select All</button>
+                  <button id="indexResetPicksButton" class="index-picked-menu-item index-picked-menu-item--clear" type="button">Clear</button>
+                </div>
               </div>
             </div>
           </div>
@@ -105,7 +108,7 @@
     <script src="./assets/app_utils.js?v=1.4.85"></script>
     <script src="./assets/app_data.js?v=1.4.105"></script>
     <script src="./assets/page_index_scanner_status.js?v=1.4.85"></script>
-    <script src="./assets/page_index_scanner.js?v=1.4.116"></script>
+    <script src="./assets/page_index_scanner.js?v=1.4.119"></script>
     <script src="./assets/app.js?v=1.4.106"></script>
   </body>
 </html>

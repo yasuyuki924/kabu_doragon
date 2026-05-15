@@ -52,6 +52,8 @@
         const timeframeOptions = document.getElementById("indexTimeframeOptions");
         const rangeChip = document.getElementById("indexRangeChip");
         const pickedLink = document.getElementById("indexPickedLink");
+        const picksMenuButton = document.getElementById("indexPicksMenuButton");
+        const picksMenu = document.getElementById("indexPicksMenu");
         const updatedStatus = document.getElementById("indexUpdatedStatus");
         const refreshButton = document.getElementById("indexRefreshButton");
         const selectAllPicksButton = document.getElementById("indexSelectAllButton");
@@ -379,7 +381,7 @@
         function updateStickyDateUi() {
           if (stickyDateButton) {
             const label = state.selectedDate ? state.selectedDate.replace(/-/g, ".") : "";
-            stickyDateButton.textContent = label ? `Date ${label} ▼` : "Date ▼";
+            stickyDateButton.textContent = label ? `${label} ▼` : "日付 ▼";
             stickyDateButton.setAttribute("aria-expanded", state.stickyDateOpen ? "true" : "false");
           }
           if (stickyDatePopover) {
@@ -393,6 +395,15 @@
               stickyDatePopover.style.maxHeight = "";
             }
           }
+        }
+
+        function setPicksMenuOpen(isOpen) {
+          if (!picksMenu || !picksMenuButton) {
+            return;
+          }
+          picksMenu.hidden = !isOpen;
+          picksMenu.classList.toggle("is-open", isOpen);
+          picksMenuButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
         }
       
         function buildDeviationFilterFromBounds(minValue, maxValue) {
@@ -771,8 +782,27 @@
         stickyDatePopover?.addEventListener("click", (event) => {
           event.stopPropagation();
         });
+
+        picksMenuButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setPicksMenuOpen(Boolean(picksMenu?.hidden));
+          state.stickyDateOpen = false;
+          state.stickyFiltersOpen = false;
+          updateStickyDateUi();
+          updateStickyFiltersUi();
+        });
+
+        picksMenu?.addEventListener("click", (event) => {
+          event.stopPropagation();
+        });
       
         document.addEventListener("click", (event) => {
+          if (picksMenu && picksMenuButton && !picksMenu.hidden) {
+            if (!picksMenu.contains(event.target) && !picksMenuButton.contains(event.target)) {
+              setPicksMenuOpen(false);
+            }
+          }
           if (state.timeframePopoverOpen && timeframePopover && timeframeGroup) {
             if (!timeframePopover.contains(event.target) && !timeframeGroup.contains(event.target)) {
               state.timeframePopoverOpen = false;
@@ -812,6 +842,7 @@
               state.stickyDateOpen = false;
               updateStickyDateUi();
             }
+            setPicksMenuOpen(false);
             closeAllStrategyPopovers();
           }
         });
@@ -903,6 +934,7 @@
       
         if (resetPicksButton) {
           resetPicksButton.addEventListener("click", async () => {
+            setPicksMenuOpen(false);
             resetScannerPicks(state);
             await render();
           });
@@ -915,6 +947,7 @@
         }
         if (selectAllPicksButton) {
           selectAllPicksButton.addEventListener("click", async () => {
+            setPicksMenuOpen(false);
             selectAllScannerPicks(state.visibleRecords, state);
             await render();
           });
@@ -1626,6 +1659,7 @@
             }
             checkbox.addEventListener("change", () => {
               toggleScannerPick(record, checkbox.checked, state);
+              updateIndexHeaderActions();
             });
           });
           bindStrategyPopoverEvents();
