@@ -48,6 +48,13 @@
       { key: "strategy_rsi2", label: "上昇中の押し目（RSI(2)）" },
       { key: "trend_turn", label: "75日線回復（ベース・リカバリー）" },
     ],
+    INDEX_SCANNER_RANKING_OPTIONS: [
+      { key: "gainers", label: "値上がり率" },
+      { key: "volume", label: "出来高増加" },
+      { key: "deviation25", label: "25日線乖離" },
+      { key: "deviation75", label: "75日線乖離" },
+      { key: "deviation200", label: "200日線乖離" },
+    ],
     TSE_MARKETS: new Set(["TSE", "プライム", "スタンダード", "グロース"]),
     MARKET_TAGS: new Set(["tse", "prime", "standard", "growth"]),
     TYPE_FILTERS: [

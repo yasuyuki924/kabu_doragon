@@ -45,6 +45,7 @@
         const themeSelect = document.getElementById("indexTheme") || stickyThemeSelect;
         const turnoverSelect = document.getElementById("indexTurnover") || stickyTurnoverSelect;
         const limitSelect = document.getElementById("indexLimit");
+        const rankingSelect = document.getElementById("indexExtraFilter");
         const timeframeGroup = document.getElementById("indexTimeframe");
         const timeframePopover = document.getElementById("indexTimeframePopover");
         const timeframePopoverTitle = document.getElementById("indexTimeframePopoverTitle");
@@ -113,16 +114,27 @@
         };
         const DEFAULT_INDEX_SORT = "strategy_turtle";
         const DEFAULT_INDEX_LIMIT = 100;
+        const rankingOptions = window.KabuAppConfig?.INDEX_SCANNER_RANKING_OPTIONS || [];
+        const strategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
+        const rankingSortKeys = new Set(rankingOptions.map((item) => item.key));
 
-        function sortControlValue() {
-          return state.sort === DEFAULT_INDEX_SORT ? "" : state.sort;
+        function strategyControlValue() {
+          return strategySortKeys.has(state.sort) && state.sort !== DEFAULT_INDEX_SORT ? state.sort : "";
+        }
+
+        function rankingControlValue() {
+          return rankingSortKeys.has(state.sort) ? state.sort : "";
         }
 
         function limitControlValue() {
           return String(state.limit);
         }
 
-        function readSortControlValue(control) {
+        function readStrategyControlValue(control) {
+          return String(control?.value || "").trim() || DEFAULT_INDEX_SORT;
+        }
+
+        function readRankingControlValue(control) {
           return String(control?.value || "").trim() || DEFAULT_INDEX_SORT;
         }
 
@@ -152,13 +164,26 @@
           ].join("");
         }
 
+        function renderRankingOptions(select) {
+          if (!select) {
+            return;
+          }
+          select.innerHTML = [
+            '<option value="">ランキング</option>',
+            ...rankingOptions.map(
+              (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
+            ),
+          ].join("");
+        }
+
         renderSortOptions(sortSelect);
         renderSortOptions(stickySortSelect);
+        renderRankingOptions(rankingSelect);
       
         const params = new URLSearchParams(window.location.search);
-        const coreStrategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
+        const indexSortKeys = new Set([...strategySortKeys, ...rankingSortKeys]);
         const requestedSort = params.get("sort") || state.sort;
-        state.sort = coreStrategySortKeys.has(requestedSort) ? requestedSort : DEFAULT_INDEX_SORT;
+        state.sort = indexSortKeys.has(requestedSort) ? requestedSort : DEFAULT_INDEX_SORT;
         state.tag = "";
         state.theme = "";
         state.selectedStrategies = [];
@@ -176,13 +201,16 @@
         };
         state.picks = loadScannerPicks();
         if (sortSelect) {
-          sortSelect.value = sortControlValue();
+          sortSelect.value = strategyControlValue();
+        }
+        if (rankingSelect) {
+          rankingSelect.value = rankingControlValue();
         }
         themeSelect.value = state.theme;
         turnoverSelect.value = String(state.turnover);
         limitSelect.value = limitControlValue();
         if (stickySortSelect) {
-          stickySortSelect.value = sortControlValue();
+          stickySortSelect.value = strategyControlValue();
         }
         if (stickyLimitSelect) {
           stickyLimitSelect.value = limitControlValue();
@@ -572,16 +600,22 @@
           stickyPickedLink.href = "./picked.html";
         }
       
-        [...new Set([sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
+        [...new Set([sortSelect, rankingSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
           .forEach((control) => {
           control.addEventListener("change", async () => {
-            state.sort = readSortControlValue(stickySortSelect?.matches(":focus") ? stickySortSelect : sortSelect);
+            const activeSortControl = stickySortSelect?.matches(":focus") ? stickySortSelect : sortSelect;
+            if (control === rankingSelect) {
+              state.sort = readRankingControlValue(rankingSelect);
+            } else if (control === sortSelect || control === stickySortSelect) {
+              state.sort = readStrategyControlValue(activeSortControl);
+            }
             state.tag = stickyTagSelect?.matches(":focus") ? stickyTagSelect.value : tagSelect.value;
             state.theme = stickyThemeSelect?.matches(":focus") ? stickyThemeSelect.value : themeSelect.value;
             state.turnover = Number(stickyTurnoverSelect?.matches(":focus") ? stickyTurnoverSelect.value : turnoverSelect.value);
             state.limit = readLimitControlValue(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect : limitSelect);
-            if (sortSelect) sortSelect.value = sortControlValue();
-            if (stickySortSelect) stickySortSelect.value = sortControlValue();
+            if (sortSelect) sortSelect.value = strategyControlValue();
+            if (rankingSelect) rankingSelect.value = rankingControlValue();
+            if (stickySortSelect) stickySortSelect.value = strategyControlValue();
             if (tagSelect) tagSelect.value = state.tag;
             if (stickyTagSelect) stickyTagSelect.value = state.tag;
             if (themeSelect) themeSelect.value = state.theme;
@@ -1443,7 +1477,13 @@
             state.selectedStrategies
           );
           if (stickySortSelect) {
-            stickySortSelect.value = sortControlValue();
+            stickySortSelect.value = strategyControlValue();
+          }
+          if (sortSelect) {
+            sortSelect.value = strategyControlValue();
+          }
+          if (rankingSelect) {
+            rankingSelect.value = rankingControlValue();
           }
           if (stickyLimitSelect) {
             stickyLimitSelect.value = limitControlValue();
