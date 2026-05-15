@@ -6,6 +6,7 @@ import argparse
 from common import (
     TICKERS_DIR,
     apply_snapshot_row,
+    apply_period_change_from_open,
     build_daily_record,
     build_enriched_rows,
     build_wtd_mtd_bars,
@@ -74,8 +75,8 @@ def main() -> int:
             continue
         wtd_rows, mtd_rows = build_wtd_mtd_bars(rows)
         enriched_rows = build_enriched_rows(rows)
-        enriched_wtd_rows = build_enriched_rows(wtd_rows)
-        enriched_mtd_rows = build_enriched_rows(mtd_rows)
+        enriched_wtd_rows = apply_period_change_from_open(build_enriched_rows(wtd_rows))
+        enriched_mtd_rows = apply_period_change_from_open(build_enriched_rows(mtd_rows))
         payload_snapshot_type = None
         payload_snapshot_date = None
         if snapshot_date and any(str(row["date"]) == snapshot_date for row in rows) and snapshot_context.get("type"):

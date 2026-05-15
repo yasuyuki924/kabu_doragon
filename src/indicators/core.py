@@ -135,6 +135,24 @@ def build_wtd_mtd_bars(
     return wtd_rows, mtd_rows
 
 
+def apply_period_change_from_open(
+    rows: list[dict[str, float | int | str | bool | None]],
+) -> list[dict[str, float | int | str | bool | None]]:
+    adjusted: list[dict[str, float | int | str | bool | None]] = []
+    for row in rows:
+        open_price = float(row.get("open") or 0)
+        close = float(row.get("close") or 0)
+        change = close - open_price if open_price else None
+        adjusted.append(
+            {
+                **row,
+                "change": round(change, 4) if change is not None else None,
+                "changePercent": round((change / open_price) * 100, 4) if change is not None and open_price else None,
+            }
+        )
+    return adjusted
+
+
 def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[str, float | int | str | bool | None]]:
     if not rows:
         return []
