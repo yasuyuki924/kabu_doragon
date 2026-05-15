@@ -65,7 +65,7 @@
           manifest: null,
           updateHealth: null,
           overview: null,
-          sort: "strategy_turtle",
+          sort: "gainers",
           tag: "",
           theme: "",
           turnover: 1000000000,
@@ -112,7 +112,7 @@
           chartRenderedCodes: new Set(),
           chartBaselineShape: null,
         };
-        const DEFAULT_INDEX_SORT = "strategy_turtle";
+        const DEFAULT_INDEX_SORT = "gainers";
         const DEFAULT_INDEX_LIMIT = 100;
         const rankingOptions = window.KabuAppConfig?.INDEX_SCANNER_RANKING_OPTIONS || [];
         const strategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));

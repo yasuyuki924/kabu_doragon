@@ -18,6 +18,7 @@
     INDEX_SCANNER_LIMITS,
     INDEX_SCANNER_MONTHS,
     INDEX_SCANNER_SORT_OPTIONS,
+    INDEX_SCANNER_RANKING_SORTS,
     INDEX_SCANNER_TIMEFRAMES,
     INDEX_SCANNER_TIMEFRAME_RANGES,
     INDEX_SCANNER_TURNOVER_OPTIONS,
@@ -2478,8 +2479,15 @@
 
   function sortScannerRecords(records, sortKey) {
     const items = [...records];
-    if (sortKey === "gainers") {
-      return items.sort((a, b) => compareNullableNumbers(b.changePercent, a.changePercent));
+    const rankingSort = INDEX_SCANNER_RANKING_SORTS?.[sortKey];
+    if (rankingSort?.key) {
+      const direction = rankingSort.direction === "asc" ? "asc" : "desc";
+      return items.sort((a, b) => {
+        const compared = direction === "asc"
+          ? compareNullableNumbers(a[rankingSort.key], b[rankingSort.key])
+          : compareNullableNumbers(b[rankingSort.key], a[rankingSort.key]);
+        return compared || String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" });
+      });
     }
     if (sortKey === "stop_high") {
       return items.sort(
@@ -2491,9 +2499,6 @@
     }
     if (sortKey === "losers") {
       return items.sort((a, b) => compareNullableNumbers(a.changePercent, b.changePercent));
-    }
-    if (sortKey === "volume") {
-      return items.sort((a, b) => compareNullableNumbers(b.volumeRatio25, a.volumeRatio25));
     }
     if (sortKey === "new_high") {
       return items.sort(
@@ -2547,15 +2552,6 @@
           compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
-    }
-    if (sortKey === "deviation25") {
-      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa25, a.distanceToMa25));
-    }
-    if (sortKey === "deviation75") {
-      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa75, a.distanceToMa75));
-    }
-    if (sortKey === "deviation200") {
-      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa200, a.distanceToMa200));
     }
     if (sortKey === "lower_shadow") {
       return items.sort(compareLowerShadowRecords);

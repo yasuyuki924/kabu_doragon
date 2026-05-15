@@ -55,6 +55,13 @@
       { key: "deviation75", label: "75日線乖離" },
       { key: "deviation200", label: "200日線乖離" },
     ],
+    INDEX_SCANNER_RANKING_SORTS: Object.freeze({
+      gainers: { key: "changePercent", direction: "desc" },
+      volume: { key: "volumeRatio25", direction: "desc" },
+      deviation25: { key: "distanceToMa25", direction: "desc" },
+      deviation75: { key: "distanceToMa75", direction: "desc" },
+      deviation200: { key: "distanceToMa200", direction: "desc" },
+    }),
     TSE_MARKETS: new Set(["TSE", "プライム", "スタンダード", "グロース"]),
     MARKET_TAGS: new Set(["tse", "prime", "standard", "growth"]),
     TYPE_FILTERS: [
