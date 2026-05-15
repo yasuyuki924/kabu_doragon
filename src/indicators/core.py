@@ -153,6 +153,43 @@ def apply_period_change_from_open(
     return adjusted
 
 
+def apply_period_overview_metrics(
+    period_rows: list[dict[str, float | int | str | bool | None]],
+    daily_rows: list[dict[str, float | int | str | bool | None]],
+    timeframe: str,
+) -> list[dict[str, float | int | str | bool | None]]:
+    adjusted: list[dict[str, float | int | str | bool | None]] = []
+    current_period = None
+    period_start_index = 0
+    for index, row in enumerate(period_rows):
+        current_date = datetime.strptime(str(row["date"]), "%Y-%m-%d").date()
+        period_key = (
+            current_date.isocalendar()[:2]
+            if timeframe == "weekly"
+            else (current_date.year, current_date.month)
+        )
+        if current_period != period_key:
+            current_period = period_key
+            period_start_index = index
+        daily_row = daily_rows[index] if index < len(daily_rows) else {}
+        period_days = index - period_start_index + 1
+        open_price = float(row.get("open") or 0)
+        close = float(row.get("close") or 0)
+        change = close - open_price if open_price else None
+        daily_volume_ma25 = float(daily_row.get("volumeMa25") or 0)
+        volume_base = daily_volume_ma25 * period_days
+        volume = float(row.get("volume") or 0)
+        adjusted.append(
+            {
+                **row,
+                "change": round(change, 4) if change is not None else None,
+                "changePercent": round((change / open_price) * 100, 4) if change is not None and open_price else None,
+                "volumeRatio25": round(volume / volume_base, 4) if volume_base else None,
+            }
+        )
+    return adjusted
+
+
 def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[str, float | int | str | bool | None]]:
     if not rows:
         return []

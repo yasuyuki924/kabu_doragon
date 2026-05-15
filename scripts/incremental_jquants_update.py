@@ -248,6 +248,8 @@ def build_period_overview_row(
     close = float(target.get("close") or 0)
     change = close - open_price if open_price else None
     volume = sum(int(float(row.get("volume") or 0)) for row in period_rows)
+    daily_volume_ma25 = float(latest_row.get("volumeMa25") or 0)
+    volume_base = daily_volume_ma25 * len(period_rows)
     return {
         **latest_row,
         "date": target_date,
@@ -259,6 +261,7 @@ def build_period_overview_row(
         "turnover": close * volume,
         "change": round(change, 4) if change is not None else None,
         "changePercent": round((change / open_price) * 100, 4) if change is not None and open_price else None,
+        "volumeRatio25": round(volume / volume_base, 4) if volume_base else None,
     }
 
 

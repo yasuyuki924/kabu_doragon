@@ -68,6 +68,7 @@ from src.indicators.core import (
     RCI_WINDOWS,
     VOLUME_MA_WINDOWS,
     apply_period_change_from_open,
+    apply_period_overview_metrics,
     build_enriched_rows,
     build_wtd_mtd_bars,
     calculate_rci,
