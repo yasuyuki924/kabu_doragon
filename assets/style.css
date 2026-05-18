@@ -2195,6 +2195,7 @@ body[data-page="index-scanner"] .index-scanner-list {
 
 .scanner-chart {
   height: 280px;
+  position: relative;
 }
 
 .scanner-item {
@@ -3224,6 +3225,46 @@ body[data-page="index-scanner"] .index-scanner-list {
   align-items: center;
 }
 
+.scanner-external-links {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.scanner-item-links .scanner-external-link {
+  min-height: 24px;
+  padding: 0 9px;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.scanner-item-links .scanner-external-link--yahoo {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.32);
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.62), rgba(69, 10, 10, 0.68));
+}
+
+.scanner-item-links .scanner-external-link--x {
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.24);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(2, 6, 23, 0.78));
+}
+
+.scanner-item-links .scanner-external-link--ir {
+  color: #fde68a;
+  border-color: rgba(250, 204, 21, 0.34);
+  background: linear-gradient(180deg, rgba(133, 77, 14, 0.62), rgba(69, 26, 3, 0.68));
+}
+
+.scanner-item-links .scanner-external-link--news {
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.34);
+  background: linear-gradient(180deg, rgba(30, 64, 175, 0.62), rgba(30, 41, 105, 0.68));
+}
+
 .scanner-card-timeframe {
   display: inline-flex;
   align-items: center;
@@ -3303,6 +3344,56 @@ body[data-page="index-scanner"] .index-scanner-list {
   height: 14px;
   margin: 0;
   accent-color: #67c5ff;
+}
+
+.scanner-chart-event-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5px;
+  height: 18px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.scanner-chart-event-marker {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #07111f;
+  font-size: 0.56rem;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.24);
+  pointer-events: auto;
+}
+
+.scanner-chart-event-marker--ir {
+  background: #60a5fa;
+}
+
+.scanner-chart-event-marker--news {
+  background: #34d399;
+}
+
+.scanner-chart-event-marker--sns {
+  background: #a78bfa;
+}
+
+.scanner-chart-event-marker--earnings {
+  background: #fbbf24;
+}
+
+.scanner-chart-event-marker--default {
+  background: #cbd5e1;
 }
 
 .scanner-reset-picks {

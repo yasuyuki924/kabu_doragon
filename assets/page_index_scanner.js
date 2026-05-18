@@ -1523,6 +1523,7 @@
             timeframe: chartTimeframe,
             useBarCount: false,
             extendToLatest: true,
+            events: record.events || record.chartEvents || record.newsEvents || record.disclosureEvents || [],
           });
           linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
           state.chartRenderedCodes.add(cacheKey);

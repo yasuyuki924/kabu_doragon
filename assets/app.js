@@ -2759,6 +2759,73 @@
     `;
   }
 
+  function normalizeTickerCodeForExternalLink(code) {
+    return String(code || "").trim().replace(/\.T$/i, "").toUpperCase();
+  }
+
+  function buildYahooFinanceUrl(code) {
+    const normalizedCode = normalizeTickerCodeForExternalLink(code);
+    return normalizedCode ? `https://finance.yahoo.co.jp/quote/${encodeURIComponent(normalizedCode)}.T` : "";
+  }
+
+  function buildXSearchUrl(record) {
+    const code = normalizeTickerCodeForExternalLink(record?.code);
+    if (!code) {
+      return "";
+    }
+    const name = String(record?.name || "").trim();
+    const query = [code, name, "株"].filter(Boolean).join(" ");
+    return `https://x.com/search?q=${encodeURIComponent(query)}&f=live`;
+  }
+
+  function buildIrSearchUrl(record) {
+    const code = normalizeTickerCodeForExternalLink(record?.code);
+    if (!code) {
+      return "";
+    }
+    const name = String(record?.name || "").trim();
+    const query = [code, name, "適時開示"].filter(Boolean).join(" ");
+    return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  }
+
+  function buildNewsSearchUrl(record) {
+    const code = normalizeTickerCodeForExternalLink(record?.code);
+    if (!code) {
+      return "";
+    }
+    const name = String(record?.name || "").trim();
+    const query = [code, name, "ニュース"].filter(Boolean).join(" ");
+    return `https://news.google.com/search?q=${encodeURIComponent(query)}&hl=ja&gl=JP&ceid=JP:ja`;
+  }
+
+  function renderScannerExternalLinks(record) {
+    const links = record?.links || {};
+    const items = [
+      { label: "Y!", title: "Yahoo Financeで開く", href: links.quote || buildYahooFinanceUrl(record?.code), tone: "yahoo" },
+      { label: "X", title: "Xで検索", href: buildXSearchUrl(record), tone: "x" },
+      { label: "IR", title: "適時開示を検索", href: links.ir || buildIrSearchUrl(record), tone: "ir" },
+      { label: "News", title: "ニュースを検索", href: buildNewsSearchUrl(record), tone: "news" },
+    ];
+    return `
+      <div class="scanner-external-links" aria-label="外部情報リンク">
+        ${items
+          .filter((item) => item.href)
+          .map(
+            (item) => `
+              <a
+                class="scanner-external-link scanner-external-link--${escapeHtml(item.tone)}"
+                href="${escapeHtml(item.href)}"
+                target="_blank"
+                rel="noreferrer"
+                title="${escapeHtml(item.title)}"
+              >${escapeHtml(item.label)}</a>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
   function filterByTurnover(records, turnoverThreshold) {
     if (!turnoverThreshold) {
       return [...records];
@@ -3115,7 +3182,7 @@
       : "";
     const quality = summarizeScannerRecordQuality(record, state.selectedDate);
     const qualityBadges = renderScannerQualityBadges(quality);
-    const strategyBar = renderScannerStrategyBar(record);
+    const externalLinks = renderScannerExternalLinks(record);
     return `
       <article class="scanner-item${stopHighClass}">
         <div class="scanner-rank-table">
@@ -3167,7 +3234,7 @@
           <div id="scanLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
             ${renderScannerItemLinks(record, record, state)}
           </div>
-          ${strategyBar ? `<div class="scanner-item-links-center">${strategyBar}</div>` : '<div class="scanner-item-links-center"></div>'}
+          <div class="scanner-item-links-center">${externalLinks}</div>
           <div class="scanner-card-timeframe" aria-label="チャート表示足">
             ${["daily", "weekly", "monthly"]
               .map((timeframe) => {
@@ -3203,19 +3270,6 @@
         local: true,
       },
     ];
-    const links = payload.links || {};
-    if (links.quote) {
-      items.push({ label: "Yahoo", href: links.quote });
-    }
-    if (links.ir) {
-      items.push({ label: "IR", href: links.ir });
-    }
-    if (links.official) {
-      items.push({ label: "公式サイト", href: links.official });
-    }
-    if (links.wikipedia) {
-      items.push({ label: "Wikipedia", href: links.wikipedia });
-    }
     return items
       .filter((item) => item.href)
       .map((item) =>
@@ -3420,6 +3474,74 @@
     ];
   }
 
+  function normalizeChartEventType(value) {
+    const type = String(value || "").trim().toLowerCase();
+    if (["ir", "tdnet", "disclosure"].includes(type)) return "ir";
+    if (["news", "n"].includes(type)) return "news";
+    if (["x", "sns", "social"].includes(type)) return "sns";
+    if (["earnings", "kessan", "決算"].includes(type)) return "earnings";
+    return "default";
+  }
+
+  function chartEventLabel(type) {
+    return {
+      ir: "IR",
+      news: "N",
+      sns: "X",
+      earnings: "決",
+      default: "•",
+    }[type] || "•";
+  }
+
+  function normalizeScannerChartEvents(events) {
+    return (Array.isArray(events) ? events : [])
+      .map((event) => {
+        const date = String(event?.date || event?.time || "").trim();
+        if (!date) {
+          return null;
+        }
+        const type = normalizeChartEventType(event?.type || event?.source || event?.category);
+        return {
+          date,
+          type,
+          label: String(event?.label || chartEventLabel(type)).trim(),
+          title: String(event?.title || event?.headline || event?.summary || chartEventLabel(type)).trim(),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function renderCompactChartEventMarkers(element, chart, visibleRows, events) {
+    const normalizedEvents = normalizeScannerChartEvents(events);
+    if (!element || !chart || !normalizedEvents.length) {
+      return;
+    }
+    const visibleDates = new Set(visibleRows.map((row) => String(row.date || "")));
+    const eventLayer = document.createElement("div");
+    eventLayer.className = "scanner-chart-event-layer";
+    element.appendChild(eventLayer);
+
+    const draw = () => {
+      eventLayer.innerHTML = "";
+      normalizedEvents
+        .filter((event) => visibleDates.has(event.date))
+        .forEach((event) => {
+          const x = chart.timeScale().timeToCoordinate(event.date);
+          if (!Number.isFinite(x)) {
+            return;
+          }
+          const marker = document.createElement("span");
+          marker.className = `scanner-chart-event-marker scanner-chart-event-marker--${event.type}`;
+          marker.textContent = event.label;
+          marker.title = event.title;
+          marker.style.left = `${Math.round(x)}px`;
+          eventLayer.appendChild(marker);
+        });
+    };
+
+    requestAnimationFrame(draw);
+  }
+
   function renderCompactStyleChart(element, rows, selectedDate, rangeValue, options = {}) {
     if (!element || !window.LightweightCharts) {
       return;
@@ -3600,6 +3722,7 @@
       from: -0.5,
       to: visibleCount - 1 + 3,
     });
+    renderCompactChartEventMarkers(element, chart, visibleRows, options.events);
     // インスタンスを登録して次回の再描画時に正しく破棄できるようにする
     if (element.id) {
       _chartInstances.set(element.id, chart);
