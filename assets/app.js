@@ -2783,9 +2783,7 @@
     if (!code) {
       return "";
     }
-    const name = String(record?.name || "").trim();
-    const query = [code, name, "適時開示"].filter(Boolean).join(" ");
-    return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    return `https://kabutan.jp/stock/news?code=${encodeURIComponent(code)}&nmode=3`;
   }
 
   function buildNewsSearchUrl(record) {
@@ -2803,7 +2801,7 @@
     const items = [
       { label: "Y!", title: "Yahoo Financeで開く", href: links.quote || buildYahooFinanceUrl(record?.code), tone: "yahoo" },
       { label: "X", title: "Xで検索", href: buildXSearchUrl(record), tone: "x" },
-      { label: "IR", title: "適時開示を検索", href: links.ir || buildIrSearchUrl(record), tone: "ir" },
+      { label: "IR", title: "株探の会社開示情報で開く", href: buildIrSearchUrl(record), tone: "ir" },
       { label: "News", title: "ニュースを検索", href: buildNewsSearchUrl(record), tone: "news" },
     ];
     return `
