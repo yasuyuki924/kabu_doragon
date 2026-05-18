@@ -26,7 +26,7 @@
       })();
     </script>
     <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.107" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.108" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
@@ -104,11 +104,31 @@
       </section>
     </main>
 
-    <script src="./assets/app_config.js?v=1.4.108"></script>
+    <div id="indexCustomCodeModal" class="index-custom-code-modal" hidden>
+      <div class="index-custom-code-dialog" role="dialog" aria-modal="true" aria-labelledby="indexCustomCodeTitle">
+        <div class="index-custom-code-header">
+          <div>
+            <div id="indexCustomCodeTitle" class="index-custom-code-title">指定コード表示</div>
+            <div class="index-custom-code-subtitle">銘柄コードをスペース・改行・カンマ区切りで貼り付け</div>
+          </div>
+          <button id="indexCustomCodeClose" class="index-custom-code-icon-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <textarea id="indexCustomCodeInput" class="index-custom-code-input" rows="8" placeholder="7203 9984 7011&#10;8306,6758"></textarea>
+        <div id="indexCustomCodeMeta" class="index-custom-code-meta">0件</div>
+        <div class="index-custom-code-actions">
+          <button id="indexCustomCodeClear" class="index-custom-code-button secondary" type="button">クリア</button>
+          <button id="indexCustomCodeExit" class="index-custom-code-button secondary" type="button">解除</button>
+          <button id="indexCustomCodeCancel" class="index-custom-code-button secondary" type="button">キャンセル</button>
+          <button id="indexCustomCodeApply" class="index-custom-code-button primary" type="button">適用</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./assets/app_config.js?v=1.4.109"></script>
     <script src="./assets/app_utils.js?v=1.4.85"></script>
     <script src="./assets/app_data.js?v=1.4.105"></script>
     <script src="./assets/page_index_scanner_status.js?v=1.4.85"></script>
-    <script src="./assets/page_index_scanner.js?v=1.4.119"></script>
+    <script src="./assets/page_index_scanner.js?v=1.4.120"></script>
     <script src="./assets/app.js?v=1.4.106"></script>
   </body>
 </html>

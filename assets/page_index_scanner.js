@@ -58,6 +58,14 @@
         const refreshButton = document.getElementById("indexRefreshButton");
         const selectAllPicksButton = document.getElementById("indexSelectAllButton");
         const resetPicksButton = document.getElementById("indexResetPicksButton");
+        const customCodeModal = document.getElementById("indexCustomCodeModal");
+        const customCodeInput = document.getElementById("indexCustomCodeInput");
+        const customCodeMeta = document.getElementById("indexCustomCodeMeta");
+        const customCodeApplyButton = document.getElementById("indexCustomCodeApply");
+        const customCodeCancelButton = document.getElementById("indexCustomCodeCancel");
+        const customCodeCloseButton = document.getElementById("indexCustomCodeClose");
+        const customCodeClearButton = document.getElementById("indexCustomCodeClear");
+        const customCodeExitButton = document.getElementById("indexCustomCodeExit");
         const miniCalendar = document.getElementById("indexMiniCalendar") || stickyMiniCalendar;
         const errorBox = document.getElementById("indexError");
         const dataQualitySummaryBox = document.getElementById("indexDataQualitySummary");
@@ -107,6 +115,9 @@
           themeOrder: [],
           visibleRecords: [],
           selectedStrategies: [],
+          customCodeText: "",
+          customCodes: [],
+          customCodeMissing: [],
           chartObserver: null,
           chartPayloadCache: new Map(),
           chartRequestCache: new Map(),
@@ -118,6 +129,7 @@
         };
         const DEFAULT_INDEX_SORT = "gainers";
         const DEFAULT_INDEX_LIMIT = 100;
+        const CUSTOM_CODE_SORT = "custom_codes";
         const CARD_CHART_RANGE_MONTHS = Object.freeze({ daily: 3, weekly: 36, monthly: 60 });
         const rankingOptions = window.KabuAppConfig?.INDEX_SCANNER_RANKING_OPTIONS || [];
         const strategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
@@ -175,12 +187,16 @@
           return rankingSortKeys.has(state.sort) ? state.sort : "";
         }
 
+        function isCustomCodeMode() {
+          return state.sort === CUSTOM_CODE_SORT;
+        }
+
         function limitControlValue() {
           return String(state.limit);
         }
 
         function effectiveTurnoverFilter() {
-          return state.timeframe === "daily" ? state.turnover : 0;
+          return !isCustomCodeMode() && state.timeframe === "daily" ? state.turnover : 0;
         }
 
         function readStrategyControlValue(control) {
@@ -194,6 +210,61 @@
         function readLimitControlValue(control) {
           const value = Number(control?.value || DEFAULT_INDEX_LIMIT);
           return INDEX_SCANNER_LIMITS.includes(value) ? value : DEFAULT_INDEX_LIMIT;
+        }
+
+        function normalizeCustomCodeInput(text) {
+          const seen = new Set();
+          return String(text || "")
+            .replace(/[，、\n\r\t]+/g, " ")
+            .split(/[\s,]+/)
+            .map((item) => item.trim().replace(/\.T$/i, "").replace(/[^\dA-Za-z]/g, "").toUpperCase())
+            .filter(Boolean)
+            .filter((code) => {
+              if (seen.has(code)) {
+                return false;
+              }
+              seen.add(code);
+              return true;
+            });
+        }
+
+        function formatCustomCodeText(codes) {
+          return normalizeCustomCodeInput(codes).join(" ");
+        }
+
+        function updateCustomCodeMeta() {
+          if (!customCodeMeta) {
+            return;
+          }
+          const codes = normalizeCustomCodeInput(customCodeInput?.value || "");
+          customCodeMeta.textContent = `${codes.length}件${codes.length ? " / 重複は適用時に除外" : ""}`;
+        }
+
+        function openCustomCodeModal() {
+          if (!customCodeModal || !customCodeInput) {
+            return;
+          }
+          customCodeInput.value = state.customCodeText || formatCustomCodeText(state.customCodes);
+          updateCustomCodeMeta();
+          customCodeModal.hidden = false;
+          customCodeModal.classList.add("is-open");
+          window.setTimeout(() => customCodeInput.focus(), 0);
+        }
+
+        function closeCustomCodeModal() {
+          if (!customCodeModal) {
+            return;
+          }
+          customCodeModal.hidden = true;
+          customCodeModal.classList.remove("is-open");
+        }
+
+        function exitCustomCodeMode() {
+          state.sort = DEFAULT_INDEX_SORT;
+          closeCustomCodeModal();
+          if (rankingSelect) rankingSelect.value = rankingControlValue();
+          if (sortSelect) sortSelect.value = strategyControlValue();
+          if (stickySortSelect) stickySortSelect.value = strategyControlValue();
         }
 
         let stopAutoRefreshPolling = null;
@@ -236,7 +307,7 @@
         const params = new URLSearchParams(window.location.search);
         const indexSortKeys = new Set([...strategySortKeys, ...rankingSortKeys]);
         const requestedSort = params.get("sort") || state.sort;
-        state.sort = indexSortKeys.has(requestedSort) ? requestedSort : DEFAULT_INDEX_SORT;
+        state.sort = indexSortKeys.has(requestedSort) && requestedSort !== CUSTOM_CODE_SORT ? requestedSort : DEFAULT_INDEX_SORT;
         state.tag = "";
         state.theme = "";
         state.selectedStrategies = [];
@@ -695,6 +766,9 @@
             }
             updateDeviation200Controls();
             updateStickyFiltersUi();
+            if (isCustomCodeMode()) {
+              openCustomCodeModal();
+            }
             await render();
           });
         });
@@ -843,6 +917,7 @@
               updateStickyDateUi();
             }
             setPicksMenuOpen(false);
+            closeCustomCodeModal();
             closeAllStrategyPopovers();
           }
         });
@@ -958,6 +1033,51 @@
             await render();
           });
         }
+
+        customCodeInput?.addEventListener("input", updateCustomCodeMeta);
+        customCodeApplyButton?.addEventListener("click", async () => {
+          state.customCodes = normalizeCustomCodeInput(customCodeInput?.value || "");
+          state.customCodeText = formatCustomCodeText(state.customCodes);
+          if (customCodeInput) {
+            customCodeInput.value = state.customCodeText;
+          }
+          state.sort = CUSTOM_CODE_SORT;
+          closeCustomCodeModal();
+          if (rankingSelect) rankingSelect.value = rankingControlValue();
+          if (sortSelect) sortSelect.value = strategyControlValue();
+          if (stickySortSelect) stickySortSelect.value = strategyControlValue();
+          await render();
+        });
+        customCodeClearButton?.addEventListener("click", () => {
+          if (customCodeInput) {
+            customCodeInput.value = "";
+          }
+          updateCustomCodeMeta();
+        });
+        customCodeExitButton?.addEventListener("click", async () => {
+          exitCustomCodeMode();
+          await render();
+        });
+        [customCodeCancelButton, customCodeCloseButton].filter(Boolean).forEach((button) => {
+          button.addEventListener("click", async () => {
+            closeCustomCodeModal();
+            if (isCustomCodeMode() && !state.customCodes.length) {
+              exitCustomCodeMode();
+              await render();
+            }
+          });
+        });
+        customCodeModal?.addEventListener("click", async (event) => {
+          if (event.target !== customCodeModal) {
+            return;
+          }
+          closeCustomCodeModal();
+          if (isCustomCodeMode() && !state.customCodes.length) {
+            exitCustomCodeMode();
+            await render();
+          }
+        });
+
         async function refreshIndexScanner(nextManifest = null) {
           state.isRefreshing = true;
           updateHeaderStatus();
@@ -1219,6 +1339,15 @@
 
         function renderDataQualitySummary() {
           if (!dataQualitySummaryBox) {
+            return;
+          }
+          if (isCustomCodeMode()) {
+            dataQualitySummaryBox.hidden = false;
+            dataQualitySummaryBox.innerHTML = `
+              <span class="index-data-quality-chip">コード指定中 <strong>${formatNumber(state.customCodes.length, 0)}</strong></span>
+              <span class="index-data-quality-chip">フィルター無効</span>
+              ${state.customCodeMissing.length ? `<span class="index-data-quality-chip">未検出 <strong>${formatNumber(state.customCodeMissing.length, 0)}</strong></span>` : ""}
+            `;
             return;
           }
           const summary = summarizeOverviewDataQuality(state.overview);
@@ -1559,48 +1688,64 @@
           updateIndexHeaderActions();
           renderTagOptions();
           renderThemeOptions();
-          const turnoverRecords = filterByTurnover(state.overview.records || [], effectiveTurnoverFilter());
-          const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
-          const baseFiltered = priceFilteredRecords.filter(
-            (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
-          );
-          let scannerBase = state.selectedStrategies.length
-            ? baseFiltered.filter((record) => state.selectedStrategies.every((strategyId) => (record.strategyMatches || []).includes(strategyId)))
-            : baseFiltered;
-          if (state.sort === "lower_shadow") {
-            scannerBase = scannerBase.filter(isLowerShadowCandidate);
-          } else if (state.sort === "stop_high") {
-            scannerBase = scannerBase.filter((record) => getStopHighStatus(record) !== "none");
-          } else if (state.sort === "new_high_20d") {
-            scannerBase = scannerBase.filter((record) => record.newHigh20d === true);
-          } else if (state.sort === "bullish_close_breakout_20d") {
-            scannerBase = scannerBase.filter((record) => record.bullishCloseBreakout20d === true);
-          } else if (isDeviationSort(state.sort)) {
-            const deviationFilter = getActiveDeviationFilter(state);
-            scannerBase = scannerBase.filter((record) => {
-              const deviationValue = getDeviationValueBySort(record, state.sort);
-              return deviationValue != null && matchesDeviationFilter(deviationValue, deviationFilter.mode, deviationFilter.min, deviationFilter.max);
-            });
-          } else if (state.sort === "trend_turn") {
-            scannerBase = scannerBase.filter((record) => record.trendTurnCandidate === true);
-          } else if (state.sort === "rebound_signal") {
-            scannerBase = scannerBase.filter((record) => String(record.signalCategory || "") !== "none");
-          } else if (state.sort === "strategy_minervini") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("minervini_trend_template"));
-          } else if (state.sort === "strategy_stage2") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("stan_weinstein_stage2"));
-          } else if (state.sort === "strategy_turtle") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("turtle_donchian_breakout"));
-          } else if (state.sort === "strategy_canslim") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("can_slim"));
-          } else if (state.sort === "strategy_rsi2") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
+          let filtered = [];
+          if (isCustomCodeMode()) {
+            const recordsByCode = new Map((state.overview.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
+            state.customCodeMissing = [];
+            filtered = state.customCodes
+              .map((code) => {
+                const record = recordsByCode.get(String(code).toUpperCase());
+                if (!record) {
+                  state.customCodeMissing.push(code);
+                }
+                return record;
+              })
+              .filter(Boolean);
+          } else {
+            state.customCodeMissing = [];
+            const turnoverRecords = filterByTurnover(state.overview.records || [], effectiveTurnoverFilter());
+            const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
+            const baseFiltered = priceFilteredRecords.filter(
+              (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
+            );
+            let scannerBase = state.selectedStrategies.length
+              ? baseFiltered.filter((record) => state.selectedStrategies.every((strategyId) => (record.strategyMatches || []).includes(strategyId)))
+              : baseFiltered;
+            if (state.sort === "lower_shadow") {
+              scannerBase = scannerBase.filter(isLowerShadowCandidate);
+            } else if (state.sort === "stop_high") {
+              scannerBase = scannerBase.filter((record) => getStopHighStatus(record) !== "none");
+            } else if (state.sort === "new_high_20d") {
+              scannerBase = scannerBase.filter((record) => record.newHigh20d === true);
+            } else if (state.sort === "bullish_close_breakout_20d") {
+              scannerBase = scannerBase.filter((record) => record.bullishCloseBreakout20d === true);
+            } else if (isDeviationSort(state.sort)) {
+              const deviationFilter = getActiveDeviationFilter(state);
+              scannerBase = scannerBase.filter((record) => {
+                const deviationValue = getDeviationValueBySort(record, state.sort);
+                return deviationValue != null && matchesDeviationFilter(deviationValue, deviationFilter.mode, deviationFilter.min, deviationFilter.max);
+              });
+            } else if (state.sort === "trend_turn") {
+              scannerBase = scannerBase.filter((record) => record.trendTurnCandidate === true);
+            } else if (state.sort === "rebound_signal") {
+              scannerBase = scannerBase.filter((record) => String(record.signalCategory || "") !== "none");
+            } else if (state.sort === "strategy_minervini") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("minervini_trend_template"));
+            } else if (state.sort === "strategy_stage2") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("stan_weinstein_stage2"));
+            } else if (state.sort === "strategy_turtle") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("turtle_donchian_breakout"));
+            } else if (state.sort === "strategy_canslim") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("can_slim"));
+            } else if (state.sort === "strategy_rsi2") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
+            }
+            filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
           }
-          const filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
           state.visibleRecords = filtered;
           syncIndexScannerUrl(
             state.selectedDate,
-            state.sort,
+            isCustomCodeMode() ? DEFAULT_INDEX_SORT : state.sort,
             state.tag,
             state.theme,
             state.turnover,
@@ -1638,7 +1783,11 @@
             if (stickySelectAllPicksButton) {
               stickySelectAllPicksButton.disabled = true;
             }
-            list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
+            list.innerHTML = isCustomCodeMode()
+              ? state.customCodes.length
+                ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div><div class="empty-cell">表示できる指定コードがありません。</div>`
+                : '<div class="empty-cell">指定コードを入力して「適用」を押してください。</div>'
+              : '<div class="empty-cell">該当する銘柄がありません。</div>';
             return;
           }
           if (selectAllPicksButton) {
@@ -1648,7 +1797,10 @@
             stickySelectAllPicksButton.disabled = false;
           }
       
-          list.innerHTML = filtered
+          const missingNotice = isCustomCodeMode() && state.customCodeMissing.length
+            ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div>`
+            : "";
+          list.innerHTML = missingNotice + filtered
             .map((record, index) => renderScannerItem(record, index, state))
             .join("");
       
