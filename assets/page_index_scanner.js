@@ -80,7 +80,7 @@
           tag: "",
           theme: "",
           turnover: 1000000000,
-          limit: 100,
+          limit: 200,
           timeframe: "daily",
           rangeMonths: 3,
           rangeMonthsByTimeframe: {
@@ -128,7 +128,7 @@
           chartBaselineShape: null,
         };
         const DEFAULT_INDEX_SORT = "gainers";
-        const DEFAULT_INDEX_LIMIT = 100;
+        const DEFAULT_INDEX_LIMIT = 200;
         const CUSTOM_CODE_SORT = "custom_codes";
         const CARD_CHART_RANGE_MONTHS = Object.freeze({ daily: 3, weekly: 36, monthly: 60 });
         const rankingOptions = window.KabuAppConfig?.INDEX_SCANNER_RANKING_OPTIONS || [];
@@ -1263,7 +1263,7 @@
           ]
             .filter(Boolean)
             .join(" / ");
-          updatedStatus.setAttribute("title", headerTooltip);
+          updatedStatus.removeAttribute("title");
           updatedStatus.setAttribute("data-status-tooltip", headerTooltip);
           updatedStatus.innerHTML = `
             <span class="index-header-status-dot" aria-hidden="true"></span>
