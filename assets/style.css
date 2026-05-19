@@ -2262,6 +2262,7 @@ body[data-page="index-scanner"] .index-scanner-list {
 }
 
 .scanner-item-stop-high .scanner-rank-table,
+.scanner-item-stop-high .scanner-card-header,
 .scanner-item-stop-high .scanner-item-chart-wrap {
   background: transparent;
 }
@@ -2289,6 +2290,102 @@ body[data-page="index-scanner"] .index-scanner-list {
 .scanner-stop-high-badge--peeled {
   background: linear-gradient(180deg, rgba(132, 66, 104, 0.92) 0%, rgba(103, 48, 79, 0.96) 100%);
   border-color: rgba(213, 128, 178, 0.28);
+}
+
+.scanner-stop-high-badge--compact {
+  width: 18px;
+  height: 18px;
+  justify-self: end;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(184, 45, 54, 0.9);
+  border-color: rgba(255, 142, 142, 0.34);
+  font-size: 0.64rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.scanner-stop-high-badge--compact.scanner-stop-high-badge--peeled {
+  background: rgba(201, 92, 137, 0.86);
+  border-color: rgba(251, 182, 213, 0.36);
+}
+
+.scanner-card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) 0.7fr 0.72fr 0.62fr 22px;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  padding: 3px 7px 2px;
+  border-radius: 10px 10px 0 0;
+  background: linear-gradient(180deg, rgba(22, 32, 51, 0.82) 0%, rgba(12, 19, 32, 0.56) 100%);
+}
+
+.scanner-card-header-left,
+.scanner-card-header-right {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.scanner-card-header-right {
+  display: contents;
+}
+
+.scanner-card-rank {
+  color: #a8bfdc;
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.scanner-card-identity {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 7px;
+  color: #eef6ff;
+  text-decoration: none;
+}
+
+.scanner-card-identity:hover {
+  color: #b9dcff;
+}
+
+.scanner-card-code {
+  flex: 0 0 auto;
+  color: #f8fbff;
+  font-size: 0.8rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.scanner-card-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #c2d2e6;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.scanner-card-price,
+.scanner-compact-change,
+.scanner-card-turnover {
+  justify-self: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.scanner-card-price {
+  color: #f8fbff;
+}
+
+.scanner-card-turnover {
+  color: #d6e5f7;
 }
 
 .strategy-reason-list {
@@ -2830,7 +2927,7 @@ body[data-page="index-scanner"] .index-scanner-list {
 
 .scanner-item-chart-wrap {
   position: relative;
-  padding: 6px 6px 0;
+  padding: 2px 3px 0;
 }
 
 .chart-inline-error {
@@ -2876,7 +2973,7 @@ body[data-page="index-scanner"] .index-scanner-list {
 
 .scanner-chart {
   position: relative;
-  height: 208px;
+  height: 300px;
 }
 
 .scanner-chart--detail {
@@ -3223,25 +3320,26 @@ body[data-page="index-scanner"] .index-scanner-list {
   }
 
   body[data-page="index-scanner"] .scanner-item-chart-wrap {
-    padding: 6px 6px 0;
+    padding: 2px 3px 0;
   }
 
   body[data-page="picked"] .picked-scanner-item .scanner-item-chart-wrap {
-    padding: 6px 6px 0;
+    padding: 2px 3px 0;
   }
 
   body[data-page="index-scanner"] .scanner-chart {
-    height: 208px;
+    height: 300px;
   }
 
   body[data-page="picked"] .picked-scanner-item .scanner-chart {
-    height: 208px;
+    height: 300px;
   }
 
   body[data-page="index-scanner"] .scanner-item-links {
     flex-wrap: nowrap;
     align-items: center;
-    padding: 7px 6px 2px;
+    margin-top: 0;
+    padding: 3px 5px 1px;
   }
 
   body[data-page="picked"] .picked-scanner-item .scanner-item-links {
@@ -3334,8 +3432,8 @@ body[data-page="index-scanner"] .index-scanner-list {
   flex-wrap: nowrap;
   gap: 8px;
   border-top: 1px solid rgba(45, 64, 92, 0.44);
-  margin-top: 5px;
-  padding: 7px 6px 2px;
+  margin-top: 0;
+  padding: 3px 5px 1px;
   font-size: 0.68rem;
 }
 
@@ -3773,7 +3871,7 @@ body[data-page="index-scanner"] .index-scanner-list {
 }
 
 .picked-chart-list .scanner-chart {
-  height: 208px;
+  height: 300px;
 }
 
 .picked-chart-empty {

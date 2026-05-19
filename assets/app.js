@@ -3055,62 +3055,62 @@
     `;
   }
 
+  function formatTurnoverOku(closeValue, volumeValue) {
+    const close = Number(closeValue);
+    const volume = Number(volumeValue);
+    if (!Number.isFinite(close) || !Number.isFinite(volume) || close <= 0 || volume < 0) {
+      return "-";
+    }
+    const oku = (close * volume) / 100000000;
+    if (oku >= 100) {
+      return `${formatNumber(Math.round(oku), 0)}億`;
+    }
+    if (oku >= 10) {
+      return `${oku.toFixed(1).replace(/\.0$/, "")}億`;
+    }
+    return `${oku.toFixed(1)}億`;
+  }
+
+  function renderScannerCompactHeader(record, rank, state, rankingKey = "") {
+    const stopHighStatus = getStopHighStatus(record);
+    const stopHighBadge = stopHighStatus === "none"
+      ? ""
+      : `<span class="scanner-stop-high-badge scanner-stop-high-badge--compact${stopHighStatus === "peeled" ? " scanner-stop-high-badge--peeled" : ""}" title="${stopHighStatus === "peeled" ? "ストップ高剥がれ" : "ストップ高"}">S</span>`;
+    const qualityBadges = renderScannerQualityBadges(summarizeScannerRecordQuality(record, state.selectedDate));
+    const detailHref = buildTickerUrl(record.code, state.selectedDate, rankingKey);
+    return `
+      <div class="scanner-card-header">
+        <div class="scanner-card-header-left">
+          <span class="scanner-card-rank">#${formatNumber(rank, 0)}</span>
+          <a class="scanner-card-identity" href="${escapeHtml(detailHref)}">
+            <span class="scanner-card-code">${escapeHtml(String(record.code || ""))}</span>
+            <span class="scanner-card-name">${escapeHtml(String(record.name || ""))}</span>
+          </a>
+        </div>
+        <div class="scanner-card-header-right">
+          <span id="scanChange-${escapeHtml(record.code)}" class="num scanner-compact-change scanner-change-cell ${getChangeClass(record.changePercent)}">
+            ${formatSignedPercentHtml(record.changePercent)}
+          </span>
+          <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-card-price">${formatNumber(record.close)}円</span>
+          <span id="scanTurnover-${escapeHtml(record.code)}" class="scanner-card-turnover">${formatTurnoverOku(record.close, record.volume)}</span>
+          ${stopHighBadge}
+          ${qualityBadges}
+          <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
+        </div>
+      </div>
+    `;
+  }
+
   function renderPickedScannerItem(record, index, state) {
     const rank = index + 1;
     const cardChartTimeframe = String(state.cardChartTimeframes?.get?.(String(record.code)) || state.timeframe || "daily");
     const stopHighStatus = getStopHighStatus(record);
     const hasStopHighBadge = stopHighStatus !== "none";
     const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
-    const stopHighBadgeClass = stopHighStatus === "peeled" ? " scanner-stop-high-badge--peeled" : "";
-    const stopHighBadge = hasStopHighBadge
-      ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
-      : "";
-    const qualityBadges = renderScannerQualityBadges(summarizeScannerRecordQuality(record, state.selectedDate));
     const externalLinks = renderScannerExternalLinks(record);
     return `
       <article class="scanner-item picked-scanner-item${stopHighClass}">
-        <div class="scanner-rank-table">
-          <table>
-            <thead>
-              <tr>
-                <th class="num scanner-col-rank">順位</th>
-                <th class="scanner-col-code">コード</th>
-                <th class="num scanner-col-close">取引値</th>
-                <th class="num scanner-col-change">前日比</th>
-                <th class="num scanner-col-volume">出来高</th>
-                <th class="num scanner-col-high">高値</th>
-                <th class="num scanner-col-low">安値</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="num">${formatNumber(rank, 0)}</td>
-                <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner">
-                    ${renderTickerIdentity(record.code, record.name, {
-                      href: buildTickerUrl(record.code, state.selectedDate, ""),
-                      variant: "scanner",
-                    })}
-                    ${stopHighBadge}
-                    ${qualityBadges}
-                  </div>
-                </td>
-                <td class="scanner-trade-cell scanner-primary-price-cell">
-                  <div class="scanner-trade-split">
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price scanner-primary-price">${formatNumber(record.close)}</span>
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
-                  </div>
-                </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num scanner-change-cell ${getChangeClass(record.changePercent)}">
-                  ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
-                </td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.low)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        ${renderScannerCompactHeader(record, rank, state, "")}
         <div class="scanner-item-chart-wrap">
           <div id="pickedChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
@@ -3132,44 +3132,7 @@
     const externalLinks = renderScannerExternalLinks(record);
     return `
       <article class="scanner-item">
-        <div class="scanner-rank-table">
-          <table>
-            <thead>
-              <tr>
-                <th class="num scanner-col-rank">順位</th>
-                <th class="scanner-col-code">コード</th>
-                <th class="num scanner-col-close">取引値</th>
-                <th class="num scanner-col-change">前日比</th>
-                <th class="num scanner-col-volume">出来高</th>
-                <th class="num scanner-col-high">高値</th>
-                <th class="num scanner-col-low">安値</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="num">${formatNumber(rank, 0)}</td>
-                <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner">
-                    ${renderTickerIdentity(record.code, record.name, {
-                      href: buildTickerUrl(record.code, state.selectedDate, ""),
-                      variant: "scanner",
-                    })}
-                  </div>
-                </td>
-                <td class="scanner-trade-cell scanner-primary-price-cell">
-                  <div class="scanner-trade-split">
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price scanner-primary-price">${formatNumber(record.close)}</span>
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
-                  </div>
-                </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num scanner-change-cell ${getChangeClass(record.changePercent)}">${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}</td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.low)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        ${renderScannerCompactHeader(record, rank, state, "")}
         <div class="scanner-item-chart-wrap">
           <div id="registeredChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
@@ -3215,57 +3178,10 @@
     const stopHighStatus = getStopHighStatus(record);
     const hasStopHighBadge = stopHighStatus !== "none";
     const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
-    const stopHighBadgeClass = stopHighStatus === "peeled" ? " scanner-stop-high-badge--peeled" : "";
-    const stopHighBadge = hasStopHighBadge
-      ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
-      : "";
-    const quality = summarizeScannerRecordQuality(record, state.selectedDate);
-    const qualityBadges = renderScannerQualityBadges(quality);
     const externalLinks = renderScannerExternalLinks(record);
     return `
       <article class="scanner-item${stopHighClass}">
-        <div class="scanner-rank-table">
-          <table>
-            <thead>
-              <tr>
-                <th class="num scanner-col-rank">順位</th>
-                <th class="scanner-col-code">コード</th>
-                <th class="num scanner-col-close">取引値</th>
-                <th class="num scanner-col-change">前日比</th>
-                <th class="num scanner-col-volume">出来高</th>
-                <th class="num scanner-col-high">高値</th>
-                <th class="num scanner-col-low">安値</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="num">${formatNumber(rank, 0)}</td>
-                <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner">
-                    ${renderTickerIdentity(record.code, record.name, {
-                      href: buildTickerUrl(record.code, state.selectedDate, rankingKey),
-                      variant: "scanner",
-                    })}
-                    ${stopHighBadge}
-                    ${qualityBadges}
-                  </div>
-                </td>
-                <td class="scanner-trade-cell scanner-primary-price-cell">
-                  <div class="scanner-trade-split">
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price scanner-primary-price">${formatNumber(record.close)}</span>
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
-                  </div>
-                </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num scanner-change-cell ${getChangeClass(record.changePercent)}">
-                  ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
-                </td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num scanner-secondary-metric">${formatNumber(record.low)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        ${renderScannerCompactHeader(record, rank, state, rankingKey)}
         <div class="scanner-item-chart-wrap">
           <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
@@ -3435,6 +3351,7 @@
     const tradeDate = document.getElementById(`scanTradeDate-${code}`);
     const tradePrice = document.getElementById(`scanTradePrice-${code}`);
     const change = document.getElementById(`scanChange-${code}`);
+    const turnover = document.getElementById(`scanTurnover-${code}`);
     const volume = document.getElementById(`scanVolume-${code}`);
     const high = document.getElementById(`scanHigh-${code}`);
     const low = document.getElementById(`scanLow-${code}`);
@@ -3446,8 +3363,11 @@
       tradeDate.hidden = !options.showDate;
     }
     if (change) {
-      change.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent)}`;
-      change.className = `num scanner-change-cell ${getChangeClass(row.changePercent)}`.trim();
+      change.innerHTML = formatSignedPercentHtml(row.changePercent);
+      change.className = `num scanner-compact-change scanner-change-cell ${getChangeClass(row.changePercent)}`.trim();
+    }
+    if (turnover) {
+      turnover.textContent = formatTurnoverOku(row.close, row.volume);
     }
     if (volume) {
       volume.textContent = formatNumber(row.volume, 0);
@@ -3763,7 +3683,7 @@
     renderCompactStyleChart(element, rows, selectedDate, rangeValue, {
       ...options,
       code,
-      height: 208,
+      height: options.height || element.clientHeight || 208,
       onInitialRow: (row) => setScannerTableValues(code, initialRowOverride || row),
       onRowSelect: (row) => setScannerTableValues(code, row, { showDate: true }),
     });
