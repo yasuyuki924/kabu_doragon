@@ -777,7 +777,7 @@ body[data-page="index-scanner"] .page-header {
   top: calc(100% + 8px);
   right: 0;
   z-index: 80;
-  min-width: 132px;
+  min-width: 178px;
   padding: 6px;
   border: 1px solid rgba(145, 99, 44, 0.48);
   border-radius: 10px;
@@ -798,6 +798,14 @@ body[data-page="index-scanner"] .page-header {
   font-weight: 800;
   text-align: left;
   cursor: pointer;
+}
+
+.index-picked-menu-item:nth-child(2),
+.index-picked-menu-item:nth-child(4),
+.index-picked-menu-item:nth-child(7) {
+  border-top: 1px solid rgba(145, 99, 44, 0.3);
+  margin-top: 4px;
+  padding-top: 6px;
 }
 
 .index-picked-menu-item:hover,
@@ -945,6 +953,30 @@ body[data-page="index-scanner"] .page-header {
   background: rgba(113, 63, 18, 0.22);
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.index-list-sets-dialog {
+  width: min(620px, 100%);
+}
+
+.index-list-sets-body {
+  display: grid;
+  gap: 8px;
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.index-list-set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px;
+  border: 1px solid rgba(145, 99, 44, 0.32);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.62);
 }
 
 .index-sticky-filters-wrap {

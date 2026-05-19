@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ローカル株分析ボード | 選別銘柄一覧</title>
+    <title>ローカル株分析ボード | List</title>
     <script>
       (function () {
         var host = window.location.hostname || "";
@@ -34,14 +34,14 @@
       <header class="page-header">
         <div class="picked-header-toolbar">
           <a class="action-button secondary picked-header-action" href="./index.html">Back</a>
-          <span class="picked-header-title">Picks</span>
+          <span class="picked-header-title">List</span>
           <span id="pickedCountBadge" class="picked-kpi-badge">Count 0</span>
           <span id="pickedSetsBadge" class="picked-kpi-badge">Sets 0</span>
           <span id="pickedUpdatedBadge" class="picked-kpi-badge picked-kpi-badge--muted">Updated --</span>
         </div>
         <div class="picked-header-actions">
           <button id="pickedHeaderExportButton" class="action-button secondary picked-header-action" type="button">Export</button>
-          <button id="pickedHeaderSaveButton" class="action-button picked-header-action" type="button">Save Set</button>
+          <button id="pickedHeaderSaveButton" class="action-button picked-header-action" type="button">Save List</button>
         </div>
       </header>
 
@@ -60,7 +60,7 @@
           </section>
           <section id="pickedRegisterPanel" class="picked-action-panel picked-action-panel--saved">
             <div class="picked-action-panel-head">
-              <h2>Saved Sets</h2>
+              <h2>Saved Lists</h2>
               <span id="pickedRegisterCount" class="picked-action-count">0</span>
             </div>
             <div class="picked-register-actions">

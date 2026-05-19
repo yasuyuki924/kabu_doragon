@@ -55,7 +55,6 @@
       { key: "deviation25", label: "25日線乖離" },
       { key: "deviation75", label: "75日線乖離" },
       { key: "deviation200", label: "200日線乖離" },
-      { key: "custom_codes", label: "指定コード表示" },
     ],
     INDEX_SCANNER_RANKING_SORTS: Object.freeze({
       gainers: { key: "changePercent", direction: "desc" },

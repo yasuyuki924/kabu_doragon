@@ -86,9 +86,15 @@
             </div>
             <div class="index-right-actions">
               <div class="index-picked-split">
-                <a id="indexPickedLink" class="action-button secondary scanner-picked-link index-sticky-action index-picked-main" href="./picked.html">Picks</a>
-                <button id="indexPicksMenuButton" class="text-button index-sticky-action index-picked-menu-button" type="button" aria-label="Picks menu" aria-expanded="false">▼</button>
+                <button id="indexPickedLink" class="action-button secondary scanner-picked-link index-sticky-action index-picked-main" type="button">List</button>
+                <button id="indexPicksMenuButton" class="text-button index-sticky-action index-picked-menu-button" type="button" aria-label="List menu" aria-expanded="false">▼</button>
                 <div id="indexPicksMenu" class="index-picked-menu" hidden>
+                  <button id="indexAddCodesButton" class="index-picked-menu-item" type="button">コードを追加</button>
+                  <button id="indexExportTradingViewButton" class="index-picked-menu-item" type="button">TradingView TXT</button>
+                  <button id="indexExportHyperButton" class="index-picked-menu-item" type="button">HYPER SBI 2 CSV</button>
+                  <button id="indexSaveListButton" class="index-picked-menu-item" type="button">Listを保存</button>
+                  <button id="indexOpenListButton" class="index-picked-menu-item" type="button">保存Listを開く</button>
+                  <button id="indexExitListButton" class="index-picked-menu-item" type="button">通常表示へ戻す</button>
                   <button id="indexSelectAllButton" class="index-picked-menu-item index-picked-menu-item--selectall" type="button">Select All</button>
                   <button id="indexResetPicksButton" class="index-picked-menu-item index-picked-menu-item--clear" type="button">Clear</button>
                 </div>
@@ -109,7 +115,7 @@
       <div class="index-custom-code-dialog" role="dialog" aria-modal="true" aria-labelledby="indexCustomCodeTitle">
         <div class="index-custom-code-header">
           <div>
-            <div id="indexCustomCodeTitle" class="index-custom-code-title">指定コード表示</div>
+            <div id="indexCustomCodeTitle" class="index-custom-code-title">コードをListに追加</div>
             <div class="index-custom-code-subtitle">銘柄コードをスペース・改行・カンマ区切りで貼り付け</div>
           </div>
           <button id="indexCustomCodeClose" class="index-custom-code-icon-button" type="button" aria-label="閉じる">×</button>
@@ -118,18 +124,47 @@
         <div id="indexCustomCodeMeta" class="index-custom-code-meta">0件</div>
         <div class="index-custom-code-actions">
           <button id="indexCustomCodeClear" class="index-custom-code-button secondary" type="button">クリア</button>
-          <button id="indexCustomCodeExit" class="index-custom-code-button secondary" type="button">解除</button>
+          <button id="indexCustomCodeExit" class="index-custom-code-button secondary" type="button">通常表示へ戻す</button>
           <button id="indexCustomCodeCancel" class="index-custom-code-button secondary" type="button">キャンセル</button>
-          <button id="indexCustomCodeApply" class="index-custom-code-button primary" type="button">適用</button>
+          <button id="indexCustomCodeApply" class="index-custom-code-button primary" type="button">Listに追加</button>
         </div>
       </div>
     </div>
 
-    <script src="./assets/app_config.js?v=1.4.109"></script>
+    <div id="indexListSaveModal" class="register-name-modal is-hidden" hidden>
+      <div class="register-name-dialog" role="dialog" aria-modal="true" aria-labelledby="indexListSaveTitle">
+        <h2 id="indexListSaveTitle">Listを保存</h2>
+        <p class="subtle register-name-note">現在のListを重複なしで保存します。</p>
+        <label class="register-name-field">
+          <span>保存名</span>
+          <input id="indexListSaveInput" type="text" maxlength="80" placeholder="例: 5月ブレイク候補" />
+        </label>
+        <div id="indexListSaveError" class="register-name-error" hidden></div>
+        <div class="register-name-actions">
+          <button id="indexListSaveOk" class="action-button" type="button">保存</button>
+          <button id="indexListSaveCancel" class="action-button secondary" type="button">キャンセル</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="indexListSetsModal" class="index-custom-code-modal" hidden>
+      <div class="index-custom-code-dialog index-list-sets-dialog" role="dialog" aria-modal="true" aria-labelledby="indexListSetsTitle">
+        <div class="index-custom-code-header">
+          <div>
+            <div id="indexListSetsTitle" class="index-custom-code-title">保存Listを開く</div>
+            <div class="index-custom-code-subtitle">開いたListだけを値上がり率順で表示します</div>
+          </div>
+          <button id="indexListSetsClose" class="index-custom-code-icon-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <div id="indexListSetsBody" class="index-list-sets-body"></div>
+      </div>
+    </div>
+
+    <script src="./assets/app_config.js?v=1.4.110"></script>
     <script src="./assets/app_utils.js?v=1.4.85"></script>
     <script src="./assets/app_data.js?v=1.4.105"></script>
     <script src="./assets/page_index_scanner_status.js?v=1.4.85"></script>
-    <script src="./assets/page_index_scanner.js?v=1.4.123"></script>
-    <script src="./assets/app.js?v=1.4.109"></script>
+    <script src="./assets/page_index_scanner.js?v=1.4.124"></script>
+    <script src="./assets/app.js?v=1.4.110"></script>
   </body>
 </html>

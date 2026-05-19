@@ -56,6 +56,12 @@
         const picksMenu = document.getElementById("indexPicksMenu");
         const updatedStatus = document.getElementById("indexUpdatedStatus");
         const refreshButton = document.getElementById("indexRefreshButton");
+        const addCodesButton = document.getElementById("indexAddCodesButton");
+        const exportTradingViewButton = document.getElementById("indexExportTradingViewButton");
+        const exportHyperButton = document.getElementById("indexExportHyperButton");
+        const saveListButton = document.getElementById("indexSaveListButton");
+        const openListButton = document.getElementById("indexOpenListButton");
+        const exitListButton = document.getElementById("indexExitListButton");
         const selectAllPicksButton = document.getElementById("indexSelectAllButton");
         const resetPicksButton = document.getElementById("indexResetPicksButton");
         const customCodeModal = document.getElementById("indexCustomCodeModal");
@@ -66,6 +72,14 @@
         const customCodeCloseButton = document.getElementById("indexCustomCodeClose");
         const customCodeClearButton = document.getElementById("indexCustomCodeClear");
         const customCodeExitButton = document.getElementById("indexCustomCodeExit");
+        const listSaveModal = document.getElementById("indexListSaveModal");
+        const listSaveInput = document.getElementById("indexListSaveInput");
+        const listSaveError = document.getElementById("indexListSaveError");
+        const listSaveOkButton = document.getElementById("indexListSaveOk");
+        const listSaveCancelButton = document.getElementById("indexListSaveCancel");
+        const listSetsModal = document.getElementById("indexListSetsModal");
+        const listSetsBody = document.getElementById("indexListSetsBody");
+        const listSetsCloseButton = document.getElementById("indexListSetsClose");
         const miniCalendar = document.getElementById("indexMiniCalendar") || stickyMiniCalendar;
         const errorBox = document.getElementById("indexError");
         const dataQualitySummaryBox = document.getElementById("indexDataQualitySummary");
@@ -118,6 +132,9 @@
           customCodeText: "",
           customCodes: [],
           customCodeMissing: [],
+          activeListName: "",
+          activeListCodes: [],
+          activeListMissing: [],
           chartObserver: null,
           chartPayloadCache: new Map(),
           chartRequestCache: new Map(),
@@ -191,12 +208,16 @@
           return state.sort === CUSTOM_CODE_SORT;
         }
 
+        function isListMode() {
+          return Array.isArray(state.activeListCodes) && state.activeListCodes.length > 0;
+        }
+
         function limitControlValue() {
           return String(state.limit);
         }
 
         function effectiveTurnoverFilter() {
-          return !isCustomCodeMode() && state.timeframe === "daily" ? state.turnover : 0;
+          return !isCustomCodeMode() && !isListMode() && state.timeframe === "daily" ? state.turnover : 0;
         }
 
         function readStrategyControlValue(control) {
@@ -237,7 +258,7 @@
             return;
           }
           const codes = normalizeCustomCodeInput(customCodeInput?.value || "");
-          customCodeMeta.textContent = `${codes.length}件${codes.length ? " / 重複は適用時に除外" : ""}`;
+          customCodeMeta.textContent = `${codes.length}件${codes.length ? " / 既存Listと重複するコードは1件に統合" : ""}`;
         }
 
         function openCustomCodeModal() {
@@ -265,6 +286,116 @@
           if (rankingSelect) rankingSelect.value = rankingControlValue();
           if (sortSelect) sortSelect.value = strategyControlValue();
           if (stickySortSelect) stickySortSelect.value = strategyControlValue();
+        }
+
+        function openListSaveModal() {
+          if (!listSaveModal || !listSaveInput || !listSaveError) {
+            return;
+          }
+          listSaveInput.value = "";
+          listSaveError.hidden = true;
+          listSaveError.textContent = "";
+          listSaveModal.hidden = false;
+          listSaveModal.classList.remove("is-hidden");
+          window.setTimeout(() => listSaveInput.focus(), 0);
+        }
+
+        function closeListSaveModal() {
+          if (!listSaveModal) {
+            return;
+          }
+          listSaveModal.hidden = true;
+          listSaveModal.classList.add("is-hidden");
+        }
+
+        function openListSetsModal() {
+          if (!listSetsModal) {
+            return;
+          }
+          renderSavedListSets();
+          listSetsModal.hidden = false;
+          listSetsModal.classList.add("is-open");
+        }
+
+        function closeListSetsModal() {
+          if (!listSetsModal) {
+            return;
+          }
+          listSetsModal.hidden = true;
+          listSetsModal.classList.remove("is-open");
+        }
+
+        function currentListPicks() {
+          const picks = loadScannerPicks();
+          const values = sortedScannerPicks(picks);
+          if (!isListMode()) {
+            return dedupeScannerPicks(values);
+          }
+          const byCode = new Map(values.map((pick) => [String(pick.code || "").trim().toUpperCase(), pick]));
+          return state.activeListCodes
+            .map((code) => byCode.get(String(code).toUpperCase()) || { code })
+            .filter((pick) => String(pick.code || "").trim());
+        }
+
+        function setActiveListFromPicks(picks, name = "List") {
+          const normalized = dedupeScannerPicks(Array.isArray(picks) ? picks : []);
+          const next = {};
+          normalized.forEach((pick) => {
+            const code = String(pick.code || "").trim().toUpperCase();
+            if (!code) {
+              return;
+            }
+            next[code] = { ...pick, code };
+          });
+          saveScannerPicks(next);
+          state.picks = next;
+          state.activeListCodes = Object.keys(next);
+          state.activeListName = name;
+        }
+
+        function exitListMode() {
+          state.activeListCodes = [];
+          state.activeListMissing = [];
+          state.activeListName = "";
+          state.customCodes = [];
+          state.customCodeMissing = [];
+          state.customCodeText = "";
+          if (isCustomCodeMode()) {
+            exitCustomCodeMode();
+          }
+        }
+
+        function buildManualPick(code, record = null) {
+          if (record) {
+            return buildScannerPickPayload(record, state);
+          }
+          const filterSnapshot = buildFilterSnapshotFromState(state);
+          return {
+            code: String(code || "").trim().toUpperCase(),
+            name: "",
+            market: "",
+            selectedAt: new Date().toISOString(),
+            filterSnapshot,
+            filterSummary: "手入力コード",
+          };
+        }
+
+        function addCodesToList(codes) {
+          const normalized = normalizeCustomCodeInput(codes);
+          if (!normalized.length) {
+            return;
+          }
+          const recordsByCode = new Map((state.overview?.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
+          const next = { ...(loadScannerPicks() || {}) };
+          normalized.forEach((code) => {
+            next[code] = buildManualPick(code, recordsByCode.get(code));
+          });
+          saveScannerPicks(next);
+          state.picks = next;
+          state.activeListCodes = Object.keys(next);
+          state.activeListName = "手入力List";
+          state.customCodes = normalized;
+          state.customCodeText = formatCustomCodeText(normalized);
         }
 
         let stopAutoRefreshPolling = null;
@@ -406,7 +537,7 @@
             return;
           }
           const pickCount = Object.keys(state.picks || {}).length;
-          stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+          stickyPickedLink.textContent = pickCount > 0 ? `List ${pickCount}` : "List";
         }
       
         function updateStickyFiltersUi() {
@@ -730,10 +861,10 @@
         updateStickyFiltersUi();
         updateStickyBarVisibility();
         if (pickedLink) {
-          pickedLink.href = "./picked.html";
+          pickedLink.removeAttribute("href");
         }
         if (stickyPickedLink) {
-          stickyPickedLink.href = "./picked.html";
+          stickyPickedLink.removeAttribute("href");
         }
       
         [...new Set([sortSelect, rankingSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
@@ -870,6 +1001,16 @@
         picksMenu?.addEventListener("click", (event) => {
           event.stopPropagation();
         });
+
+        pickedLink?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setPicksMenuOpen(Boolean(picksMenu?.hidden));
+          state.stickyDateOpen = false;
+          state.stickyFiltersOpen = false;
+          updateStickyDateUi();
+          updateStickyFiltersUi();
+        });
       
         document.addEventListener("click", (event) => {
           if (picksMenu && picksMenuButton && !picksMenu.hidden) {
@@ -918,6 +1059,8 @@
             }
             setPicksMenuOpen(false);
             closeCustomCodeModal();
+            closeListSaveModal();
+            closeListSetsModal();
             closeAllStrategyPopovers();
           }
         });
@@ -1011,6 +1154,7 @@
           resetPicksButton.addEventListener("click", async () => {
             setPicksMenuOpen(false);
             resetScannerPicks(state);
+            exitListMode();
             await render();
           });
         }
@@ -1034,14 +1178,39 @@
           });
         }
 
+        addCodesButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          openCustomCodeModal();
+        });
+        exportTradingViewButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          triggerExportDownloads([buildTradingViewExportEntry(currentListPicks())]);
+        });
+        exportHyperButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          triggerExportDownloads(buildHyperExportEntries(currentListPicks()));
+        });
+        saveListButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          openListSaveModal();
+        });
+        openListButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          openListSetsModal();
+        });
+        exitListButton?.addEventListener("click", async () => {
+          setPicksMenuOpen(false);
+          exitListMode();
+          await render();
+        });
+
         customCodeInput?.addEventListener("input", updateCustomCodeMeta);
         customCodeApplyButton?.addEventListener("click", async () => {
-          state.customCodes = normalizeCustomCodeInput(customCodeInput?.value || "");
-          state.customCodeText = formatCustomCodeText(state.customCodes);
+          const nextCodes = normalizeCustomCodeInput(customCodeInput?.value || "");
+          addCodesToList(nextCodes);
           if (customCodeInput) {
             customCodeInput.value = state.customCodeText;
           }
-          state.sort = CUSTOM_CODE_SORT;
           closeCustomCodeModal();
           if (rankingSelect) rankingSelect.value = rankingControlValue();
           if (sortSelect) sortSelect.value = strategyControlValue();
@@ -1055,7 +1224,7 @@
           updateCustomCodeMeta();
         });
         customCodeExitButton?.addEventListener("click", async () => {
-          exitCustomCodeMode();
+          exitListMode();
           await render();
         });
         [customCodeCancelButton, customCodeCloseButton].filter(Boolean).forEach((button) => {
@@ -1075,6 +1244,36 @@
           if (isCustomCodeMode() && !state.customCodes.length) {
             exitCustomCodeMode();
             await render();
+          }
+        });
+
+        listSaveOkButton?.addEventListener("click", () => {
+          try {
+            const saved = registerAllPicks(currentListPicks(), listSaveInput?.value || "");
+            state.activeListName = saved?.name || state.activeListName;
+            if (listSaveError) {
+              listSaveError.hidden = true;
+              listSaveError.textContent = "";
+            }
+            closeListSaveModal();
+          } catch (error) {
+            if (listSaveError) {
+              listSaveError.textContent = error?.message || "保存できませんでした。";
+              listSaveError.hidden = false;
+            }
+          }
+        });
+        listSaveCancelButton?.addEventListener("click", closeListSaveModal);
+        listSaveInput?.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            listSaveOkButton?.click();
+          }
+        });
+        listSetsCloseButton?.addEventListener("click", closeListSetsModal);
+        listSetsModal?.addEventListener("click", (event) => {
+          if (event.target === listSetsModal) {
+            closeListSetsModal();
           }
         });
 
@@ -1182,10 +1381,63 @@
             return;
           }
           const pickCount = Object.keys(state.picks || {}).length;
-          pickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+          pickedLink.textContent = pickCount > 0 ? `List ${pickCount}` : "List";
           if (stickyPickedLink) {
-            stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+            stickyPickedLink.textContent = pickCount > 0 ? `List ${pickCount}` : "List";
           }
+          const hasPicks = pickCount > 0;
+          [exportTradingViewButton, exportHyperButton, saveListButton, resetPicksButton].filter(Boolean).forEach((button) => {
+            button.disabled = !hasPicks;
+          });
+          if (exitListButton) {
+            exitListButton.disabled = !isListMode();
+          }
+        }
+
+        function renderSavedListSets() {
+          if (!listSetsBody) {
+            return;
+          }
+          const sets = loadRegisteredPicks();
+          if (!sets.length) {
+            listSetsBody.innerHTML = '<div class="empty-cell">保存されたListはありません。</div>';
+            return;
+          }
+          listSetsBody.innerHTML = sets
+            .map((entry) => {
+              const id = escapeHtml(String(entry?.id || ""));
+              return `
+                <div class="index-list-set-row">
+                  <div>
+                    <div class="picked-register-name">${escapeHtml(entry?.name || "Untitled")}</div>
+                    <div class="picked-register-meta">${escapeHtml(formatPickedDateTime(entry?.registeredAt))} / ${formatNumber(Number(entry?.count || 0), 0)}件</div>
+                  </div>
+                  <div class="picked-register-item-actions">
+                    <button type="button" class="row-button" data-open-index-list-set="${id}">開く</button>
+                    <button type="button" class="row-button picked-remove-button" data-delete-index-list-set="${id}">削除</button>
+                  </div>
+                </div>
+              `;
+            })
+            .join("");
+          listSetsBody.querySelectorAll("[data-open-index-list-set]").forEach((button) => {
+            button.addEventListener("click", async () => {
+              const entry = getRegisteredSetById(button.getAttribute("data-open-index-list-set"));
+              if (!entry) {
+                renderSavedListSets();
+                return;
+              }
+              setActiveListFromPicks(entry.items || [], entry.name || "保存List");
+              closeListSetsModal();
+              await render();
+            });
+          });
+          listSetsBody.querySelectorAll("[data-delete-index-list-set]").forEach((button) => {
+            button.addEventListener("click", () => {
+              removeRegisteredSetById(button.getAttribute("data-delete-index-list-set"));
+              renderSavedListSets();
+            });
+          });
         }
       
         function updateHeaderStatus() {
@@ -1339,6 +1591,16 @@
 
         function renderDataQualitySummary() {
           if (!dataQualitySummaryBox) {
+            return;
+          }
+          if (isListMode()) {
+            dataQualitySummaryBox.hidden = false;
+            dataQualitySummaryBox.innerHTML = `
+              <span class="index-data-quality-chip">List表示 <strong>${escapeHtml(state.activeListName || "List")}</strong></span>
+              <span class="index-data-quality-chip">値上がり率順</span>
+              <span class="index-data-quality-chip">対象 <strong>${formatNumber(state.activeListCodes.length, 0)}</strong></span>
+              ${state.activeListMissing.length ? `<span class="index-data-quality-chip">未検出 <strong>${formatNumber(state.activeListMissing.length, 0)}</strong></span>` : ""}
+            `;
             return;
           }
           if (isCustomCodeMode()) {
@@ -1690,7 +1952,20 @@
           renderTagOptions();
           renderThemeOptions();
           let filtered = [];
-          if (isCustomCodeMode()) {
+          if (isListMode()) {
+            const recordsByCode = new Map((state.overview.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
+            state.activeListMissing = [];
+            const listRecords = state.activeListCodes
+              .map((code) => {
+                const record = recordsByCode.get(String(code).toUpperCase());
+                if (!record) {
+                  state.activeListMissing.push(code);
+                }
+                return record;
+              })
+              .filter(Boolean);
+            filtered = sortScannerRecords(listRecords, DEFAULT_INDEX_SORT);
+          } else if (isCustomCodeMode()) {
             const recordsByCode = new Map((state.overview.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
             state.customCodeMissing = [];
             filtered = state.customCodes
@@ -1703,6 +1978,7 @@
               })
               .filter(Boolean);
           } else {
+            state.activeListMissing = [];
             state.customCodeMissing = [];
             const turnoverRecords = filterByTurnover(state.overview.records || [], effectiveTurnoverFilter());
             const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
@@ -1746,7 +2022,7 @@
           state.visibleRecords = filtered;
           syncIndexScannerUrl(
             state.selectedDate,
-            isCustomCodeMode() ? DEFAULT_INDEX_SORT : state.sort,
+            isCustomCodeMode() || isListMode() ? DEFAULT_INDEX_SORT : state.sort,
             state.tag,
             state.theme,
             state.turnover,
@@ -1788,6 +2064,8 @@
               ? state.customCodes.length
                 ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div><div class="empty-cell">表示できる指定コードがありません。</div>`
                 : '<div class="empty-cell">指定コードを入力して「適用」を押してください。</div>'
+              : isListMode()
+                ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.activeListMissing.join(", "))}</div><div class="empty-cell">表示できるList銘柄がありません。</div>`
               : '<div class="empty-cell">該当する銘柄がありません。</div>';
             return;
           }
@@ -1798,9 +2076,11 @@
             stickySelectAllPicksButton.disabled = false;
           }
       
-          const missingNotice = isCustomCodeMode() && state.customCodeMissing.length
-            ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div>`
-            : "";
+          const missingNotice = isListMode() && state.activeListMissing.length
+            ? `<div class="index-custom-code-notice">List内で見つからないコード: ${escapeHtml(state.activeListMissing.join(", "))}</div>`
+            : isCustomCodeMode() && state.customCodeMissing.length
+              ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div>`
+              : "";
           list.innerHTML = missingNotice + filtered
             .map((record, index) => renderScannerItem(record, index, state))
             .join("");
@@ -1810,8 +2090,16 @@
             if (!checkbox) {
               return;
             }
-            checkbox.addEventListener("change", () => {
+            checkbox.addEventListener("change", async () => {
               toggleScannerPick(record, checkbox.checked, state);
+              if (isListMode() && !checkbox.checked) {
+                state.activeListCodes = state.activeListCodes.filter((code) => String(code) !== String(record.code));
+                if (!state.activeListCodes.length) {
+                  exitListMode();
+                }
+                await render();
+                return;
+              }
               updateIndexHeaderActions();
             });
           });
