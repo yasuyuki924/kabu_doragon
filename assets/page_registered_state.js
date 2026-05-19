@@ -7,6 +7,9 @@
       bars: 63,
       timeframe: "daily",
       set: null,
+      cardChartTimeframes: new Map(),
+      fullChartPayloadCache: new Map(),
+      fullChartRequestCache: new Map(),
     };
   }
 

@@ -2856,6 +2856,10 @@ body[data-page="index-scanner"] .index-scanner-list {
     grid-template-columns: 1fr;
   }
 
+  .scanner-list.picked-chart-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .scanner-item {
     padding: 8px;
   }
@@ -3033,7 +3037,16 @@ body[data-page="index-scanner"] .index-scanner-list {
     border-radius: 10px 10px 0 0;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table {
+    overflow-x: auto;
+    border-radius: 10px 10px 0 0;
+  }
+
   body[data-page="index-scanner"] .scanner-rank-table table {
+    display: table;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table table {
     display: table;
   }
 
@@ -3041,7 +3054,15 @@ body[data-page="index-scanner"] .index-scanner-list {
     display: table-row-group;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table tbody {
+    display: table-row-group;
+  }
+
   body[data-page="index-scanner"] .scanner-rank-table tr {
+    display: table-row;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table tr {
     display: table-row;
   }
 
@@ -3049,7 +3070,20 @@ body[data-page="index-scanner"] .index-scanner-list {
     display: table-header-group;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table thead {
+    display: table-header-group;
+  }
+
   body[data-page="index-scanner"] .scanner-rank-table td {
+    display: table-cell;
+    min-height: 0;
+    padding: 4px 5px;
+    border-radius: 0;
+    background: linear-gradient(180deg, rgba(14, 20, 34, 0.24) 0%, rgba(11, 18, 31, 0.1) 100%);
+    text-align: center;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table td {
     display: table-cell;
     min-height: 0;
     padding: 4px 5px;
@@ -3063,12 +3097,26 @@ body[data-page="index-scanner"] .index-scanner-list {
     display: none;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table td::before {
+    content: none;
+    display: none;
+  }
+
   body[data-page="index-scanner"] .scanner-rank-table td:nth-child(2) {
+    grid-column: auto;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table td:nth-child(2) {
     grid-column: auto;
   }
 
   body[data-page="index-scanner"] .scanner-rank-table td.num,
   body[data-page="index-scanner"] .scanner-rank-table th.num {
+    text-align: center;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table td.num,
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table th.num {
     text-align: center;
   }
 
@@ -3078,7 +3126,19 @@ body[data-page="index-scanner"] .index-scanner-list {
     background: linear-gradient(180deg, rgba(14, 20, 34, 0.24) 0%, rgba(11, 18, 31, 0.1) 100%);
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table td:nth-child(1),
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table td:nth-child(3),
+  body[data-page="picked"] .picked-scanner-item .scanner-rank-table td:nth-child(4) {
+    background: linear-gradient(180deg, rgba(14, 20, 34, 0.24) 0%, rgba(11, 18, 31, 0.1) 100%);
+  }
+
   body[data-page="index-scanner"] .scanner-name-cell-inner {
+    align-items: center;
+    min-height: calc(2.8em + 8px);
+    padding: 5px 8px;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-name-cell-inner {
     align-items: center;
     min-height: calc(2.8em + 8px);
     padding: 5px 8px;
@@ -3091,7 +3151,19 @@ body[data-page="index-scanner"] .index-scanner-list {
     letter-spacing: 0.05em;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-name-cell .tickerCode {
+    color: #f8fbff;
+    font-size: 0.86rem;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+  }
+
   body[data-page="index-scanner"] .scanner-name-cell .tickerName {
+    font-size: 0.73rem;
+    color: #c2d2e6;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-name-cell .tickerName {
     font-size: 0.73rem;
     color: #c2d2e6;
   }
@@ -3102,7 +3174,18 @@ body[data-page="index-scanner"] .index-scanner-list {
     padding: 0 3px;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-trade-split {
+    justify-items: center;
+    gap: 0;
+    padding: 0 3px;
+  }
+
   body[data-page="index-scanner"] .scanner-trade-price {
+    font-size: 0.86rem;
+    font-weight: 800;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-trade-price {
     font-size: 0.86rem;
     font-weight: 800;
   }
@@ -3111,7 +3194,15 @@ body[data-page="index-scanner"] .index-scanner-list {
     padding: 6px 6px 0;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-item-chart-wrap {
+    padding: 6px 6px 0;
+  }
+
   body[data-page="index-scanner"] .scanner-chart {
+    height: 208px;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-chart {
     height: 208px;
   }
 
@@ -3121,10 +3212,21 @@ body[data-page="index-scanner"] .index-scanner-list {
     padding: 7px 6px 2px;
   }
 
+  body[data-page="picked"] .picked-scanner-item .scanner-item-links {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
   body[data-page="index-scanner"] .scanner-item-links-center {
     order: initial;
     flex-basis: auto;
     justify-content: center;
+  }
+
+  body[data-page="picked"] .picked-scanner-item .scanner-item-links-center {
+    order: initial;
+    flex-basis: auto;
+    justify-content: flex-start;
   }
 
   body[data-page="index-scanner"] .scanner-item-strategy-bar,
@@ -3639,7 +3741,7 @@ body[data-page="index-scanner"] .index-scanner-list {
 }
 
 .picked-chart-list .scanner-chart {
-  height: 268px;
+  height: 208px;
 }
 
 .picked-chart-empty {
@@ -3651,7 +3753,10 @@ body[data-page="index-scanner"] .index-scanner-list {
 }
 
 .picked-card-remove {
-  min-width: 96px;
+  min-width: 58px;
+  min-height: 22px;
+  padding: 0 7px;
+  font-size: 0.66rem;
 }
 
 .picked-scanner-item {
@@ -3667,12 +3772,20 @@ body[data-page="index-scanner"] .index-scanner-list {
 }
 
 .scanner-item-links--picked {
-  min-height: 32px;
-  padding: 6px 6px 2px;
+  min-height: 30px;
+  margin-top: 3px;
+  padding: 5px 6px 2px;
 }
 
 .scanner-item-links-main--picked {
   gap: 8px;
+}
+
+.picked-scanner-item .scanner-item-links-center {
+  order: initial;
+  flex: 0 0 auto;
+  flex-basis: auto;
+  justify-content: flex-start;
 }
 
 .picked-link-pill {
@@ -4936,6 +5049,10 @@ body[data-page="ticker"] .period-button:hover {
   .scanner-item-links {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .scanner-list.picked-chart-list {
+    grid-template-columns: 1fr;
   }
 
   th,

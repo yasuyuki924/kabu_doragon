@@ -28,6 +28,7 @@ SYNC_STATE_JSON = ROOT / "data" / "jquants_sync_state.json"
 OHLCV_DIR = ROOT / "data" / "ohlcv"
 OHLCV_RAW_DIR = ROOT / "data" / "ohlcv_raw"
 PUBLIC_JSON_DIR = ROOT / "data" / "public_json" / "ticker_recent" / "1y" / "ohlcv_ma"
+OVERVIEW_LITE_DIR = ROOT / "data" / "public_json" / "overview_lite"
 
 REPRESENTATIVE_CODES = ["6327", "7162", "7203", "9983"]
 
@@ -180,6 +181,31 @@ def _check_public_json(code: str, manifest_latest: str) -> dict:
     return result
 
 
+def _check_overview_lite_index(manifest_latest: str) -> dict:
+    result: dict = {"ok": True, "issues": []}
+    index = _load_json(OVERVIEW_LITE_DIR / "index.json")
+    if not index:
+        result["ok"] = False
+        result["issues"].append("overview_lite/index.json missing or unreadable")
+        return result
+
+    result["generatedAt"] = index.get("generatedAt", "")
+    for key, filename in (
+        ("daily", "market_pulse.json"),
+        ("weekly", "market_pulse_weekly.json"),
+        ("monthly", "market_pulse_monthly.json"),
+    ):
+        dates = [str(item) for item in index.get(key) or [] if str(item).strip()]
+        result[f"{key}_last"] = dates[-1] if dates else ""
+        if manifest_latest and manifest_latest not in dates:
+            result["ok"] = False
+            result["issues"].append(f"{key} index missing manifest.latestDate={manifest_latest}")
+        if manifest_latest and not (OVERVIEW_LITE_DIR / manifest_latest / filename).exists():
+            result["ok"] = False
+            result["issues"].append(f"{filename} missing for manifest.latestDate={manifest_latest}")
+    return result
+
+
 def main() -> int:
     today = datetime.now().strftime("%Y%m%d")
     log = _Log(LOGS_DIR / f"daily_update_postcheck_{today}.log")
@@ -246,6 +272,18 @@ def main() -> int:
         for issue in pj_r.get("issues", []):
             log.log(f"             ISSUE: {issue}")
             ng_items.append(f"public_json/{code}: {issue}")
+
+    overview_index = _check_overview_lite_index(manifest_latest)
+    tag = "OK" if overview_index["ok"] else "NG"
+    log.log(
+        f"  overview_lite_index[{tag}] generatedAt={overview_index.get('generatedAt','?')} "
+        f"daily={overview_index.get('daily_last','?')} "
+        f"weekly={overview_index.get('weekly_last','?')} "
+        f"monthly={overview_index.get('monthly_last','?')}"
+    )
+    for issue in overview_index.get("issues", []):
+        log.log(f"             ISSUE: {issue}")
+        ng_items.append(f"overview_lite/index.json: {issue}")
 
     if ng_items:
         log.log(f"[FAIL] {len(ng_items)} issue(s) found — data may be corrupted:")

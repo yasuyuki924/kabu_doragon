@@ -65,7 +65,11 @@
       timeframe: "daily",
       sort: "code",
       registered: [],
+      cardChartTimeframes: new Map(),
+      fullChartPayloadCache: new Map(),
+      fullChartRequestCache: new Map(),
     };
+    const CARD_CHART_RANGE_MONTHS = Object.freeze({ daily: 3, weekly: 36, monthly: 60 });
 
     let stopAutoRefreshPolling = null;
 
@@ -211,6 +215,117 @@
       });
     }
 
+    function normalizeCardChartTimeframe(value) {
+      const timeframe = String(value || "").trim();
+      return ["daily", "weekly", "monthly"].includes(timeframe) ? timeframe : "daily";
+    }
+
+    function getCardChartTimeframe(code) {
+      return normalizeCardChartTimeframe(state.cardChartTimeframes.get(String(code)) || state.timeframe);
+    }
+
+    function getCardChartRangeMonths(timeframe) {
+      return CARD_CHART_RANGE_MONTHS[normalizeCardChartTimeframe(timeframe)] || CARD_CHART_RANGE_MONTHS.daily;
+    }
+
+    function shouldUseFullChartRows(timeframe, rangeMonths) {
+      return timeframe === "monthly" || (timeframe === "weekly" && Number(rangeMonths) > 12);
+    }
+
+    function updateCardChartTimeframeControls(code, timeframe) {
+      chartList?.querySelectorAll("[data-card-chart-code]").forEach((button) => {
+        if (button.getAttribute("data-card-chart-code") !== String(code)) {
+          return;
+        }
+        const isActive = button.getAttribute("data-card-chart-timeframe") === timeframe;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function parseOhlcvCsv(text) {
+      return String(text || "")
+        .trim()
+        .split(/\r?\n/)
+        .slice(1)
+        .map((line) => {
+          const [date, open, high, low, close, volume] = line.split(",");
+          return {
+            date,
+            open: Number(open),
+            high: Number(high),
+            low: Number(low),
+            close: Number(close),
+            volume: Number(volume),
+          };
+        })
+        .filter((row) => row.date && Number.isFinite(row.close));
+    }
+
+    async function loadFullChartRows(code) {
+      const cacheKey = String(code || "");
+      const cached = state.fullChartPayloadCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+      if (!state.fullChartRequestCache.has(cacheKey)) {
+        state.fullChartRequestCache.set(
+          cacheKey,
+          fetch(`./data/ohlcv/${cacheKey}.csv`, { cache: "no-store" })
+            .then(async (response) => {
+              if (!response.ok) {
+                throw new Error(`CSV 読み込み失敗: ${cacheKey} (${response.status})`);
+              }
+              const rows = parseOhlcvCsv(await response.text());
+              state.fullChartPayloadCache.set(cacheKey, rows);
+              return rows;
+            })
+            .finally(() => {
+              state.fullChartRequestCache.delete(cacheKey);
+            })
+        );
+      }
+      return state.fullChartRequestCache.get(cacheKey);
+    }
+
+    async function renderPickedCardChart(record, inspected) {
+      const timeframe = getCardChartTimeframe(record.code);
+      const rangeMonths = getCardChartRangeMonths(timeframe);
+      const chartPayload = inspected.chartPayload || inspected.payload;
+      let chartRows = chartPayload.ohlcv || [];
+      if (shouldUseFullChartRows(timeframe, rangeMonths)) {
+        try {
+          chartRows = await loadFullChartRows(record.code);
+        } catch (_error) {
+        }
+      }
+      updateCardChartTimeframeControls(record.code, timeframe);
+      renderScannerCompactChart(`pickedChart-${record.code}`, record.code, chartRows, record.date || state.selectedDate, rangeMonths, {
+        timeframe,
+        useBarCount: false,
+        extendToLatest: true,
+        events: record.events || record.chartEvents || record.newsEvents || record.disclosureEvents || [],
+      });
+    }
+
+    function bindPickedCardTimeframeEvents(chartItems) {
+      chartList?.querySelectorAll("[data-card-chart-timeframe]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const code = String(button.getAttribute("data-card-chart-code") || "");
+          const timeframe = normalizeCardChartTimeframe(button.getAttribute("data-card-chart-timeframe"));
+          const entry = chartItems.find((item) => item.kind === "success" && String(item.record.code) === code);
+          if (!code || !entry) {
+            return;
+          }
+          state.cardChartTimeframes.set(code, timeframe);
+          updateCardChartTimeframeControls(code, timeframe);
+          void renderPickedCardChart(entry.record, entry.inspected);
+        });
+      });
+    }
+
     async function renderPickedCharts(picks) {
       if (!chartList) {
         return;
@@ -295,21 +410,19 @@
         })
         .join("");
 
-      chartItems.forEach((entry) => {
+      for (const entry of chartItems) {
         if (entry.kind !== "success") {
-          return;
+          continue;
         }
         const { inspected, record } = entry;
-        const chartPayload = inspected.chartPayload || inspected.payload;
-        renderScannerCompactChart(`pickedChart-${record.code}`, record.code, chartPayload.ohlcv || [], record.date || state.selectedDate, state.bars, {
-          timeframe: state.timeframe,
-          useBarCount: true,
-        });
+        await renderPickedCardChart(record, inspected);
         const linksElement = document.getElementById(`pickedLinks-${record.code}`);
         if (linksElement) {
           linksElement.innerHTML = renderPickedItemLinks(inspected.payload, record, state);
         }
-      });
+      }
+
+      bindPickedCardTimeframeEvents(chartItems);
 
       Array.from(chartList.querySelectorAll("button[data-remove-pick]")).forEach((button) => {
         button.addEventListener("click", async () => {

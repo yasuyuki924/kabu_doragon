@@ -3057,19 +3057,29 @@
 
   function renderPickedScannerItem(record, index, state) {
     const rank = index + 1;
+    const cardChartTimeframe = String(state.cardChartTimeframes?.get?.(String(record.code)) || state.timeframe || "daily");
+    const stopHighStatus = getStopHighStatus(record);
+    const hasStopHighBadge = stopHighStatus !== "none";
+    const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
+    const stopHighBadgeClass = stopHighStatus === "peeled" ? " scanner-stop-high-badge--peeled" : "";
+    const stopHighBadge = hasStopHighBadge
+      ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
+      : "";
+    const qualityBadges = renderScannerQualityBadges(summarizeScannerRecordQuality(record, state.selectedDate));
+    const externalLinks = renderScannerExternalLinks(record);
     return `
-      <article class="scanner-item picked-scanner-item">
+      <article class="scanner-item picked-scanner-item${stopHighClass}">
         <div class="scanner-rank-table">
           <table>
             <thead>
               <tr>
-                <th class="num scanner-col-rank">Rank</th>
-                <th class="scanner-col-code">Code</th>
-                <th class="num scanner-col-close">Price</th>
-                <th class="num scanner-col-change">Change</th>
-                <th class="num scanner-col-volume">Volume</th>
-                <th class="num scanner-col-high">High</th>
-                <th class="num scanner-col-low">Low</th>
+                <th class="num scanner-col-rank">順位</th>
+                <th class="scanner-col-code">コード</th>
+                <th class="num scanner-col-close">取引値</th>
+                <th class="num scanner-col-change">前日比</th>
+                <th class="num scanner-col-volume">出来高</th>
+                <th class="num scanner-col-high">高値</th>
+                <th class="num scanner-col-low">安値</th>
               </tr>
             </thead>
             <tbody>
@@ -3081,6 +3091,8 @@
                       href: buildTickerUrl(record.code, state.selectedDate, ""),
                       variant: "scanner",
                     })}
+                    ${stopHighBadge}
+                    ${qualityBadges}
                   </div>
                 </td>
                 <td class="scanner-trade-cell scanner-primary-price-cell">
@@ -3106,7 +3118,9 @@
           <div id="pickedLinks-${escapeHtml(record.code)}" class="scanner-item-links-main scanner-item-links-main--picked">
             ${renderPickedItemLinks(record, record, state)}
           </div>
-          <button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(record.code)}">✕ Remove</button>
+          <div class="scanner-item-links-center">${externalLinks}</div>
+          ${renderScannerCardTimeframeButtons(record.code, cardChartTimeframe)}
+          <button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(record.code)}">Remove</button>
         </div>
       </article>
     `;
@@ -3114,6 +3128,8 @@
 
   function renderRegisteredScannerItem(record, index, state) {
     const rank = index + 1;
+    const cardChartTimeframe = String(state.cardChartTimeframes?.get?.(String(record.code)) || state.timeframe || "daily");
+    const externalLinks = renderScannerExternalLinks(record);
     return `
       <article class="scanner-item">
         <div class="scanner-rank-table">
@@ -3161,8 +3177,33 @@
           <div id="registeredLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
             ${renderScannerItemLinks(record, record, { selectedDate: state.selectedDate, sort: "code" })}
           </div>
+          <div class="scanner-item-links-center">${externalLinks}</div>
+          ${renderScannerCardTimeframeButtons(record.code, cardChartTimeframe)}
         </div>
       </article>
+    `;
+  }
+
+  function renderScannerCardTimeframeButtons(code, activeTimeframe) {
+    const normalizedActive = ["daily", "weekly", "monthly"].includes(activeTimeframe) ? activeTimeframe : "daily";
+    return `
+      <div class="scanner-card-timeframe" aria-label="チャート表示足">
+        ${["daily", "weekly", "monthly"]
+          .map((timeframe) => {
+            const label = { daily: "日", weekly: "週", monthly: "月" }[timeframe];
+            const isActive = normalizedActive === timeframe;
+            return `
+              <button
+                type="button"
+                class="scanner-card-timeframe-btn${isActive ? " is-active" : ""}"
+                data-card-chart-code="${escapeHtml(code)}"
+                data-card-chart-timeframe="${timeframe}"
+                aria-pressed="${isActive ? "true" : "false"}"
+              >${label}</button>
+            `;
+          })
+          .join("")}
+      </div>
     `;
   }
 
@@ -3233,23 +3274,7 @@
             ${renderScannerItemLinks(record, record, state)}
           </div>
           <div class="scanner-item-links-center">${externalLinks}</div>
-          <div class="scanner-card-timeframe" aria-label="チャート表示足">
-            ${["daily", "weekly", "monthly"]
-              .map((timeframe) => {
-                const label = { daily: "日", weekly: "週", monthly: "月" }[timeframe];
-                const isActive = cardChartTimeframe === timeframe;
-                return `
-                  <button
-                    type="button"
-                    class="scanner-card-timeframe-btn${isActive ? " is-active" : ""}"
-                    data-card-chart-code="${escapeHtml(record.code)}"
-                    data-card-chart-timeframe="${timeframe}"
-                    aria-pressed="${isActive ? "true" : "false"}"
-                  >${label}</button>
-                `;
-              })
-              .join("")}
-          </div>
+          ${renderScannerCardTimeframeButtons(record.code, cardChartTimeframe)}
           <label class="scanner-pick-toggle">
             <input type="checkbox" data-pick-code="${escapeHtml(record.code)}"${picked ? " checked" : ""} />
             <span>Pick</span>
@@ -3314,23 +3339,19 @@
   function renderPickedItemLinks(payload, record, state) {
     const items = [
       {
-        label: "📈 Detail",
+        label: "Detail",
         href: buildTickerUrl(record.code, state.selectedDate, ""),
         local: true,
       },
     ];
-    const links = payload.links || {};
-    if (links.quote) {
-      items.push({ label: "↗ Yahoo", href: links.quote });
-    }
     return items
       .filter((item) => item.href)
       .map((item) =>
         item.local
-          ? `<a class="picked-link-pill" href="${item.href}">${escapeHtml(item.label)}</a>`
-          : `<a class="picked-link-pill" href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
+          ? `<a href="${item.href}">${escapeHtml(item.label)}</a>`
+          : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
       )
-      .join("");
+      .join('<span class="scanner-link-separator">|</span>');
   }
 
   function abbreviateTickerName(name) {

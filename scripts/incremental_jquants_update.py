@@ -381,6 +381,27 @@ def update_manifest(target_date: str) -> None:
     write_json(MANIFEST_JSON, payload)
 
 
+def update_overview_lite_index(target_date: str, logger: Logger) -> dict[str, Any]:
+    index_path = OVERVIEW_LITE_DIR / "index.json"
+    payload = read_json(index_path, {})
+    updated: dict[str, bool] = {}
+    for key, filename in (
+        ("daily", "market_pulse.json"),
+        ("weekly", "market_pulse_weekly.json"),
+        ("monthly", "market_pulse_monthly.json"),
+    ):
+        dates = [str(item) for item in payload.get(key) or [] if str(item).strip()]
+        file_exists = (OVERVIEW_LITE_DIR / target_date / filename).exists()
+        if file_exists and target_date not in dates:
+            dates.append(target_date)
+        payload[key] = sorted(set(dates))
+        updated[key] = file_exists and payload[key][-1:] == [target_date]
+    payload["generatedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    write_compact_json(index_path, payload)
+    logger.log(f"overview_lite_index=OK {json.dumps(updated, ensure_ascii=False)}")
+    return updated
+
+
 def write_summary_and_health(status: str, *, target_date: str, manifest_latest: str, details: dict[str, Any]) -> None:
     now = datetime.now().astimezone().isoformat(timespec="seconds")
     write_json(
@@ -433,6 +454,7 @@ def main() -> int:
 
         if manifest_latest and target_date <= manifest_latest:
             logger.log("[SKIP] already up to date")
+            update_overview_lite_index(manifest_latest, logger)
             write_summary_and_health("skipped", target_date=target_date, manifest_latest=manifest_latest, details={"reason": "already_up_to_date"})
             return 0
         if not manifest_latest:
@@ -517,6 +539,7 @@ def main() -> int:
 
         build_metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger)
         logger.log(f"build_public_json=OK {json.dumps(build_metrics, ensure_ascii=False)}")
+        index_metrics = update_overview_lite_index(target_date, logger)
         update_manifest(target_date)
         write_summary_and_health(
             "success",
@@ -530,6 +553,7 @@ def main() -> int:
                 "adjustedCodeCount": len(adjusted_codes),
                 "fetchSeconds": fetch_seconds,
                 "build": build_metrics,
+                "overviewLiteIndex": index_metrics,
                 "log": str(log_path),
             },
         )
