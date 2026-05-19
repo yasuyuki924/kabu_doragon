@@ -21,13 +21,28 @@ if str(ROOT) not in sys.path:
 from src.data_source.local_data import build_daily_record  # noqa: E402
 from src.indicators.core import build_enriched_rows  # noqa: E402
 from src.jquants_provider import (  # noqa: E402
+    build_inactive_candidate_entries,
+    build_inactive_registry,
     build_client,
+    build_theme_lookup,
+    build_watchlist,
     default_paths,
+    fetch_jpx_delisted_lookup,
+    fetch_master_frame,
     fetch_trading_dates,
     format_yyyymmdd,
     load_auth_config,
+    load_existing_watchlist_candidates,
+    load_inactive_lookup,
+    load_retry_pending_candidates,
+    load_theme_map,
+    master_frame_to_records,
+    read_nikkei_codes,
     resolve_latest_trading_date,
+    select_components,
     sync_prices,
+    today_jst,
+    write_inactive_codes,
     write_sync_state,
     write_update_state,
 )
@@ -44,6 +59,9 @@ UPDATE_HEALTH_JSON = ROOT / "data" / "update_health.json"
 UPDATE_STATE_JSON = ROOT / "data" / "update_state.json"
 SYNC_STATE_JSON = ROOT / "data" / "jquants_sync_state.json"
 LOGS_DIR = ROOT / "logs"
+TSE_COMPONENTS_CSV = ROOT / "data" / "tse_listed_components.csv"
+DEFAULT_SEGMENTS = ["prime", "standard", "growth"]
+NEW_LISTING_LOOKBACK_DAYS = 120
 
 OHLCV_KEYS = ("date", "open", "high", "low", "close", "volume", "ma5", "ma25", "ma75", "ma200")
 DETAIL_ROW_KEYS = (
@@ -155,6 +173,103 @@ def discover_codes() -> list[str]:
     paths = default_paths()
     watchlist = read_json(paths.watchlist_json, [])
     return sorted({str(item.get("ticker") or item.get("code") or "").strip() for item in watchlist if isinstance(item, dict)})
+
+
+def resolve_active_universe(client: object, api_version: str, paths: Any, logger: Logger) -> list[dict[str, object]]:
+    master_records = master_frame_to_records(fetch_master_frame(client, api_version), api_version)
+    nikkei_codes = read_nikkei_codes(paths.nikkei_components_csv)
+    components = select_components(
+        master_records,
+        universe="tse",
+        selected_segments=DEFAULT_SEGMENTS,
+        max_tickers=0,
+        codes=[],
+        nikkei_codes=nikkei_codes,
+    )
+    existing_watchlist = load_existing_watchlist_candidates(paths.watchlist_json)
+    retry_pending = load_retry_pending_candidates(paths.retry_pending_json)
+    existing_inactive = load_inactive_lookup(paths.inactive_codes_json)
+    jpx_lookup = fetch_jpx_delisted_lookup()
+    inactive_items = build_inactive_registry(
+        candidate_entries=build_inactive_candidate_entries(components, existing_watchlist, retry_pending),
+        active_codes={str(item["code"]) for item in components},
+        as_of_date=today_jst(),
+        existing_lookup=existing_inactive,
+        jpx_lookup=jpx_lookup,
+        checked_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+    )
+    write_inactive_codes(
+        inactive_items,
+        as_of_date=today_jst(),
+        jpx_fetch_ok=bool(jpx_lookup),
+        path=paths.inactive_codes_json,
+    )
+    inactive_codes = {str(item["code"]) for item in inactive_items}
+    active_components = [row for row in components if str(row.get("code") or "") not in inactive_codes]
+    write_active_components_csv(active_components)
+    theme_lookup = build_theme_lookup(load_theme_map(paths.theme_map_json))
+    watchlist = build_watchlist(active_components, "tse", theme_lookup)
+    paths.watchlist_json.write_text(json.dumps(watchlist, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.log(
+        "active_universe=OK "
+        f"master={len(master_records)} active={len(watchlist)} inactive={len(inactive_codes)} "
+        f"jpxDelisted={'OK' if jpx_lookup else 'FALLBACK'}"
+    )
+    return watchlist
+
+
+def write_active_components_csv(components: list[dict[str, str]]) -> None:
+    TSE_COMPONENTS_CSV.parent.mkdir(parents=True, exist_ok=True)
+    with TSE_COMPONENTS_CSV.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(
+            fh,
+            fieldnames=["source_date", "code", "name", "market", "market_slug", "sector", "industry"],
+        )
+        writer.writeheader()
+        for row in components:
+            writer.writerow(
+                {
+                    "source_date": today_jst().replace("-", ""),
+                    "code": row.get("code", ""),
+                    "name": row.get("name", ""),
+                    "market": row.get("market", ""),
+                    "market_slug": row.get("market_slug", ""),
+                    "sector": row.get("sector", ""),
+                    "industry": row.get("industry", ""),
+                }
+            )
+
+
+def sync_ticker_meta(watchlist: list[dict[str, object]], target_date: str) -> int:
+    TICKER_META_DIR.mkdir(parents=True, exist_ok=True)
+    updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    changed = 0
+    for item in watchlist:
+        code = str(item.get("ticker") or "").strip()
+        if not code:
+            continue
+        meta = {
+            "code": code,
+            "name": item.get("name", ""),
+            "market": item.get("market", ""),
+            "sector": item.get("sector", ""),
+            "industry": item.get("industry", ""),
+            "tags": item.get("tags", []),
+            "themes": item.get("themes", []),
+            "links": item.get("links", {}),
+            "snapshotDate": target_date,
+            "snapshotType": "daily",
+            "updatedAt": updated_at,
+        }
+        path = TICKER_META_DIR / f"{code}.json"
+        existing = read_json(path, {})
+        comparable_existing = {key: value for key, value in existing.items() if key != "updatedAt"} if isinstance(existing, dict) else {}
+        comparable_meta = {key: value for key, value in meta.items() if key != "updatedAt"}
+        if comparable_existing == comparable_meta:
+            continue
+        write_compact_json(path, meta)
+        changed += 1
+    return changed
 
 
 def read_ohlcv_csv(path: Path) -> list[dict[str, float | int | str]]:
@@ -452,47 +567,102 @@ def main() -> int:
         logger.log(f"manifest.latestDate={manifest_latest or '-'}")
         logger.log(f"jquants.targetDate={target_date}")
 
-        if manifest_latest and target_date <= manifest_latest:
-            logger.log("[SKIP] already up to date")
-            update_overview_lite_index(manifest_latest, logger)
-            write_summary_and_health("skipped", target_date=target_date, manifest_latest=manifest_latest, details={"reason": "already_up_to_date"})
+        if args.dry_run:
+            codes = discover_codes()
+            logger.log(f"codeCount={len(codes)}")
+            logger.log("[DRY-RUN] no data was changed")
             return 0
+
         if not manifest_latest:
             logger.log("[ERROR] manifest.latestDate is empty; incremental update needs a baseline")
             return 3
 
-        start_candidate = parse_date(manifest_latest) + timedelta(days=1)
-        target = parse_date(target_date)
-        trading_dates = fetch_trading_dates(client, api_version, start_candidate, target)
-        if not trading_dates:
-            logger.log("[SKIP] no trading dates in delta range")
-            write_summary_and_health("skipped", target_date=target_date, manifest_latest=manifest_latest, details={"reason": "no_trading_dates"})
-            return 0
-        start_date = trading_dates[0]
-        end_date = trading_dates[-1]
-        logger.log("mode=incremental")
+        backfill_only = False
+        if manifest_latest and target_date <= manifest_latest:
+            logger.log("[CHECK] already up to date; checking active universe for missing listings")
+            target_date = manifest_latest
+            start_date = parse_date(target_date)
+            end_date = start_date
+            trading_dates = [start_date]
+            backfill_only = True
+        else:
+            start_candidate = parse_date(manifest_latest) + timedelta(days=1)
+            target = parse_date(target_date)
+            trading_dates = fetch_trading_dates(client, api_version, start_candidate, target)
+            if not trading_dates:
+                logger.log("[SKIP] no trading dates in delta range")
+                write_summary_and_health("skipped", target_date=target_date, manifest_latest=manifest_latest, details={"reason": "no_trading_dates"})
+                return 0
+            start_date = trading_dates[0]
+            end_date = trading_dates[-1]
+        logger.log("mode=backfill_missing_listings" if backfill_only else "mode=incremental")
         logger.log(f"dateRange={format_yyyymmdd(start_date)}..{format_yyyymmdd(end_date)}")
         logger.log(f"tradingDateCount={len(trading_dates)}")
 
-        codes = discover_codes()
+        active_watchlist = resolve_active_universe(client, api_version, paths, logger)
+        codes = sorted({str(item.get("ticker") or "").strip() for item in active_watchlist if str(item.get("ticker") or "").strip()})
         logger.log(f"codeCount={len(codes)}")
         if not codes:
-            logger.log("[ERROR] no ticker codes were discovered")
+            logger.log("[ERROR] no active ticker codes were resolved")
             return 4
-        if args.dry_run:
-            logger.log("[DRY-RUN] no data was changed")
-            return 0
+        meta_changed = sync_ticker_meta(active_watchlist, target_date)
+        logger.log(f"ticker_meta=OK changed={meta_changed}")
 
         fetch_started = time.perf_counter()
-        latest_date, updated_dates, updated_codes, adjusted_codes, adjusted_date_from = sync_prices(
-            client,
-            api_version,
-            paths,
-            codes,
-            start_date,
-            end_date,
-            1,
-        )
+        missing_history_codes = [
+            code
+            for code in codes
+            if not (paths.ohlcv_raw_dir / f"{code}.csv").exists() or not (paths.ohlcv_dir / f"{code}.csv").exists()
+        ]
+        prefetch_updated_dates: set[str] = set()
+        prefetch_updated_codes: set[str] = set()
+        prefetch_adjusted_codes: set[str] = set()
+        prefetch_adjusted_date_from: str | None = None
+        if missing_history_codes:
+            history_start = max(parse_date(target_date) - timedelta(days=NEW_LISTING_LOOKBACK_DAYS), parse_date("2000-01-01"))
+            logger.log(
+                f"new_listing_prefetch=START codes={len(missing_history_codes)} "
+                f"dateRange={format_yyyymmdd(history_start)}..{format_yyyymmdd(end_date)}"
+            )
+            _, prefetch_updated_dates, prefetch_updated_codes, prefetch_adjusted_codes, prefetch_adjusted_date_from = sync_prices(
+                client,
+                api_version,
+                paths,
+                missing_history_codes,
+                history_start,
+                end_date,
+                1,
+            )
+            logger.log(
+                f"new_listing_prefetch=OK updatedDates={len(prefetch_updated_dates)} "
+                f"updatedCodes={len(prefetch_updated_codes)}"
+            )
+        if backfill_only and not missing_history_codes:
+            logger.log("[SKIP] already up to date and no missing active listings")
+            update_overview_lite_index(manifest_latest, logger)
+            write_summary_and_health("skipped", target_date=target_date, manifest_latest=manifest_latest, details={"reason": "already_up_to_date"})
+            return 0
+        if backfill_only:
+            latest_date = target_date
+            updated_dates = set(prefetch_updated_dates)
+            updated_codes = set(prefetch_updated_codes)
+            adjusted_codes = set(prefetch_adjusted_codes)
+            adjusted_date_from = prefetch_adjusted_date_from
+        else:
+            latest_date, updated_dates, updated_codes, adjusted_codes, adjusted_date_from = sync_prices(
+                client,
+                api_version,
+                paths,
+                codes,
+                start_date,
+                end_date,
+                1,
+            )
+            updated_dates.update(prefetch_updated_dates)
+            updated_codes.update(prefetch_updated_codes)
+            adjusted_codes.update(prefetch_adjusted_codes)
+            if prefetch_adjusted_date_from and (adjusted_date_from is None or prefetch_adjusted_date_from < adjusted_date_from):
+                adjusted_date_from = prefetch_adjusted_date_from
         fetch_seconds = round(time.perf_counter() - fetch_started, 3)
         logger.log(f"fetch=OK latestDate={latest_date} updatedDates={len(updated_dates)} updatedCodes={len(updated_codes)} seconds={fetch_seconds}")
 
