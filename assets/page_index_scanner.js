@@ -1285,6 +1285,7 @@
             state.overviewDateIndex = await loadOverviewDateIndex();
             state.pendingManifest = null;
             state.hasFreshUpdate = false;
+            resetChartCaches();
             await loadDate(state.selectedDate || state.manifest.latestDate);
             await render();
           });
@@ -1553,6 +1554,15 @@
             state.chartObserver.disconnect();
             state.chartObserver = null;
           }
+        }
+
+        function resetChartCaches() {
+          state.chartRenderedCodes = new Set();
+          state.chartPayloadCache.clear();
+          state.chartRequestCache.clear();
+          state.fullChartPayloadCache.clear();
+          state.fullChartRequestCache.clear();
+          state.chartBaselineShape = null;
         }
 
         function renderChartLoadingState(code, title = "Chart standby", message = "表示領域に入ると読み込みます") {
