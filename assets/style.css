@@ -717,6 +717,15 @@ body[data-page="index-scanner"] .page-header {
   background-color: rgba(68, 46, 28, 0.98);
 }
 
+.index-sticky-select--muted {
+  opacity: 0.58;
+}
+
+.index-sticky-select--muted:hover,
+.index-sticky-select--muted:focus-visible {
+  opacity: 0.9;
+}
+
 #indexSort.index-sticky-select {
   min-width: 104px;
   max-width: 118px;
@@ -730,8 +739,10 @@ body[data-page="index-scanner"] .page-header {
 .index-sticky-label {
   display: inline-flex;
   align-items: center;
-  min-height: 38px;
-  padding: 0 14px;
+  justify-content: space-between;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 0 12px;
   border: 1px solid rgba(145, 99, 44, 0.4);
   border-radius: 10px;
   background: rgba(56, 39, 25, 0.97);
@@ -739,6 +750,21 @@ body[data-page="index-scanner"] .page-header {
   font-size: 0.8rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.index-sticky-ranking-label {
+  min-width: 92px;
+  max-width: 108px;
+}
+
+.index-sticky-ranking-label::after {
+  content: "";
+  width: 10px;
+  height: 6px;
+  margin-left: 12px;
+  flex: 0 0 auto;
+  background: #d2b28a;
+  clip-path: polygon(0 0, 50% 100%, 100% 0);
 }
 
 .index-sticky-label[hidden] {

@@ -191,6 +191,25 @@
           return normalizeHighPullbackDropPct(state.highPullbackDropPct);
         }
 
+        function syncCurrentIndexScannerUrl() {
+          if (!state.selectedDate) {
+            return;
+          }
+          syncIndexScannerUrl(
+            state.selectedDate,
+            isCustomCodeMode() || isListMode() ? DEFAULT_INDEX_SORT : state.sort,
+            state.tag,
+            state.theme,
+            effectiveTurnoverFilter(),
+            state.limit,
+            state.rangeMonths,
+            state.timeframe,
+            state.deviationFilters,
+            state.selectedStrategies,
+            isDailyOnlySort() ? highPullbackDropPct() : ""
+          );
+        }
+
         function normalizeOverviewDateList(values) {
           return [...new Set((Array.isArray(values) ? values : [])
             .map((value) => String(value || "").trim())
@@ -390,6 +409,14 @@
             return "";
           }
           return rankingSortKeys.has(state.sort) ? state.sort : "";
+        }
+
+        function isStrategySortActive() {
+          return strategySortKeys.has(state.sort) && state.sort !== DEFAULT_INDEX_SORT;
+        }
+
+        function isRankingSortActive() {
+          return rankingSortKeys.has(state.sort) || state.sort === DEFAULT_INDEX_SORT;
         }
 
         function isCustomCodeMode() {
@@ -633,6 +660,17 @@
           ].join("");
         }
 
+        function updateSortPriorityUi() {
+          const strategyActive = isStrategySortActive();
+          const rankingActive = isRankingSortActive();
+          [sortSelect, stickySortSelect].filter(Boolean).forEach((select) => {
+            select.classList.toggle("index-sticky-select--muted", rankingActive && !strategyActive);
+          });
+          [rankingSelect, rankingLabel].filter(Boolean).forEach((control) => {
+            control.classList.toggle("index-sticky-select--muted", strategyActive);
+          });
+        }
+
         renderSortOptions(sortSelect);
         renderSortOptions(stickySortSelect);
         renderRankingOptions(rankingSelect);
@@ -666,6 +704,7 @@
         if (rankingSelect) {
           rankingSelect.value = rankingControlValue();
         }
+        updateSortPriorityUi();
         themeSelect.value = state.theme;
         turnoverSelect.value = String(effectiveTurnoverFilter());
         limitSelect.value = limitControlValue();
@@ -740,6 +779,18 @@
             btn.setAttribute("aria-disabled", isDisabled ? "true" : "false");
             btn.title = isDisabled ? "高値調整（30% Pullback）は日足のみ対応です" : "";
           });
+        }
+
+        function updateDailyOnlySortUi() {
+          renderRankingOptions(rankingSelect);
+          if (rankingSelect) {
+            rankingSelect.value = rankingControlValue();
+          }
+          updateSortPriorityUi();
+          updateTimeframeUI();
+          updateStickyTimeframeUI();
+          updateRangeChip();
+          updateTimeframePopover();
         }
       
         function updateStickyBarVisibility() {
@@ -1106,6 +1157,8 @@
             if (sortSelect) sortSelect.value = strategyControlValue();
             renderRankingOptions(rankingSelect);
             if (rankingSelect) rankingSelect.value = rankingControlValue();
+            updateDailyOnlySortUi();
+            updateSortPriorityUi();
             if (stickySortSelect) stickySortSelect.value = strategyControlValue();
             if (tagSelect) tagSelect.value = state.tag;
             if (stickyTagSelect) stickyTagSelect.value = state.tag;
@@ -1533,6 +1586,10 @@
           state.overviewDateIndex = await loadOverviewDateIndex();
           state.themeOrder = await loadThemeOrder();
           await loadDate(params.get("date") || state.manifest.latestDate);
+          if (isDailyOnlySort()) {
+            updateDailyOnlySortUi();
+            syncCurrentIndexScannerUrl();
+          }
           await render();
           startManifestPolling();
         } catch (error) {
@@ -2222,6 +2279,14 @@
       
         async function render() {
           errorBox.hidden = true;
+          const forcedDailyOnlyTimeframe = enforceDailyOnlySortTimeframe();
+          if (forcedDailyOnlyTimeframe && state.selectedDate) {
+            await loadDate(state.selectedDate);
+          }
+          if (isDailyOnlySort()) {
+            updateDailyOnlySortUi();
+            syncCurrentIndexScannerUrl();
+          }
           disconnectChartObserver();
           list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
           state.picks = loadScannerPicks();
@@ -2302,19 +2367,7 @@
             filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
           }
           state.visibleRecords = filtered;
-          syncIndexScannerUrl(
-            state.selectedDate,
-            isCustomCodeMode() || isListMode() ? DEFAULT_INDEX_SORT : state.sort,
-            state.tag,
-            state.theme,
-            effectiveTurnoverFilter(),
-            state.limit,
-            state.rangeMonths,
-            state.timeframe,
-            state.deviationFilters,
-            state.selectedStrategies,
-            isDailyOnlySort() ? highPullbackDropPct() : ""
-          );
+          syncCurrentIndexScannerUrl();
           if (stickySortSelect) {
             stickySortSelect.value = strategyControlValue();
           }
@@ -2330,8 +2383,7 @@
           if (stickyTurnoverSelect) {
             stickyTurnoverSelect.value = String(effectiveTurnoverFilter());
           }
-          updateStickyTimeframeUI();
-          updateRangeChip();
+          updateDailyOnlySortUi();
           updateStickyFiltersUi();
           updateHeaderStatus();
           renderDataQualitySummary();
@@ -2493,6 +2545,17 @@
             }
           );
         }
+
+        window.addEventListener("pageshow", () => {
+          if (!isDailyOnlySort()) {
+            return;
+          }
+          enforceDailyOnlySortTimeframe();
+          updateDailyOnlySortUi();
+          renderDateControls();
+          renderCalendar();
+          syncCurrentIndexScannerUrl();
+        });
       }
       
   }
