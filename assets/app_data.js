@@ -13,7 +13,23 @@
   }
 
   async function loadManifestData(fetchJson, manifestPath) {
-    const payload = await fetchJson(manifestPath);
+    let payload;
+    try {
+      payload = await fetchJson(manifestPath);
+    } catch (error) {
+      const indexPath = window.KabuAppConfig?.OVERVIEW_LITE_INDEX_PATH;
+      if (!indexPath) {
+        throw error;
+      }
+      const indexPayload = await loadOverviewDateIndexData(indexPath);
+      const availableDates = Array.isArray(indexPayload?.daily) ? indexPayload.daily : [];
+      payload = {
+        generatedAt: indexPayload?.generatedAt || "",
+        latestDate: availableDates.at(-1) || "",
+        availableDates,
+        currentSnapshot: null,
+      };
+    }
     if (!Array.isArray(payload.availableDates) || !payload.latestDate) {
       throw new Error("manifest.json の形式が不正です。");
     }
@@ -45,7 +61,12 @@
   }
 
   async function loadThemeOrderData(fetchJson, themeMapPath) {
-    const payload = await fetchJson(themeMapPath);
+    let payload;
+    try {
+      payload = await fetchJson(themeMapPath);
+    } catch (_error) {
+      return [];
+    }
     const items = Array.isArray(payload?.themes) ? payload.themes : [];
     return items
       .map((item) => String(item?.name || item?.label || "").trim())
