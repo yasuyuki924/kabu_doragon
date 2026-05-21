@@ -46,6 +46,7 @@ from src.data_source.local_data import (
     iter_ticker_payloads,
     load_daily_records,
     load_ohlcv_rows,
+    load_ohlcv_rows_prefer_adjusted,
     load_theme_map,
     load_ticker_payload,
     load_update_state,

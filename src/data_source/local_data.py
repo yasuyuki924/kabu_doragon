@@ -6,6 +6,7 @@ import json
 from src.common.io import load_json_dict, write_json
 from src.common.paths import (
     DAILY_RECORDS_DIR,
+    OHLCV_ADJUSTED_DIR,
     OHLCV_DIR,
     TICKERS_DIR,
     THEME_MAP_JSON,
@@ -82,6 +83,17 @@ def load_update_state() -> dict[str, object]:
 
 def load_ohlcv_rows(code: str) -> list[dict[str, float | int | str]]:
     path = OHLCV_DIR / f"{code}.csv"
+    return load_ohlcv_rows_from_path(path)
+
+
+def load_ohlcv_rows_prefer_adjusted(code: str) -> list[dict[str, float | int | str]]:
+    adjusted_path = OHLCV_ADJUSTED_DIR / f"{code}.csv"
+    if adjusted_path.exists():
+        return load_ohlcv_rows_from_path(adjusted_path)
+    return load_ohlcv_rows(code)
+
+
+def load_ohlcv_rows_from_path(path) -> list[dict[str, float | int | str]]:
     if not path.exists():
         return []
 

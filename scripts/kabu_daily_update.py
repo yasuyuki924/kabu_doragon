@@ -37,6 +37,7 @@ SYNC_STATE_JSON = ROOT / "data" / "jquants_sync_state.json"
 INCREMENTAL_SHELL = ROOT / "scripts" / "run_incremental_public_json_update.sh"
 INTEGRITY_SCRIPT = ROOT / "scripts" / "check_ohlcv_integrity.py"
 POSTCHECK_SCRIPT = ROOT / "scripts" / "check_daily_update_result.py"
+CORPORATE_ACTION_SCRIPT = ROOT / "scripts" / "check_corporate_actions.py"
 
 # 8301 has known structural gaps; use the same 4-code set as check_ohlcv_integrity.py.
 REPRESENTATIVE_CODES = ["6327", "7162", "7203", "9983"]
@@ -181,6 +182,25 @@ def main() -> int:
         log.log("  ACTION: check data/manifest.json and run_incremental_public_json_update.sh manually")
         log.close()
         return 1
+
+    # --- Step 3b: Corporate action dry-run before publication rebuild ---
+    # This is intentionally dry-run only; detected actions must be reviewed
+    # before any adjusted OHLCV promotion.
+    log.log("[CHECK] corporate action pre-flight dry-run")
+    r_ca = subprocess.run(
+        [sys.executable, str(CORPORATE_ACTION_SCRIPT)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    for line in r_ca.stdout.splitlines():
+        log.log(f"  corp_action: {line}")
+    if r_ca.returncode != 0:
+        for line in r_ca.stderr.splitlines():
+            log.log(f"  corp_action_err: {line}")
+        log.log("[ERROR] corporate action dry-run failed — update blocked")
+        log.close()
+        return 2
 
     # --- Step 4: Call incremental update ---
     log.log("[RUN] run_incremental_public_json_update.sh")

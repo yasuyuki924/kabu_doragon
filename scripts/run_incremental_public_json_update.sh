@@ -37,6 +37,15 @@ if [ "${integrity_status}" -ne 0 ]; then
 fi
 echo "[$(timestamp)] [OK] OHLCV integrity passed"
 
+echo "[$(timestamp)] [CHECK] corporate action dry-run"
+"${PYTHON_BIN}" "${ROOT}/scripts/check_corporate_actions.py"
+corp_action_status=$?
+if [ "${corp_action_status}" -ne 0 ]; then
+  echo "[$(timestamp)] [ERROR] corporate action dry-run failed (exit=${corp_action_status}) — aborting" >&2
+  exit 2
+fi
+echo "[$(timestamp)] [OK] corporate action dry-run completed"
+
 "${PYTHON_BIN}" "${ROOT}/scripts/incremental_jquants_update.py" "$@"
 cmd_status=$?
 

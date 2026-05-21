@@ -12,6 +12,7 @@ from common import (
     build_wtd_mtd_bars,
     discover_available_dates,
     load_ohlcv_rows,
+    load_ohlcv_rows_prefer_adjusted,
     load_snapshot_lookup,
     load_update_state,
     load_watchlist,
@@ -30,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--all", action="store_true", help="Build all ticker payloads")
     parser.add_argument("--cache-days", help="Comma separated trading dates to refresh in daily_records")
     parser.add_argument("--cache-recent-months", type=int, default=0, help="Refresh recent N calendar months in daily_records")
+    parser.add_argument("--prefer-adjusted", action="store_true", help="Use data/ohlcv_adjusted when a per-code file exists")
     return parser.parse_args()
 
 
@@ -68,7 +70,7 @@ def main() -> int:
     date_updates_monthly: dict[str, dict[str, dict[str, object]]] = {f"{date_value}_monthly": {} for date_value in sorted(cache_dates)}
     for item in items:
         code = str(item["ticker"])
-        rows = load_ohlcv_rows(code)
+        rows = load_ohlcv_rows_prefer_adjusted(code) if args.prefer_adjusted else load_ohlcv_rows(code)
         if snapshot_lookup:
             rows = apply_snapshot_row(rows, code, {**snapshot_context, "lookup": snapshot_lookup})
         if not rows:
