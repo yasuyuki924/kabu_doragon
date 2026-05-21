@@ -46,6 +46,7 @@
         const turnoverSelect = document.getElementById("indexTurnover") || stickyTurnoverSelect;
         const limitSelect = document.getElementById("indexLimit");
         const rankingSelect = document.getElementById("indexExtraFilter");
+        const rankingLabel = document.getElementById("indexRankingLabel");
         const timeframeGroup = document.getElementById("indexTimeframe");
         const timeframePopover = document.getElementById("indexTimeframePopover");
         const timeframePopoverTitle = document.getElementById("indexTimeframePopoverTitle");
@@ -98,7 +99,7 @@
           limit: 200,
           timeframe: "daily",
           rangeMonths: 3,
-          highPullbackDropPct: 25,
+          highPullbackDropPct: 30,
           rangeMonthsByTimeframe: {
             daily: 3,
             weekly: 12,
@@ -161,8 +162,7 @@
         const HIGH_PULLBACK_LOOKAHEAD_BARS = 10;
         const HIGH_PULLBACK_RECENT_ACHIEVEMENT_BARS = 5;
         const HIGH_PULLBACK_FILTER_CONCURRENCY = 24;
-        const HIGH_PULLBACK_DROP_PCT_OPTIONS = [25, 30];
-        const DEFAULT_HIGH_PULLBACK_DROP_PCT = 25;
+        const DEFAULT_HIGH_PULLBACK_DROP_PCT = 30;
 
         function isDailyOnlySort(sortKey = state.sort) {
           return DAILY_ONLY_SORT_KEYS.has(sortKey);
@@ -184,8 +184,7 @@
         }
 
         function normalizeHighPullbackDropPct(value) {
-          const numeric = Number(value);
-          return HIGH_PULLBACK_DROP_PCT_OPTIONS.includes(numeric) ? numeric : DEFAULT_HIGH_PULLBACK_DROP_PCT;
+          return DEFAULT_HIGH_PULLBACK_DROP_PCT;
         }
 
         function highPullbackDropPct() {
@@ -343,6 +342,8 @@
                 ? 0
                 : 1,
             highPullback30CurrentDrawdownPct: metrics.currentDrawdownPct,
+            highPullback30Highest200: metrics.highest200,
+            highPullback30AfterLow: metrics.afterLow,
             highPullback30HighDate: metrics.highDate,
             highPullback30LowDate: metrics.afterLowDate,
             highPullback30BarsToLow: metrics.barsToLow,
@@ -352,10 +353,6 @@
         async function filterHighPullback30Records(records) {
           const out = [];
           await mapWithConcurrency(records, HIGH_PULLBACK_FILTER_CONCURRENCY, async (record) => {
-            if ((record.strategyMatches || []).includes(HIGH_PULLBACK_STRATEGY_ID)) {
-              out.push(record);
-              return;
-            }
             const high52w = Number(record.high52w);
             const low52w = Number(record.low52w);
             const rangeDrop = high52w > 0 && Number.isFinite(low52w) ? ((high52w - low52w) / high52w) * 100 : NaN;
@@ -390,7 +387,7 @@
 
         function rankingControlValue() {
           if (isDailyOnlySort()) {
-            return `pullback_${highPullbackDropPct()}`;
+            return "";
           }
           return rankingSortKeys.has(state.sort) ? state.sort : "";
         }
@@ -614,15 +611,20 @@
         }
 
         function renderRankingOptions(select) {
+          const useLabel = isDailyOnlySort();
+          if (rankingLabel) {
+            rankingLabel.hidden = !useLabel;
+          }
           if (!select) {
             return;
           }
-          if (isDailyOnlySort()) {
-            select.innerHTML = HIGH_PULLBACK_DROP_PCT_OPTIONS.map(
-              (value) => `<option value="pullback_${value}">${value}%以上</option>`
-            ).join("");
+          if (useLabel) {
+            select.disabled = true;
+            select.hidden = true;
             return;
           }
+          select.disabled = false;
+          select.hidden = false;
           select.innerHTML = [
             '<option value="">ランキング</option>',
             ...rankingOptions.map(
@@ -1088,7 +1090,7 @@
             const activeSortControl = stickySortSelect?.matches(":focus") ? stickySortSelect : sortSelect;
             if (control === rankingSelect) {
               if (isDailyOnlySort()) {
-                state.highPullbackDropPct = normalizeHighPullbackDropPct(String(rankingSelect?.value || "").replace("pullback_", ""));
+                state.highPullbackDropPct = DEFAULT_HIGH_PULLBACK_DROP_PCT;
               } else {
                 state.sort = readRankingControlValue(rankingSelect);
               }
@@ -1222,6 +1224,9 @@
 
         picksMenu?.addEventListener("click", (event) => {
           event.stopPropagation();
+          if (event.target.closest("button, a")) {
+            setPicksMenuOpen(false);
+          }
         });
 
         pickedLink?.addEventListener("click", (event) => {
@@ -1235,8 +1240,8 @@
         });
       
         document.addEventListener("click", (event) => {
-          if (picksMenu && picksMenuButton && !picksMenu.hidden) {
-            if (!picksMenu.contains(event.target) && !picksMenuButton.contains(event.target)) {
+          if (picksMenu && !picksMenu.hidden) {
+            if (!picksMenu.contains(event.target) && !picksMenuToggle?.contains(event.target)) {
               setPicksMenuOpen(false);
             }
           }
@@ -1617,6 +1622,21 @@
           });
           if (exitListButton) {
             exitListButton.disabled = !isListMode();
+          }
+        }
+
+        function setCardPickedState(card, picked) {
+          if (!card) {
+            return;
+          }
+          card.classList.toggle("scanner-item-picked", picked);
+          card.classList.remove("scanner-item-pick-flash");
+          if (picked) {
+            void card.offsetWidth;
+            card.classList.add("scanner-item-pick-flash");
+            window.setTimeout(() => {
+              card.classList.remove("scanner-item-pick-flash");
+            }, 520);
           }
         }
 
@@ -2350,12 +2370,31 @@
       
           filtered.forEach((record) => {
             const checkbox = list.querySelector(`input[data-pick-code="${record.code}"]`);
+            const card = list.querySelector(`[data-scanner-card-code="${record.code}"]`);
+            const chartWrap = list.querySelector(`[data-pick-chart-code="${record.code}"]`);
             if (!checkbox) {
               return;
             }
             checkbox.addEventListener("change", async () => {
               toggleScannerPick(record, checkbox.checked, state);
+              setCardPickedState(card, checkbox.checked);
               if (isListMode() && !checkbox.checked) {
+                state.activeListCodes = state.activeListCodes.filter((code) => String(code) !== String(record.code));
+                if (!state.activeListCodes.length) {
+                  exitListMode();
+                }
+                await render();
+                return;
+              }
+              updateIndexHeaderActions();
+            });
+            chartWrap?.addEventListener("dblclick", async (event) => {
+              event.preventDefault();
+              const nextChecked = !Boolean(state.picks?.[record.code]);
+              checkbox.checked = nextChecked;
+              toggleScannerPick(record, nextChecked, state);
+              setCardPickedState(card, nextChecked);
+              if (isListMode() && !nextChecked) {
                 state.activeListCodes = state.activeListCodes.filter((code) => String(code) !== String(record.code));
                 if (!state.activeListCodes.length) {
                   exitListMode();

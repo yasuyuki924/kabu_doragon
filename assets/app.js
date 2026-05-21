@@ -3109,6 +3109,32 @@
           <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
         </div>
       </div>
+      ${renderHighPullbackMeta(record, state)}
+    `;
+  }
+
+  function renderHighPullbackMeta(record, state) {
+    if (state?.sort !== "strategy_high_pullback_30") {
+      return "";
+    }
+    const metrics = record?.strategyMetrics?.high_pullback_30 || {};
+    const highDate = record.highPullback30HighDate || metrics.highDate;
+    const lowDate = record.highPullback30LowDate || metrics.afterLowDate;
+    const high = record.highPullback30Highest200 || metrics.highest200;
+    const low = record.highPullback30AfterLow || metrics.afterLow;
+    const dropRate = record.highPullback30DropRate ?? metrics.dropRate;
+    if (!highDate || !lowDate || dropRate == null) {
+      return "";
+    }
+    const highLabel = high != null ? `${formatScannerTradeDate(highDate)} ${formatNumber(high)}` : formatScannerTradeDate(highDate);
+    const lowLabel = low != null ? `${formatScannerTradeDate(lowDate)} ${formatNumber(low)}` : formatScannerTradeDate(lowDate);
+    return `
+      <div class="scanner-high-pullback-meta">
+        <span>高値 ${escapeHtml(highLabel)}</span>
+        <span class="scanner-high-pullback-arrow">→</span>
+        <span>安値 ${escapeHtml(lowLabel)}</span>
+        <strong>-${formatNumber(dropRate, 1)}%</strong>
+      </div>
     `;
   }
 
@@ -3189,11 +3215,12 @@
     const stopHighStatus = getStopHighStatus(record);
     const hasStopHighBadge = stopHighStatus !== "none";
     const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
+    const pickedClass = picked ? " scanner-item-picked" : "";
     const externalLinks = renderScannerExternalLinks(record);
     return `
-      <article class="scanner-item${stopHighClass}">
+      <article class="scanner-item${stopHighClass}${pickedClass}" data-scanner-card-code="${escapeHtml(record.code)}">
         ${renderScannerCompactHeader(record, rank, state, rankingKey)}
-        <div class="scanner-item-chart-wrap">
+        <div class="scanner-item-chart-wrap" data-pick-chart-code="${escapeHtml(record.code)}" title="ダブルクリックでPick切替">
           <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
         <div class="scanner-item-links">
