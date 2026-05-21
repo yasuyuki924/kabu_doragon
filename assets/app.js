@@ -2573,6 +2573,7 @@
       strategy_turtle: "turtle_donchian_breakout",
       strategy_canslim: "can_slim",
       strategy_rsi2: "rsi2_pullback",
+      strategy_high_pullback_30: "high_pullback_30",
     };
     if (strategySortMap[sortKey]) {
       const strategyId = strategySortMap[sortKey];
@@ -2649,6 +2650,7 @@
       strategy_turtle: "高値ブレイク（Turtle）",
       strategy_canslim: "CAN SLIM",
       strategy_rsi2: "上昇中の押し目（RSI(2)）",
+      strategy_high_pullback_30: "高値調整（30% Pullback）",
     }[sortKey] || sortKey;
   }
 
@@ -3481,6 +3483,37 @@
     requestAnimationFrame(draw);
   }
 
+  function renderScannerChartDateTooltip(element, chart, visibleRows) {
+    if (!element || !chart || !visibleRows.length) {
+      return;
+    }
+    const tooltip = document.createElement("div");
+    tooltip.className = "scanner-chart-date-tooltip";
+    tooltip.hidden = true;
+    element.appendChild(tooltip);
+
+    const hideTooltip = () => {
+      tooltip.hidden = true;
+    };
+    chart.subscribeCrosshairMove((param) => {
+      if (!param?.time || !param.point || param.point.x < 0 || param.point.y < 0) {
+        hideTooltip();
+        return;
+      }
+      const row = resolveRowByTime(visibleRows, param.time);
+      if (!row) {
+        hideTooltip();
+        return;
+      }
+      tooltip.textContent = formatScannerTradeDate(row.date);
+      tooltip.hidden = false;
+      const width = tooltip.offsetWidth || 64;
+      const x = Math.max(8, Math.min(element.clientWidth - width - 8, Math.round(param.point.x - width / 2)));
+      tooltip.style.left = `${x}px`;
+    });
+    element.addEventListener("mouseleave", hideTooltip);
+  }
+
   function renderCompactStyleChart(element, rows, selectedDate, rangeValue, options = {}) {
     if (!element || !window.LightweightCharts) {
       return;
@@ -3562,6 +3595,7 @@
           labelVisible: false,
           width: 1,
           color: "rgba(203, 213, 225, 0.5)",
+          style: window.LightweightCharts?.LineStyle?.Dotted ?? 1,
         },
         horzLine: { visible: false, labelVisible: false },
       },
@@ -3662,6 +3696,7 @@
       to: visibleCount - 1 + 3,
     });
     renderCompactChartEventMarkers(element, chart, visibleRows, options.events);
+    renderScannerChartDateTooltip(element, chart, visibleRows);
     // インスタンスを登録して次回の再描画時に正しく破棄できるようにする
     if (element.id) {
       _chartInstances.set(element.id, chart);
@@ -3685,7 +3720,7 @@
       code,
       height: options.height || element.clientHeight || 208,
       onInitialRow: (row) => setScannerTableValues(code, initialRowOverride || row),
-      onRowSelect: (row) => setScannerTableValues(code, row, { showDate: true }),
+      onRowSelect: (row) => setScannerTableValues(code, row),
     });
   }
 
@@ -3913,7 +3948,7 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, rangeMonths, timeframe, deviationFilters = {}, selectedStrategies = []) {
+  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, rangeMonths, timeframe, deviationFilters = {}, selectedStrategies = [], pullbackDropPct = "") {
     const params = new URLSearchParams(window.location.search);
     params.set("date", date);
     params.set("sort", sort);
@@ -3938,6 +3973,11 @@
       params.delete("strategy");
     }
     params.set("turnover", String(turnover));
+    if (sort === "strategy_high_pullback_30" && pullbackDropPct) {
+      params.set("pullback", String(pullbackDropPct));
+    } else {
+      params.delete("pullback");
+    }
     DEVIATION_SORT_KEYS.forEach((key) => {
       const shortKey = DEVIATION_URL_KEY_MAP[key];
       const filter = deviationFilters[key] || { mode: "", min: "", max: "" };

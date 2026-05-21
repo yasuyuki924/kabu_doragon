@@ -37,6 +37,11 @@ TREND_TURN_THRESHOLDS = SimpleNamespace(
     above_ma75_window=5,
     above_ma75_min_count=3,
 )
+HIGH_PULLBACK_THRESHOLDS = SimpleNamespace(
+    lookback_bars=200,
+    lookahead_bars=40,
+    min_drop_pct=30.0,
+)
 
 
 def distance_from_baseline(value: float | None, baseline: float | None) -> float | None:
@@ -190,6 +195,54 @@ def apply_period_overview_metrics(
     return adjusted
 
 
+def detect_high_pullback_30(
+    rows: list[dict[str, float | int | str]],
+    index: int,
+) -> dict[str, float | int | str | bool | None]:
+    lookback = HIGH_PULLBACK_THRESHOLDS.lookback_bars
+    lookahead = HIGH_PULLBACK_THRESHOLDS.lookahead_bars
+    if index + 1 < lookback:
+        return {"detected": False}
+    window_start = index - lookback + 1
+    high_index = -1
+    highest = 0.0
+    for pos in range(window_start, index + 1):
+        high = float(rows[pos]["high"])
+        if high >= highest:
+            highest = high
+            high_index = pos
+    if high_index < 0 or highest <= 0:
+        return {"detected": False}
+    low_start = high_index + 1
+    low_end = min(index, high_index + lookahead)
+    if low_start > low_end:
+        return {"detected": False}
+    low_index = -1
+    after_low = float("inf")
+    for pos in range(low_start, low_end + 1):
+        low = float(rows[pos]["low"])
+        if low < after_low:
+            after_low = low
+            low_index = pos
+    if low_index < 0:
+        return {"detected": False}
+    drop_rate = ((highest - after_low) / highest) * 100
+    if drop_rate < HIGH_PULLBACK_THRESHOLDS.min_drop_pct:
+        return {"detected": False}
+    close = float(rows[index]["close"])
+    return {
+        "detected": True,
+        "highest200": round(highest, 4),
+        "highDate": str(rows[high_index]["date"]),
+        "afterLow": round(after_low, 4),
+        "afterLowDate": str(rows[low_index]["date"]),
+        "barsToLow": low_index - high_index,
+        "dropRate": round(drop_rate, 4),
+        "currentClose": round(close, 4),
+        "currentDrawdownPct": round(((highest - close) / highest) * 100, 4),
+    }
+
+
 def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[str, float | int | str | bool | None]]:
     if not rows:
         return []
@@ -319,6 +372,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         trend_turn_above_ma75_ratio = None
         trend_turn_score = 0
         trend_turn_reason = ""
+        high_pullback_30 = detect_high_pullback_30(rows, index)
 
         ref_index = index - TREND_TURN_THRESHOLDS.ref_days_below_ma75
         if ref_index >= 0 and ma75 is not None and ma_map[75][ref_index] is not None and float(rows[ref_index]["close"]) < float(ma_map[75][ref_index]):
@@ -433,6 +487,12 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
             "trendTurnAboveMa75Ratio": trend_turn_above_ma75_ratio,
             "trendTurnScore": int(trend_turn_score),
             "trendTurnReason": trend_turn_reason,
+            "highPullback30": high_pullback_30,
+            "highPullback30Candidate": bool(high_pullback_30.get("detected")),
+            "highPullback30DropRate": high_pullback_30.get("dropRate"),
+            "highPullback30HighDate": high_pullback_30.get("highDate"),
+            "highPullback30LowDate": high_pullback_30.get("afterLowDate"),
+            "highPullback30BarsToLow": high_pullback_30.get("barsToLow"),
         }
         strategy_results = evaluate_strategies(base_row)
         strategy_matches = [strategy_id for strategy_id, result in strategy_results.items() if result.matched]

@@ -41,6 +41,7 @@
       { key: "turtle_donchian_breakout", label: "Turtle" },
       { key: "can_slim", label: "CAN SLIM" },
       { key: "rsi2_pullback", label: "RSI(2)" },
+      { key: "high_pullback_30", label: "30% Pullback" },
     ],
     INDEX_SCANNER_SORT_OPTIONS: [
       { key: "strategy_minervini", label: "成長ブレイク（Minervini）" },
@@ -48,6 +49,7 @@
       { key: "strategy_turtle", label: "高値ブレイク（Turtle）" },
       { key: "strategy_rsi2", label: "上昇中の押し目（RSI(2)）" },
       { key: "trend_turn", label: "75日線回復（ベース・リカバリー）" },
+      { key: "strategy_high_pullback_30", label: "高値調整（30% Pullback）" },
     ],
     INDEX_SCANNER_RANKING_OPTIONS: [
       { key: "gainers", label: "値上がり率" },

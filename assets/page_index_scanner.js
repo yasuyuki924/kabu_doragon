@@ -98,6 +98,7 @@
           limit: 200,
           timeframe: "daily",
           rangeMonths: 3,
+          highPullbackDropPct: 25,
           rangeMonthsByTimeframe: {
             daily: 3,
             weekly: 12,
@@ -152,6 +153,40 @@
         const rankingOptions = window.KabuAppConfig?.INDEX_SCANNER_RANKING_OPTIONS || [];
         const strategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
         const rankingSortKeys = new Set(rankingOptions.map((item) => item.key));
+        const DAILY_ONLY_SORT_KEYS = new Set(["strategy_high_pullback_30"]);
+        const HIGH_PULLBACK_STRATEGY_ID = "high_pullback_30";
+        const HIGH_PULLBACK_MIN_BARS = 200;
+        const HIGH_PULLBACK_LOOKAHEAD_BARS = 40;
+        const HIGH_PULLBACK_DROP_PCT_OPTIONS = [25, 30];
+        const DEFAULT_HIGH_PULLBACK_DROP_PCT = 25;
+
+        function isDailyOnlySort(sortKey = state.sort) {
+          return DAILY_ONLY_SORT_KEYS.has(sortKey);
+        }
+
+        function enforceDailyOnlySortTimeframe() {
+          if (!isDailyOnlySort()) {
+            return false;
+          }
+          if (state.timeframe === "daily") {
+            return false;
+          }
+          state.timeframe = "daily";
+          state.rangeMonths = normalizeIndexScannerRangeMonths("daily", state.rangeMonthsByTimeframe.daily, 3);
+          state.rangeMonthsByTimeframe.daily = state.rangeMonths;
+          state.timeframePopoverOpen = false;
+          state.timeframePopoverTarget = "";
+          return true;
+        }
+
+        function normalizeHighPullbackDropPct(value) {
+          const numeric = Number(value);
+          return HIGH_PULLBACK_DROP_PCT_OPTIONS.includes(numeric) ? numeric : DEFAULT_HIGH_PULLBACK_DROP_PCT;
+        }
+
+        function highPullbackDropPct() {
+          return normalizeHighPullbackDropPct(state.highPullbackDropPct);
+        }
 
         function normalizeOverviewDateList(values) {
           return [...new Set((Array.isArray(values) ? values : [])
@@ -208,11 +243,128 @@
           return periodEndDate || resolveAvailableDate(requestedDate, availableDates);
         }
 
+        function findHighPullback30Match(rows, selectedDate) {
+          const eligibleRows = (Array.isArray(rows) ? rows : [])
+            .filter((row) => row?.date && (!selectedDate || row.date <= selectedDate))
+            .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+          if (eligibleRows.length < HIGH_PULLBACK_MIN_BARS) {
+            return null;
+          }
+          const windowRows = eligibleRows.slice(-HIGH_PULLBACK_MIN_BARS);
+          let highIndex = -1;
+          let highest = -Infinity;
+          windowRows.forEach((row, index) => {
+            const high = Number(row.high);
+            if (Number.isFinite(high) && high >= highest) {
+              highest = high;
+              highIndex = index;
+            }
+          });
+          if (!(highest > 0) || highIndex < 0) {
+            return null;
+          }
+          const afterRows = windowRows.slice(highIndex + 1, highIndex + 1 + HIGH_PULLBACK_LOOKAHEAD_BARS);
+          if (!afterRows.length) {
+            return null;
+          }
+          let lowIndex = -1;
+          let afterLow = Infinity;
+          afterRows.forEach((row, index) => {
+            const low = Number(row.low);
+            if (Number.isFinite(low) && low < afterLow) {
+              afterLow = low;
+              lowIndex = index;
+            }
+          });
+          if (!Number.isFinite(afterLow) || lowIndex < 0) {
+            return null;
+          }
+          const barsToLow = lowIndex + 1;
+          const dropRate = ((highest - afterLow) / highest) * 100;
+          if (dropRate < highPullbackDropPct()) {
+            return null;
+          }
+          const currentClose = Number(eligibleRows[eligibleRows.length - 1]?.close);
+          return {
+            highest200: roundNumber(highest, 4),
+            highDate: windowRows[highIndex].date,
+            afterLow: roundNumber(afterLow, 4),
+            afterLowDate: afterRows[lowIndex].date,
+            barsToLow,
+            dropRate: roundNumber(dropRate, 4),
+            currentClose: Number.isFinite(currentClose) ? roundNumber(currentClose, 4) : null,
+            currentDrawdownPct: Number.isFinite(currentClose) ? roundNumber(((highest - currentClose) / highest) * 100, 4) : null,
+          };
+        }
+
+        function attachHighPullback30Match(record, metrics) {
+          const strategyMatches = [...new Set([...(record.strategyMatches || []), HIGH_PULLBACK_STRATEGY_ID])];
+          const strategyScores = { ...(record.strategyScores || {}), [HIGH_PULLBACK_STRATEGY_ID]: metrics.dropRate };
+          const strategyMetrics = { ...(record.strategyMetrics || {}), [HIGH_PULLBACK_STRATEGY_ID]: metrics };
+          const strategyReasons = {
+            ...(record.strategyReasons || {}),
+            [HIGH_PULLBACK_STRATEGY_ID]: [
+              `200本最高値 ${formatNumber(metrics.highest200, 0)} (${metrics.highDate})`,
+              `${metrics.barsToLow}本後に -${formatNumber(metrics.dropRate, 1)}% 調整`,
+            ],
+          };
+          return {
+            ...record,
+            strategyMatches,
+            strategyScores,
+            strategyMetrics,
+            strategyReasons,
+            highPullback30Candidate: true,
+            highPullback30DropRate: metrics.dropRate,
+            highPullback30HighDate: metrics.highDate,
+            highPullback30LowDate: metrics.afterLowDate,
+            highPullback30BarsToLow: metrics.barsToLow,
+          };
+        }
+
+        async function filterHighPullback30Records(records) {
+          const out = [];
+          await mapWithConcurrency(records, 12, async (record) => {
+            if ((record.strategyMatches || []).includes(HIGH_PULLBACK_STRATEGY_ID)) {
+              out.push(record);
+              return;
+            }
+            const currentDrawdown = Number(record.distanceTo52wHighPct);
+            if (!Number.isFinite(currentDrawdown) || currentDrawdown < highPullbackDropPct()) {
+              return;
+            }
+            try {
+              let metrics = null;
+              try {
+                const inspected = await loadRecentTickerForChart(record.code, {
+                  selectedDate: state.selectedDate,
+                  allowStaleSelectedDate: true,
+                });
+                metrics = findHighPullback30Match(inspected.payload?.ohlcv || [], state.selectedDate);
+              } catch (_recentError) {
+                metrics = null;
+              }
+              if (!metrics) {
+                metrics = findHighPullback30Match(await loadFullChartRows(record.code), state.selectedDate);
+              }
+              if (metrics) {
+                out.push(attachHighPullback30Match(record, metrics));
+              }
+            } catch (error) {
+              console.debug("[high-pullback-30:skip]", { code: record.code, reason: error?.message || String(error) });
+            }
+          });
+          return out;
+        }
+
         function strategyControlValue() {
           return strategySortKeys.has(state.sort) && state.sort !== DEFAULT_INDEX_SORT ? state.sort : "";
         }
 
         function rankingControlValue() {
+          if (isDailyOnlySort()) {
+            return `pullback_${highPullbackDropPct()}`;
+          }
           return rankingSortKeys.has(state.sort) ? state.sort : "";
         }
 
@@ -229,6 +381,9 @@
         }
 
         function effectiveTurnoverFilter() {
+          if (isDailyOnlySort()) {
+            return 0;
+          }
           return !isCustomCodeMode() && !isListMode() && state.timeframe === "daily" ? state.turnover : 0;
         }
 
@@ -435,6 +590,12 @@
           if (!select) {
             return;
           }
+          if (isDailyOnlySort()) {
+            select.innerHTML = HIGH_PULLBACK_DROP_PCT_OPTIONS.map(
+              (value) => `<option value="pullback_${value}">${value}%以上</option>`
+            ).join("");
+            return;
+          }
           select.innerHTML = [
             '<option value="">ランキング</option>',
             ...rankingOptions.map(
@@ -461,6 +622,9 @@
         state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
         state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
         state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
+        state.highPullbackDropPct = normalizeHighPullbackDropPct(params.get("pullback"));
+        enforceDailyOnlySortTimeframe();
+        renderRankingOptions(rankingSelect);
         state.deviationDrafts = {
           deviation25: { ...state.deviationFilters.deviation25 },
           deviation75: { ...state.deviationFilters.deviation75 },
@@ -474,7 +638,7 @@
           rankingSelect.value = rankingControlValue();
         }
         themeSelect.value = state.theme;
-        turnoverSelect.value = String(state.turnover);
+        turnoverSelect.value = String(effectiveTurnoverFilter());
         limitSelect.value = limitControlValue();
         if (stickySortSelect) {
           stickySortSelect.value = strategyControlValue();
@@ -513,9 +677,15 @@
             return;
           }
           timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
-            const isActive = btn.dataset.value === state.timeframe;
+            const timeframe = btn.dataset.value;
+            const isDisabled = isDailyOnlySort() && timeframe !== "daily";
+            const isActive = timeframe === state.timeframe;
             btn.classList.toggle("active", isActive);
+            btn.classList.toggle("is-disabled", isDisabled);
+            btn.disabled = isDisabled;
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+            btn.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+            btn.title = isDisabled ? "高値調整（30% Pullback）は日足のみ対応です" : "";
           });
         }
       
@@ -531,9 +701,15 @@
             return;
           }
           stickyTimeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
-            const isActive = btn.dataset.value === state.timeframe;
+            const timeframe = btn.dataset.value;
+            const isDisabled = isDailyOnlySort() && timeframe !== "daily";
+            const isActive = timeframe === state.timeframe;
             btn.classList.toggle("active", isActive);
+            btn.classList.toggle("is-disabled", isDisabled);
+            btn.disabled = isDisabled;
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+            btn.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+            btn.title = isDisabled ? "高値調整（30% Pullback）は日足のみ対応です" : "";
           });
         }
       
@@ -884,22 +1060,29 @@
           control.addEventListener("change", async () => {
             const activeSortControl = stickySortSelect?.matches(":focus") ? stickySortSelect : sortSelect;
             if (control === rankingSelect) {
-              state.sort = readRankingControlValue(rankingSelect);
+              if (isDailyOnlySort()) {
+                state.highPullbackDropPct = normalizeHighPullbackDropPct(String(rankingSelect?.value || "").replace("pullback_", ""));
+              } else {
+                state.sort = readRankingControlValue(rankingSelect);
+              }
             } else if (control === sortSelect || control === stickySortSelect) {
               state.sort = readStrategyControlValue(activeSortControl);
+              state.highPullbackDropPct = highPullbackDropPct();
             }
+            enforceDailyOnlySortTimeframe();
             state.tag = stickyTagSelect?.matches(":focus") ? stickyTagSelect.value : tagSelect.value;
             state.theme = stickyThemeSelect?.matches(":focus") ? stickyThemeSelect.value : themeSelect.value;
             state.turnover = Number(stickyTurnoverSelect?.matches(":focus") ? stickyTurnoverSelect.value : turnoverSelect.value);
             state.limit = readLimitControlValue(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect : limitSelect);
             if (sortSelect) sortSelect.value = strategyControlValue();
+            renderRankingOptions(rankingSelect);
             if (rankingSelect) rankingSelect.value = rankingControlValue();
             if (stickySortSelect) stickySortSelect.value = strategyControlValue();
             if (tagSelect) tagSelect.value = state.tag;
             if (stickyTagSelect) stickyTagSelect.value = state.tag;
             if (themeSelect) themeSelect.value = state.theme;
             if (stickyThemeSelect) stickyThemeSelect.value = state.theme;
-            if (turnoverSelect) turnoverSelect.value = String(state.turnover);
+            if (turnoverSelect) turnoverSelect.value = String(effectiveTurnoverFilter());
             if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(effectiveTurnoverFilter());
             if (limitSelect) limitSelect.value = limitControlValue();
             if (stickyLimitSelect) stickyLimitSelect.value = limitControlValue();
@@ -1129,6 +1312,9 @@
               event.stopPropagation();
               clearLongPressTimer();
               const nextTimeframe = String(btn.dataset.value || state.timeframe);
+              if (btn.disabled || (isDailyOnlySort() && nextTimeframe !== "daily")) {
+                return;
+              }
               if (longPressTriggered) {
                 longPressTriggered = false;
                 return;
@@ -2038,6 +2224,9 @@
               scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("can_slim"));
             } else if (state.sort === "strategy_rsi2") {
               scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
+            } else if (state.sort === "strategy_high_pullback_30") {
+              list.innerHTML = '<div class="empty-cell">高値調整を判定中...</div>';
+              scannerBase = await filterHighPullback30Records(scannerBase);
             }
             filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
           }
@@ -2047,12 +2236,13 @@
             isCustomCodeMode() || isListMode() ? DEFAULT_INDEX_SORT : state.sort,
             state.tag,
             state.theme,
-            state.turnover,
+            effectiveTurnoverFilter(),
             state.limit,
             state.rangeMonths,
             state.timeframe,
             state.deviationFilters,
-            state.selectedStrategies
+            state.selectedStrategies,
+            isDailyOnlySort() ? highPullbackDropPct() : ""
           );
           if (stickySortSelect) {
             stickySortSelect.value = strategyControlValue();

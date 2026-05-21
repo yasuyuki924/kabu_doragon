@@ -378,6 +378,41 @@ def evaluate_rsi2_pullback(context: dict[str, Any]) -> StrategyMatchResult:
     return _with_result(matched, score, reasons, False, [], metrics, ["pullback", "mean_reversion"])
 
 
+def evaluate_high_pullback_30(context: dict[str, Any]) -> StrategyMatchResult:
+    row = context["row"]
+    params = context["params"]
+    metrics = dict(row.get("highPullback30") or {})
+    if not metrics.get("detected"):
+        return _base_result(metrics)
+
+    drop_rate = metrics.get("dropRate")
+    bars_to_low = metrics.get("barsToLow")
+    current_drawdown = metrics.get("currentDrawdownPct")
+    reasons: list[str] = []
+    score = float(drop_rate or 0)
+    if drop_rate is not None:
+        reasons.append(f"200本最高値から{drop_rate:.1f}%調整")
+    if bars_to_low is not None:
+        reasons.append(f"高値後{bars_to_low}本で安値形成")
+    if current_drawdown is not None:
+        reasons.append(f"現在値は高値から{current_drawdown:.1f}%下")
+
+    return _with_result(
+        True,
+        score,
+        reasons,
+        False,
+        [],
+        {
+            **metrics,
+            "lookbackBars": params["lookbackBars"],
+            "lookaheadBars": params["lookaheadBars"],
+            "minDropPct": params["minDropPct"],
+        },
+        ["daily_only", "pullback", "reset"],
+    )
+
+
 STRATEGY_PRESETS: list[StrategyPreset] = [
     StrategyPreset(
         id="minervini_trend_template",
@@ -476,6 +511,29 @@ STRATEGY_PRESETS: list[StrategyPreset] = [
         displayMetrics=["rsi2", "consecutiveDownDays", "distanceToMa50", "distanceToMa150", "pullbackDepthPct"],
         reasonTemplates={},
         evaluate=evaluate_rsi2_pullback,
+    ),
+    StrategyPreset(
+        id="high_pullback_30",
+        name="High Pullback 30%",
+        description="直近200本高値の後、40本以内に30%以上調整した銘柄を拾う。",
+        params={
+            "lookbackBars": 200,
+            "lookaheadBars": 40,
+            "minDropPct": 30.0,
+            "timeframe": "daily",
+        },
+        displayMetrics=[
+            "highest200",
+            "highDate",
+            "afterLow",
+            "afterLowDate",
+            "barsToLow",
+            "dropRate",
+            "currentClose",
+            "currentDrawdownPct",
+        ],
+        reasonTemplates={},
+        evaluate=evaluate_high_pullback_30,
     ),
 ]
 
