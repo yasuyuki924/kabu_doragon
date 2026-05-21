@@ -54,6 +54,7 @@
         const pickedLink = document.getElementById("indexPickedLink");
         const picksMenuButton = document.getElementById("indexPicksMenuButton");
         const picksMenu = document.getElementById("indexPicksMenu");
+        const picksMenuToggle = picksMenuButton || pickedLink;
         const updatedStatus = document.getElementById("indexUpdatedStatus");
         const refreshButton = document.getElementById("indexRefreshButton");
         const addCodesButton = document.getElementById("indexAddCodesButton");
@@ -159,13 +160,24 @@
             .sort();
         }
 
+        function compactOverviewDatesByPeriod(dates, timeframe) {
+          if (timeframe === "daily") {
+            return dates;
+          }
+          const latestByPeriod = new Map();
+          dates.forEach((dateValue) => {
+            latestByPeriod.set(overviewDatePeriodKey(dateValue, timeframe), dateValue);
+          });
+          return [...latestByPeriod.values()].sort();
+        }
+
         function getOverviewDatesForTimeframe(timeframe = state.timeframe) {
           const key = timeframe === "weekly" ? "weekly" : timeframe === "monthly" ? "monthly" : "daily";
           const indexedDates = normalizeOverviewDateList(state.overviewDateIndex?.[key]);
           if (indexedDates.length) {
-            return indexedDates;
+            return compactOverviewDatesByPeriod(indexedDates, key);
           }
-          return normalizeOverviewDateList(state.manifest?.availableDates || []);
+          return compactOverviewDatesByPeriod(normalizeOverviewDateList(state.manifest?.availableDates || []), key);
         }
 
         function overviewDatePeriodKey(dateValue, timeframe) {
@@ -600,12 +612,12 @@
         }
 
         function setPicksMenuOpen(isOpen) {
-          if (!picksMenu || !picksMenuButton) {
+          if (!picksMenu || !picksMenuToggle) {
             return;
           }
           picksMenu.hidden = !isOpen;
           picksMenu.classList.toggle("is-open", isOpen);
-          picksMenuButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+          picksMenuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
         }
       
         function buildDeviationFilterFromBounds(minValue, maxValue) {
