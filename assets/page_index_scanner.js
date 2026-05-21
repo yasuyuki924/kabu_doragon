@@ -140,6 +140,8 @@
           chartObserver: null,
           chartPayloadCache: new Map(),
           chartRequestCache: new Map(),
+          highPullbackRecentPayloadCache: new Map(),
+          highPullbackRecentRequestCache: new Map(),
           fullChartPayloadCache: new Map(),
           fullChartRequestCache: new Map(),
           chartRenderedCodes: new Set(),
@@ -156,7 +158,9 @@
         const DAILY_ONLY_SORT_KEYS = new Set(["strategy_high_pullback_30"]);
         const HIGH_PULLBACK_STRATEGY_ID = "high_pullback_30";
         const HIGH_PULLBACK_MIN_BARS = 200;
-        const HIGH_PULLBACK_LOOKAHEAD_BARS = 40;
+        const HIGH_PULLBACK_LOOKAHEAD_BARS = 10;
+        const HIGH_PULLBACK_RECENT_ACHIEVEMENT_BARS = 5;
+        const HIGH_PULLBACK_FILTER_CONCURRENCY = 24;
         const HIGH_PULLBACK_DROP_PCT_OPTIONS = [25, 30];
         const DEFAULT_HIGH_PULLBACK_DROP_PCT = 25;
 
@@ -284,6 +288,13 @@
           if (dropRate < highPullbackDropPct()) {
             return null;
           }
+          const windowStartIndex = eligibleRows.length - windowRows.length;
+          const lowWindowIndex = highIndex + 1 + lowIndex;
+          const lowEligibleIndex = windowStartIndex + lowWindowIndex;
+          const barsSinceLow = eligibleRows.length - 1 - lowEligibleIndex;
+          if (barsSinceLow >= HIGH_PULLBACK_RECENT_ACHIEVEMENT_BARS) {
+            return null;
+          }
           const currentClose = Number(eligibleRows[eligibleRows.length - 1]?.close);
           return {
             highest200: roundNumber(highest, 4),
@@ -291,21 +302,29 @@
             afterLow: roundNumber(afterLow, 4),
             afterLowDate: afterRows[lowIndex].date,
             barsToLow,
+            barsSinceLow,
             dropRate: roundNumber(dropRate, 4),
             currentClose: Number.isFinite(currentClose) ? roundNumber(currentClose, 4) : null,
             currentDrawdownPct: Number.isFinite(currentClose) ? roundNumber(((highest - currentClose) / highest) * 100, 4) : null,
           };
         }
 
+        function hasHighPullbackLookbackRows(rows, selectedDate) {
+          return (Array.isArray(rows) ? rows : []).filter((row) => row?.date && (!selectedDate || row.date <= selectedDate)).length >= HIGH_PULLBACK_MIN_BARS;
+        }
+
         function attachHighPullback30Match(record, metrics) {
           const strategyMatches = [...new Set([...(record.strategyMatches || []), HIGH_PULLBACK_STRATEGY_ID])];
           const strategyScores = { ...(record.strategyScores || {}), [HIGH_PULLBACK_STRATEGY_ID]: metrics.dropRate };
           const strategyMetrics = { ...(record.strategyMetrics || {}), [HIGH_PULLBACK_STRATEGY_ID]: metrics };
+          const highLabel = metrics.highDate ? ` (${metrics.highDate})` : "";
+          const lowLabel = metrics.afterLowDate ? ` (${metrics.afterLowDate})` : "";
+          const barsLabel = metrics.barsToLow != null ? `${metrics.barsToLow}本後に ` : "";
           const strategyReasons = {
             ...(record.strategyReasons || {}),
             [HIGH_PULLBACK_STRATEGY_ID]: [
-              `200本最高値 ${formatNumber(metrics.highest200, 0)} (${metrics.highDate})`,
-              `${metrics.barsToLow}本後に -${formatNumber(metrics.dropRate, 1)}% 調整`,
+              `高値 ${formatNumber(metrics.highest200, 0)}${highLabel}`,
+              `${barsLabel}安値 ${formatNumber(metrics.afterLow, 0)}${lowLabel} / -${formatNumber(metrics.dropRate, 1)}%`,
             ],
           };
           return {
@@ -316,6 +335,14 @@
             strategyReasons,
             highPullback30Candidate: true,
             highPullback30DropRate: metrics.dropRate,
+            highPullback30DropDistance: Math.abs(Number(metrics.dropRate) - highPullbackDropPct()),
+            highPullback30SortBand:
+              metrics.currentDrawdownPct != null &&
+              metrics.currentDrawdownPct >= highPullbackDropPct() - 5 &&
+              metrics.currentDrawdownPct <= highPullbackDropPct() + 10
+                ? 0
+                : 1,
+            highPullback30CurrentDrawdownPct: metrics.currentDrawdownPct,
             highPullback30HighDate: metrics.highDate,
             highPullback30LowDate: metrics.afterLowDate,
             highPullback30BarsToLow: metrics.barsToLow,
@@ -324,27 +351,27 @@
 
         async function filterHighPullback30Records(records) {
           const out = [];
-          await mapWithConcurrency(records, 12, async (record) => {
+          await mapWithConcurrency(records, HIGH_PULLBACK_FILTER_CONCURRENCY, async (record) => {
             if ((record.strategyMatches || []).includes(HIGH_PULLBACK_STRATEGY_ID)) {
               out.push(record);
               return;
             }
-            const currentDrawdown = Number(record.distanceTo52wHighPct);
-            if (!Number.isFinite(currentDrawdown) || currentDrawdown < highPullbackDropPct()) {
+            const high52w = Number(record.high52w);
+            const low52w = Number(record.low52w);
+            const rangeDrop = high52w > 0 && Number.isFinite(low52w) ? ((high52w - low52w) / high52w) * 100 : NaN;
+            if (!Number.isFinite(rangeDrop) || rangeDrop < highPullbackDropPct()) {
               return;
             }
             try {
               let metrics = null;
+              let recentRows = null;
               try {
-                const inspected = await loadRecentTickerForChart(record.code, {
-                  selectedDate: state.selectedDate,
-                  allowStaleSelectedDate: true,
-                });
-                metrics = findHighPullback30Match(inspected.payload?.ohlcv || [], state.selectedDate);
+                recentRows = await loadHighPullbackRecentRows(record.code);
+                metrics = findHighPullback30Match(recentRows, state.selectedDate);
               } catch (_recentError) {
                 metrics = null;
               }
-              if (!metrics) {
+              if (!metrics && !hasHighPullbackLookbackRows(recentRows, state.selectedDate)) {
                 metrics = findHighPullback30Match(await loadFullChartRows(record.code), state.selectedDate);
               }
               if (metrics) {
@@ -1758,8 +1785,6 @@
           state.chartRenderedCodes = new Set();
           state.chartPayloadCache.clear();
           state.chartRequestCache.clear();
-          state.fullChartPayloadCache.clear();
-          state.fullChartRequestCache.clear();
           state.chartBaselineShape = null;
         }
 
@@ -1881,7 +1906,7 @@
         }
 
         async function loadFullChartRows(code) {
-          const cacheKey = `${state.selectedDate}:${code}`;
+          const cacheKey = String(code);
           const cached = state.fullChartPayloadCache.get(cacheKey);
           if (cached) {
             return cached;
@@ -1907,6 +1932,32 @@
             );
           }
           return state.fullChartRequestCache.get(cacheKey);
+        }
+
+        async function loadHighPullbackRecentRows(code) {
+          const cacheKey = String(code);
+          const cached = state.highPullbackRecentPayloadCache.get(cacheKey);
+          if (cached) {
+            return cached;
+          }
+          if (!state.highPullbackRecentRequestCache.has(cacheKey)) {
+            state.highPullbackRecentRequestCache.set(
+              cacheKey,
+              loadRecentTickerForChart(code, {
+                selectedDate: state.selectedDate,
+                allowStaleSelectedDate: true,
+              })
+                .then((inspected) => {
+                  const rows = inspected.payload?.ohlcv || [];
+                  state.highPullbackRecentPayloadCache.set(cacheKey, rows);
+                  return rows;
+                })
+                .finally(() => {
+                  state.highPullbackRecentRequestCache.delete(cacheKey);
+                })
+            );
+          }
+          return state.highPullbackRecentRequestCache.get(cacheKey);
         }
 
         async function ensureScannerCardChart(record, options = {}) {

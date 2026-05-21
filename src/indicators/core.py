@@ -39,7 +39,8 @@ TREND_TURN_THRESHOLDS = SimpleNamespace(
 )
 HIGH_PULLBACK_THRESHOLDS = SimpleNamespace(
     lookback_bars=200,
-    lookahead_bars=40,
+    lookahead_bars=10,
+    recent_achievement_bars=5,
     min_drop_pct=30.0,
 )
 
@@ -229,6 +230,9 @@ def detect_high_pullback_30(
     drop_rate = ((highest - after_low) / highest) * 100
     if drop_rate < HIGH_PULLBACK_THRESHOLDS.min_drop_pct:
         return {"detected": False}
+    bars_since_low = index - low_index
+    if bars_since_low >= HIGH_PULLBACK_THRESHOLDS.recent_achievement_bars:
+        return {"detected": False}
     close = float(rows[index]["close"])
     return {
         "detected": True,
@@ -237,6 +241,7 @@ def detect_high_pullback_30(
         "afterLow": round(after_low, 4),
         "afterLowDate": str(rows[low_index]["date"]),
         "barsToLow": low_index - high_index,
+        "barsSinceLow": bars_since_low,
         "dropRate": round(drop_rate, 4),
         "currentClose": round(close, 4),
         "currentDrawdownPct": round(((highest - close) / highest) * 100, 4),

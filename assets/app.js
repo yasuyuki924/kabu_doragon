@@ -111,6 +111,7 @@
       formatSignedPercentHtml,
       formatSnapshotBaseDate,
       formatSnapshotGeneratedAt,
+      roundNumber,
       getActiveDeviationDraft,
       getActiveDeviationFilter,
       getActiveDeviationSortKey,
@@ -2567,13 +2568,21 @@
     if (sortKey === "watch_candidates") {
       return items.sort((a, b) => compareNullableNumbers(b.watchCandidateScore, a.watchCandidateScore));
     }
+    if (sortKey === "strategy_high_pullback_30") {
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(a.highPullback30DropDistance, b.highPullback30DropDistance) ||
+          compareNullableNumbers(b.highPullback30DropRate, a.highPullback30DropRate) ||
+          compareNullableNumbers(a.changePercent, b.changePercent) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     const strategySortMap = {
       strategy_minervini: "minervini_trend_template",
       strategy_stage2: "stan_weinstein_stage2",
       strategy_turtle: "turtle_donchian_breakout",
       strategy_canslim: "can_slim",
       strategy_rsi2: "rsi2_pullback",
-      strategy_high_pullback_30: "high_pullback_30",
     };
     if (strategySortMap[sortKey]) {
       const strategyId = strategySortMap[sortKey];

@@ -394,6 +394,8 @@ def evaluate_high_pullback_30(context: dict[str, Any]) -> StrategyMatchResult:
         reasons.append(f"200本最高値から{drop_rate:.1f}%調整")
     if bars_to_low is not None:
         reasons.append(f"高値後{bars_to_low}本で安値形成")
+    if metrics.get("barsSinceLow") is not None:
+        reasons.append(f"下落達成から{metrics['barsSinceLow']}本以内")
     if current_drawdown is not None:
         reasons.append(f"現在値は高値から{current_drawdown:.1f}%下")
 
@@ -407,6 +409,7 @@ def evaluate_high_pullback_30(context: dict[str, Any]) -> StrategyMatchResult:
             **metrics,
             "lookbackBars": params["lookbackBars"],
             "lookaheadBars": params["lookaheadBars"],
+            "recentAchievementBars": params["recentAchievementBars"],
             "minDropPct": params["minDropPct"],
         },
         ["daily_only", "pullback", "reset"],
@@ -515,10 +518,11 @@ STRATEGY_PRESETS: list[StrategyPreset] = [
     StrategyPreset(
         id="high_pullback_30",
         name="High Pullback 30%",
-        description="直近200本高値の後、40本以内に30%以上調整した銘柄を拾う。",
+        description="直近200本高値の後、10本以内に30%以上調整し、その達成日が直近5本以内の銘柄を拾う。",
         params={
             "lookbackBars": 200,
-            "lookaheadBars": 40,
+            "lookaheadBars": 10,
+            "recentAchievementBars": 5,
             "minDropPct": 30.0,
             "timeframe": "daily",
         },
@@ -528,6 +532,7 @@ STRATEGY_PRESETS: list[StrategyPreset] = [
             "afterLow",
             "afterLowDate",
             "barsToLow",
+            "barsSinceLow",
             "dropRate",
             "currentClose",
             "currentDrawdownPct",
