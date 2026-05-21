@@ -61,6 +61,7 @@
         const addCodesButton = document.getElementById("indexAddCodesButton");
         const exportTradingViewButton = document.getElementById("indexExportTradingViewButton");
         const exportHyperButton = document.getElementById("indexExportHyperButton");
+        const viewListButton = document.getElementById("indexViewListButton");
         const saveListButton = document.getElementById("indexSaveListButton");
         const openListButton = document.getElementById("indexOpenListButton");
         const exitListButton = document.getElementById("indexExitListButton");
@@ -138,6 +139,7 @@
           activeListName: "",
           activeListCodes: [],
           activeListMissing: [],
+          activeListViewing: false,
           chartObserver: null,
           chartPayloadCache: new Map(),
           chartRequestCache: new Map(),
@@ -424,7 +426,7 @@
         }
 
         function isListMode() {
-          return Array.isArray(state.activeListCodes) && state.activeListCodes.length > 0;
+          return state.activeListViewing === true;
         }
 
         function limitControlValue() {
@@ -569,12 +571,24 @@
           state.picks = next;
           state.activeListCodes = Object.keys(next);
           state.activeListName = name;
+          state.activeListViewing = true;
+        }
+
+        function viewCurrentPickList() {
+          const picks = loadScannerPicks();
+          const normalized = dedupeScannerPicks(sortedScannerPicks(picks));
+          state.picks = picks;
+          state.activeListCodes = normalized.map((pick) => String(pick.code || "").trim().toUpperCase()).filter(Boolean);
+          state.activeListMissing = [];
+          state.activeListName = "現在のList";
+          state.activeListViewing = true;
         }
 
         function exitListMode() {
           state.activeListCodes = [];
           state.activeListMissing = [];
           state.activeListName = "";
+          state.activeListViewing = false;
           state.customCodes = [];
           state.customCodeMissing = [];
           state.customCodeText = "";
@@ -1476,6 +1490,11 @@
         saveListButton?.addEventListener("click", () => {
           setPicksMenuOpen(false);
           openListSaveModal();
+        });
+        viewListButton?.addEventListener("click", async () => {
+          setPicksMenuOpen(false);
+          viewCurrentPickList();
+          await render();
         });
         openListButton?.addEventListener("click", () => {
           setPicksMenuOpen(false);
@@ -2400,7 +2419,9 @@
                 ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div><div class="empty-cell">表示できる指定コードがありません。</div>`
                 : '<div class="empty-cell">指定コードを入力して「適用」を押してください。</div>'
               : isListMode()
-                ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.activeListMissing.join(", "))}</div><div class="empty-cell">表示できるList銘柄がありません。</div>`
+                ? state.activeListCodes.length
+                  ? `${state.activeListMissing.length ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.activeListMissing.join(", "))}</div>` : ""}<div class="empty-cell">表示できるList銘柄がありません。</div>`
+                  : '<div class="empty-cell">Listが空です。</div>'
               : '<div class="empty-cell">該当する銘柄がありません。</div>';
             return;
           }
