@@ -2386,6 +2386,12 @@ body[data-page="index-scanner"] .index-scanner-list {
   letter-spacing: 0;
 }
 
+body[data-page="index-scanner"] .scanner-stop-high-badge--compact {
+  width: 17px;
+  height: 17px;
+  font-size: 0.59rem;
+}
+
 .scanner-stop-high-badge--compact.scanner-stop-high-badge--peeled {
   background: rgba(201, 92, 137, 0.86);
   border-color: rgba(251, 182, 213, 0.36);
@@ -2400,6 +2406,13 @@ body[data-page="index-scanner"] .index-scanner-list {
   padding: 6px 8px 5px;
   border-radius: 10px 10px 0 0;
   background: linear-gradient(180deg, rgba(22, 32, 51, 0.82) 0%, rgba(12, 19, 32, 0.56) 100%);
+}
+
+body[data-page="index-scanner"] .scanner-card-header {
+  grid-template-columns: minmax(0, 1.68fr) 0.82fr 0.72fr 0.62fr 20px;
+  gap: 11px;
+  min-height: 33px;
+  padding: 5px 7px 4px;
 }
 
 .scanner-card-header-left,
@@ -2420,6 +2433,16 @@ body[data-page="index-scanner"] .index-scanner-list {
   font-size: 0.84rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+body[data-page="index-scanner"] .scanner-card-rank {
+  font-size: 0.77rem;
+}
+
+body[data-page="index-scanner"] .scanner-compact-change {
+  font-size: 1.02rem;
+  font-weight: 950;
+  letter-spacing: 0.01em;
 }
 
 .scanner-card-identity {
@@ -3265,6 +3288,10 @@ body[data-page="index-scanner"] .index-scanner-list {
     padding: 2px;
   }
 
+  body[data-page="index-scanner"] .scanner-list {
+    gap: 15px;
+  }
+
   body[data-page="index-scanner"] .scanner-rank-table {
     overflow-x: auto;
     border-radius: 10px 10px 0 0;
@@ -3432,7 +3459,7 @@ body[data-page="index-scanner"] .index-scanner-list {
   }
 
   body[data-page="index-scanner"] .scanner-chart {
-    height: 300px;
+    height: 276px;
   }
 
   body[data-page="picked"] .picked-scanner-item .scanner-chart {
@@ -3440,10 +3467,29 @@ body[data-page="index-scanner"] .index-scanner-list {
   }
 
   body[data-page="index-scanner"] .scanner-item-links {
+    gap: 7px;
     flex-wrap: nowrap;
     align-items: center;
     margin-top: 0;
     padding: 3px 5px 1px;
+    font-size: 0.63rem;
+  }
+
+  body[data-page="index-scanner"] .scanner-item-links a,
+  body[data-page="index-scanner"] .scanner-item-links .scanner-external-link {
+    min-height: 22px;
+    padding: 0 8px;
+    font-size: 0.63rem;
+  }
+
+  body[data-page="index-scanner"] .scanner-card-timeframe {
+    gap: 2px;
+  }
+
+  body[data-page="index-scanner"] .scanner-card-timeframe-btn {
+    width: 24px;
+    height: 20px;
+    font-size: 0.63rem;
   }
 
   body[data-page="picked"] .picked-scanner-item .scanner-item-links {
@@ -3482,6 +3528,15 @@ body[data-page="index-scanner"] .index-scanner-list {
   body[data-page="index-scanner"] .scanner-pick-toggle {
     order: initial;
     margin-left: 0;
+    min-height: 24px;
+    gap: 5px;
+    padding: 0 9px;
+    font-size: 0.63rem;
+  }
+
+  body[data-page="index-scanner"] .scanner-pick-toggle input {
+    width: 13px;
+    height: 13px;
   }
 }
 

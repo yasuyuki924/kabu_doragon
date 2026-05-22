@@ -371,9 +371,37 @@
           };
         }
 
+        function highPullbackMetricsFromRecord(record) {
+          const metrics = record?.highPullback30 || {};
+          const dropRate = record?.highPullback30DropRate ?? metrics.dropRate;
+          if (!Number.isFinite(Number(dropRate))) {
+            return null;
+          }
+          return {
+            highest200: record?.highPullback30Highest200 ?? metrics.highest200,
+            highDate: record?.highPullback30HighDate ?? metrics.highDate,
+            afterLow: record?.highPullback30AfterLow ?? metrics.afterLow,
+            afterLowDate: record?.highPullback30LowDate ?? metrics.afterLowDate,
+            barsToLow: record?.highPullback30BarsToLow ?? metrics.barsToLow,
+            barsSinceLow: metrics.barsSinceLow,
+            dropRate: Number(dropRate),
+            currentClose: metrics.currentClose,
+            currentDrawdownPct: record?.highPullback30CurrentDrawdownPct ?? metrics.currentDrawdownPct,
+          };
+        }
+
         async function filterHighPullback30Records(records) {
           const out = [];
           await mapWithConcurrency(records, HIGH_PULLBACK_FILTER_CONCURRENCY, async (record) => {
+            const savedHighPullbackMatch =
+              record.highPullback30Candidate === true || (record.strategyMatches || []).includes(HIGH_PULLBACK_STRATEGY_ID);
+            if (savedHighPullbackMatch) {
+              const metrics = highPullbackMetricsFromRecord(record);
+              if (metrics) {
+                out.push(attachHighPullback30Match(record, metrics));
+                return;
+              }
+            }
             const high52w = Number(record.high52w);
             const low52w = Number(record.low52w);
             const rangeDrop = high52w > 0 && Number.isFinite(low52w) ? ((high52w - low52w) / high52w) * 100 : NaN;
@@ -652,16 +680,10 @@
         }
 
         function renderRankingOptions(select) {
-          const useLabel = isDailyOnlySort();
           if (rankingLabel) {
-            rankingLabel.hidden = !useLabel;
+            rankingLabel.hidden = true;
           }
           if (!select) {
-            return;
-          }
-          if (useLabel) {
-            select.disabled = true;
-            select.hidden = true;
             return;
           }
           select.disabled = false;
@@ -1156,9 +1178,8 @@
             if (control === rankingSelect) {
               if (isDailyOnlySort()) {
                 state.highPullbackDropPct = DEFAULT_HIGH_PULLBACK_DROP_PCT;
-              } else {
-                state.sort = readRankingControlValue(rankingSelect);
               }
+              state.sort = readRankingControlValue(rankingSelect);
             } else if (control === sortSelect || control === stickySortSelect) {
               state.sort = readStrategyControlValue(activeSortControl);
               state.highPullbackDropPct = highPullbackDropPct();

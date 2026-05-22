@@ -2492,9 +2492,16 @@
     if (rankingSort?.key) {
       const direction = rankingSort.direction === "asc" ? "asc" : "desc";
       return items.sort((a, b) => {
+        const leftValue = a[rankingSort.key];
+        const rightValue = b[rankingSort.key];
+        const leftMissing = leftValue == null;
+        const rightMissing = rightValue == null;
+        if (leftMissing || rightMissing) {
+          return leftMissing === rightMissing ? 0 : leftMissing ? 1 : -1;
+        }
         const compared = direction === "asc"
-          ? compareNullableNumbers(a[rankingSort.key], b[rankingSort.key])
-          : compareNullableNumbers(b[rankingSort.key], a[rankingSort.key]);
+          ? compareNullableNumbers(leftValue, rightValue)
+          : compareNullableNumbers(rightValue, leftValue);
         return compared || String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" });
       });
     }
@@ -3220,7 +3227,7 @@
     return `
       <article class="scanner-item${stopHighClass}${pickedClass}" data-scanner-card-code="${escapeHtml(record.code)}">
         ${renderScannerCompactHeader(record, rank, state, rankingKey)}
-        <div class="scanner-item-chart-wrap" data-pick-chart-code="${escapeHtml(record.code)}" title="ダブルクリックでPick切替">
+        <div class="scanner-item-chart-wrap" data-pick-chart-code="${escapeHtml(record.code)}">
           <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
         <div class="scanner-item-links">
