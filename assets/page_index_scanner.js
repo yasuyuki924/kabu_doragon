@@ -7,6 +7,18 @@
           resolveHeaderStatusState,
         } = window.KabuPageIndexScannerStatus;
         const sortSelect = document.getElementById("indexSort");
+        const strategyDropdown = document.getElementById("indexStrategyDropdown");
+        const strategyDropdownButton = document.getElementById("indexStrategyDropdownButton");
+        const strategyDropdownMenu = document.getElementById("indexStrategyDropdownMenu");
+        const rankingDropdown = document.getElementById("indexRankingDropdown");
+        const rankingDropdownButton = document.getElementById("indexRankingDropdownButton");
+        const rankingDropdownMenu = document.getElementById("indexRankingDropdownMenu");
+        const limitDropdown = document.getElementById("indexLimitDropdown");
+        const limitDropdownButton = document.getElementById("indexLimitDropdownButton");
+        const limitDropdownMenu = document.getElementById("indexLimitDropdownMenu");
+        const turnoverDropdown = document.getElementById("indexTurnoverDropdown");
+        const turnoverDropdownButton = document.getElementById("indexTurnoverDropdownButton");
+        const turnoverDropdownMenu = document.getElementById("indexTurnoverDropdownMenu");
         const stickyBar = document.getElementById("indexStickyBar");
         const stickyPickedLink = document.getElementById("indexStickyPickedLink");
         const stickyRefreshButton = document.getElementById("indexStickyRefreshButton");
@@ -534,6 +546,7 @@
           if (rankingSelect) rankingSelect.value = rankingControlValue();
           if (sortSelect) sortSelect.value = strategyControlValue();
           if (stickySortSelect) stickySortSelect.value = strategyControlValue();
+          syncHeaderDropdownsUi();
         }
 
         function openListSaveModal() {
@@ -679,6 +692,89 @@
           ].join("");
         }
 
+        function strategyDropdownLabel() {
+          if (!sortSelect) {
+            return "ストラテジー";
+          }
+          const selected = sortSelect.options[sortSelect.selectedIndex];
+          return selected?.textContent?.trim() || "ストラテジー";
+        }
+
+        function customDropdowns() {
+          return [
+            { root: strategyDropdown, select: sortSelect, button: strategyDropdownButton, menu: strategyDropdownMenu, fallback: "ストラテジー", optionAttribute: "data-strategy-dropdown-value" },
+            { root: rankingDropdown, select: rankingSelect, button: rankingDropdownButton, menu: rankingDropdownMenu, fallback: "ランキング", optionAttribute: "data-ranking-dropdown-value" },
+            { root: limitDropdown, select: limitSelect, button: limitDropdownButton, menu: limitDropdownMenu, fallback: "表示件数", optionAttribute: "data-limit-dropdown-value" },
+            { root: turnoverDropdown, select: turnoverSelect, button: turnoverDropdownButton, menu: turnoverDropdownMenu, fallback: "売買代金", optionAttribute: "data-turnover-dropdown-value" },
+          ];
+        }
+
+        function customDropdownLabel(control) {
+          const selected = control.select?.options?.[control.select.selectedIndex];
+          return selected?.textContent?.trim() || control.fallback;
+        }
+
+        function closeCustomDropdown(control) {
+          if (!control.menu || !control.button) {
+            return;
+          }
+          control.menu.hidden = true;
+          control.button.setAttribute("aria-expanded", "false");
+        }
+
+        function closeStrategyDropdown() {
+          closeCustomDropdown(customDropdowns()[0]);
+        }
+
+        function closeAllHeaderDropdowns(exceptControl = null) {
+          customDropdowns().forEach((control) => {
+            if (control !== exceptControl) {
+              closeCustomDropdown(control);
+            }
+          });
+        }
+
+        function syncCustomDropdownUi(control) {
+          if (!control.select || !control.button || !control.menu) {
+            return;
+          }
+          control.button.textContent = customDropdownLabel(control);
+          control.button.classList.toggle("index-sticky-select--muted", control.select.classList.contains("index-sticky-select--muted"));
+          control.menu.querySelectorAll(`[${control.optionAttribute}]`).forEach((option) => {
+            const isSelected = option.getAttribute(control.optionAttribute) === control.select.value;
+            option.classList.toggle("is-selected", isSelected);
+            option.setAttribute("aria-selected", isSelected ? "true" : "false");
+          });
+        }
+
+        function syncStrategyDropdownUi() {
+          syncCustomDropdownUi(customDropdowns()[0]);
+        }
+
+        function syncHeaderDropdownsUi() {
+          customDropdowns().forEach(syncCustomDropdownUi);
+        }
+
+        function renderCustomDropdownOptions(control) {
+          if (!control.select || !control.menu) {
+            return;
+          }
+          control.menu.innerHTML = [...control.select.options].map((option) => {
+            const value = escapeHtml(option.value);
+            const label = escapeHtml(option.textContent || "");
+            return `<button class="index-strategy-dropdown-option" type="button" role="option" ${control.optionAttribute}="${value}">${label}</button>`;
+          }).join("");
+          syncCustomDropdownUi(control);
+        }
+
+        function renderStrategyDropdownOptions() {
+          renderCustomDropdownOptions(customDropdowns()[0]);
+        }
+
+        function renderHeaderDropdownOptions() {
+          customDropdowns().forEach(renderCustomDropdownOptions);
+        }
+
         function renderRankingOptions(select) {
           if (rankingLabel) {
             rankingLabel.hidden = true;
@@ -702,14 +798,17 @@
           [sortSelect, stickySortSelect].filter(Boolean).forEach((select) => {
             select.classList.toggle("index-sticky-select--muted", rankingActive && !strategyActive);
           });
+          strategyDropdownButton?.classList.toggle("index-sticky-select--muted", rankingActive && !strategyActive);
           [rankingSelect, rankingLabel].filter(Boolean).forEach((control) => {
             control.classList.toggle("index-sticky-select--muted", strategyActive);
           });
+          rankingDropdownButton?.classList.toggle("index-sticky-select--muted", strategyActive);
         }
 
         renderSortOptions(sortSelect);
         renderSortOptions(stickySortSelect);
         renderRankingOptions(rankingSelect);
+        renderHeaderDropdownOptions();
       
         const params = new URLSearchParams(window.location.search);
         const indexSortKeys = new Set([...strategySortKeys, ...rankingSortKeys]);
@@ -728,6 +827,7 @@
         state.highPullbackDropPct = normalizeHighPullbackDropPct(params.get("pullback"));
         enforceDailyOnlySortTimeframe();
         renderRankingOptions(rankingSelect);
+        renderHeaderDropdownOptions();
         state.deviationDrafts = {
           deviation25: { ...state.deviationFilters.deviation25 },
           deviation75: { ...state.deviationFilters.deviation75 },
@@ -740,10 +840,11 @@
         if (rankingSelect) {
           rankingSelect.value = rankingControlValue();
         }
-        updateSortPriorityUi();
         themeSelect.value = state.theme;
         turnoverSelect.value = String(effectiveTurnoverFilter());
         limitSelect.value = limitControlValue();
+        updateSortPriorityUi();
+        syncHeaderDropdownsUi();
         if (stickySortSelect) {
           stickySortSelect.value = strategyControlValue();
         }
@@ -819,10 +920,12 @@
 
         function updateDailyOnlySortUi() {
           renderRankingOptions(rankingSelect);
+          renderCustomDropdownOptions(customDropdowns()[1]);
           if (rankingSelect) {
             rankingSelect.value = rankingControlValue();
           }
           updateSortPriorityUi();
+          syncHeaderDropdownsUi();
           updateTimeframeUI();
           updateStickyTimeframeUI();
           updateRangeChip();
@@ -1171,9 +1274,7 @@
           stickyPickedLink.removeAttribute("href");
         }
       
-        [...new Set([sortSelect, rankingSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
-          .forEach((control) => {
-          control.addEventListener("change", async () => {
+        async function handleHeaderControlChange(control) {
             const activeSortControl = stickySortSelect?.matches(":focus") ? stickySortSelect : sortSelect;
             if (control === rankingSelect) {
               if (isDailyOnlySort()) {
@@ -1191,6 +1292,7 @@
             state.limit = readLimitControlValue(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect : limitSelect);
             if (sortSelect) sortSelect.value = strategyControlValue();
             renderRankingOptions(rankingSelect);
+            renderCustomDropdownOptions(customDropdowns()[1]);
             if (rankingSelect) rankingSelect.value = rankingControlValue();
             updateDailyOnlySortUi();
             updateSortPriorityUi();
@@ -1203,6 +1305,7 @@
             if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(effectiveTurnoverFilter());
             if (limitSelect) limitSelect.value = limitControlValue();
             if (stickyLimitSelect) stickyLimitSelect.value = limitControlValue();
+            syncHeaderDropdownsUi();
             const activeDeviationKey = getActiveDeviationSortKey(state.sort);
             if (activeDeviationKey) {
               state.deviationDrafts[activeDeviationKey] = { ...state.deviationFilters[activeDeviationKey] };
@@ -1213,7 +1316,51 @@
               openCustomCodeModal();
             }
             await render();
+        }
+
+        [...new Set([sortSelect, rankingSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
+          .forEach((control) => {
+          control.addEventListener("change", async () => {
+            await handleHeaderControlChange(control);
           });
+        });
+
+        customDropdowns().forEach((control) => {
+          control.button?.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!control.menu || !control.button) {
+              return;
+            }
+            const willOpen = control.menu.hidden;
+            closeAllHeaderDropdowns(control);
+            control.menu.hidden = !willOpen;
+            control.button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+            syncCustomDropdownUi(control);
+          });
+          control.menu?.addEventListener("click", async (event) => {
+            const option = event.target?.closest?.(`[${control.optionAttribute}]`);
+            if (!option || !control.select) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            control.select.value = option.getAttribute(control.optionAttribute) || "";
+            closeCustomDropdown(control);
+            await handleHeaderControlChange(control.select);
+          });
+        });
+
+        document.addEventListener("click", (event) => {
+          if (!customDropdowns().some((control) => control.root?.contains(event.target))) {
+            closeAllHeaderDropdowns();
+          }
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            closeAllHeaderDropdowns();
+          }
         });
       
         [stickyDevMinInput, stickyDevMaxInput].filter(Boolean).forEach((input) => {
@@ -1538,6 +1685,7 @@
           if (rankingSelect) rankingSelect.value = rankingControlValue();
           if (sortSelect) sortSelect.value = strategyControlValue();
           if (stickySortSelect) stickySortSelect.value = strategyControlValue();
+          syncHeaderDropdownsUi();
           await render();
         });
         customCodeClearButton?.addEventListener("click", () => {
@@ -2423,6 +2571,7 @@
           if (stickyTurnoverSelect) {
             stickyTurnoverSelect.value = String(effectiveTurnoverFilter());
           }
+          syncHeaderDropdownsUi();
           updateDailyOnlySortUi();
           updateStickyFiltersUi();
           updateHeaderStatus();
