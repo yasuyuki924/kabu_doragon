@@ -31,11 +31,8 @@ MA_WINDOWS = (5, 25, 50, 75, 140, 150, 160, 200)
 VOLUME_MA_WINDOWS = (5, 20, 25)
 RCI_WINDOWS = (12, 24, 48)
 TREND_TURN_THRESHOLDS = SimpleNamespace(
-    ref_days_below_ma75=10,
-    below_ma75_window=30,
-    below_ma75_min_count=15,
-    above_ma75_window=5,
-    above_ma75_min_count=3,
+    ma200_lookback_days=120,
+    max_above_ma200_count=10,
 )
 HIGH_PULLBACK_THRESHOLDS = SimpleNamespace(
     lookback_bars=200,
@@ -379,44 +376,41 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         trend_turn_reason = ""
         high_pullback_30 = detect_high_pullback_30(rows, index)
 
-        ref_index = index - TREND_TURN_THRESHOLDS.ref_days_below_ma75
-        if ref_index >= 0 and ma75 is not None and ma_map[75][ref_index] is not None and float(rows[ref_index]["close"]) < float(ma_map[75][ref_index]):
-            below_window_start = index - TREND_TURN_THRESHOLDS.below_ma75_window + 1
-            above_window_start = index - TREND_TURN_THRESHOLDS.above_ma75_window + 1
-            if below_window_start >= 0 and above_window_start >= 0:
-                below_count = 0
-                above_count = 0
-                below_window_valid = True
-                above_window_valid = True
+        prev_index = index - 1
+        lookback_start = index - TREND_TURN_THRESHOLDS.ma200_lookback_days
+        if (
+            prev_index >= 0
+            and lookback_start >= 0
+            and ma200 is not None
+            and ma_map[200][prev_index] is not None
+            and close > float(ma200)
+            and float(rows[prev_index]["close"]) <= float(ma_map[200][prev_index])
+        ):
+            above_count = 0
+            lookback_valid = True
+            for pos in range(lookback_start, index):
+                pos_ma200 = ma_map[200][pos]
+                if pos_ma200 is None:
+                    lookback_valid = False
+                    break
+                if float(rows[pos]["close"]) > float(pos_ma200):
+                    above_count += 1
 
-                for pos in range(below_window_start, index + 1):
-                    pos_ma75 = ma_map[75][pos]
-                    if pos_ma75 is None:
-                        below_window_valid = False
-                        break
-                    if float(rows[pos]["close"]) < float(pos_ma75):
-                        below_count += 1
-
-                for pos in range(above_window_start, index + 1):
-                    pos_ma75 = ma_map[75][pos]
-                    if pos_ma75 is None:
-                        above_window_valid = False
-                        break
-                    if float(rows[pos]["close"]) > float(pos_ma75):
-                        above_count += 1
-
-                if below_window_valid and above_window_valid and below_count >= TREND_TURN_THRESHOLDS.below_ma75_min_count and above_count >= TREND_TURN_THRESHOLDS.above_ma75_min_count:
-                    trend_turn_candidate = True
-                    trend_turn_range_pct = float(below_count)
-                    trend_turn_above_ma75_ratio = round(above_count / TREND_TURN_THRESHOLDS.above_ma75_window, 4)
-                    trend_turn_score = int(below_count + above_count)
-                    trend_turn_reason = "|".join(
-                        [
-                            "10日目前MA75下",
-                            f"30日中{below_count}日MA75下",
-                            f"5日中{above_count}日MA75上",
-                        ]
-                    )
+            if lookback_valid and above_count <= TREND_TURN_THRESHOLDS.max_above_ma200_count:
+                ma200_distance = distance_from_baseline(close, ma200)
+                trend_turn_candidate = True
+                trend_turn_breakout_date = str(row["date"])
+                trend_turn_days_after_breakout = 0
+                trend_turn_range_pct = float(above_count)
+                trend_turn_above_ma75_ratio = round(above_count / TREND_TURN_THRESHOLDS.ma200_lookback_days, 4)
+                trend_turn_score = int(TREND_TURN_THRESHOLDS.ma200_lookback_days - above_count)
+                trend_turn_reason = "|".join(
+                    [
+                        "今日MA200上抜け",
+                        f"120日中{above_count}日MA200上",
+                        f"MA200乖離{ma200_distance:.1f}%" if ma200_distance is not None else "MA200乖離-",
+                    ]
+                )
 
         base_row = {
             "date": row["date"],

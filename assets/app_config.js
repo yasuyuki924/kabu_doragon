@@ -48,7 +48,7 @@
       { key: "strategy_stage2", label: "中期上昇入り（Stage 2）" },
       { key: "strategy_turtle", label: "高値ブレイク（Turtle）" },
       { key: "strategy_rsi2", label: "上昇中の押し目（RSI(2)）" },
-      { key: "trend_turn", label: "75日線回復（ベース・リカバリー）" },
+      { key: "trend_turn", label: "200日線回復（ベース・リカバリー）" },
       { key: "strategy_high_pullback_30", label: "高値調整（30% Pullback）" },
     ],
     INDEX_SCANNER_RANKING_OPTIONS: [

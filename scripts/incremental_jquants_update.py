@@ -53,6 +53,7 @@ TICKER_RECENT_DIR = PUBLIC_JSON / "ticker_recent" / "1y" / "ohlcv_ma"
 TICKER_META_DIR = PUBLIC_JSON / "ticker_meta"
 TICKER_DETAIL_DIR = PUBLIC_JSON / "ticker_detail_recent" / "1y"
 OVERVIEW_LITE_DIR = PUBLIC_JSON / "overview_lite"
+OVERVIEW_LITE_INDEX_JSON = OVERVIEW_LITE_DIR / "index.json"
 MANIFEST_JSON = ROOT / "data" / "manifest.json"
 UPDATE_SUMMARY_JSON = ROOT / "data" / "update_summary.json"
 UPDATE_HEALTH_JSON = ROOT / "data" / "update_health.json"
@@ -163,7 +164,20 @@ def detect_running_legacy_updates() -> list[str]:
 
 def load_manifest_latest() -> str:
     manifest = read_json(MANIFEST_JSON, {})
-    return str(manifest.get("latestDate") or "").strip()
+    latest = str(manifest.get("latestDate") or "").strip()
+    if latest:
+        return latest
+    index_payload = read_json(OVERVIEW_LITE_INDEX_JSON, {})
+    daily_dates = [str(item).strip() for item in index_payload.get("daily") or [] if str(item).strip()]
+    return daily_dates[-1] if daily_dates else ""
+
+
+def load_manifest_available_dates(manifest: dict[str, Any]) -> list[str]:
+    available_dates = [str(item).strip() for item in manifest.get("availableDates") or [] if str(item).strip()]
+    if available_dates:
+        return available_dates
+    index_payload = read_json(OVERVIEW_LITE_INDEX_JSON, {})
+    return [str(item).strip() for item in index_payload.get("daily") or [] if str(item).strip()]
 
 
 def discover_codes() -> list[str]:
@@ -483,7 +497,7 @@ def rebuild_public_json_from_ohlcv(codes: list[str], target_date: str, logger: L
 
 def update_manifest(target_date: str) -> None:
     manifest = read_json(MANIFEST_JSON, {})
-    available_dates = [str(item) for item in manifest.get("availableDates") or [] if str(item).strip()]
+    available_dates = load_manifest_available_dates(manifest)
     if target_date not in available_dates:
         available_dates.append(target_date)
     available_dates = sorted(set(available_dates))

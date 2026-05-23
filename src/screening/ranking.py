@@ -151,8 +151,9 @@ def sort_trend_turn_records(records: list[dict[str, object]]) -> list[dict[str, 
     items = [record for record in records if bool(record.get("trendTurnCandidate"))]
     items.sort(
         key=lambda item: (
-            -float(item.get("trendTurnScore") or 0),
-            -float(item.get("trendTurnAboveMa75Ratio") or 0),
+            float(item.get("trendTurnRangePct") or 0),
+            abs(float(item.get("distanceToMa200") or 0)),
+            -float(item.get("volumeRatio25") or 0),
             -float(item.get("changePercent") or 0),
             str(item.get("code") or ""),
         )

@@ -2546,8 +2546,9 @@
     if (sortKey === "trend_turn") {
       return items.sort(
         (a, b) =>
-          compareNullableNumbers(b.trendTurnScore, a.trendTurnScore) ||
-          compareNullableNumbers(b.trendTurnAboveMa75Ratio, a.trendTurnAboveMa75Ratio) ||
+          compareNullableNumbers(a.trendTurnRangePct, b.trendTurnRangePct) ||
+          compareNullableNumbers(Math.abs(a.distanceToMa200 || 0), Math.abs(b.distanceToMa200 || 0)) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
           compareNullableNumbers(b.changePercent, a.changePercent) ||
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
@@ -2654,7 +2655,7 @@
       new_high: "New High",
       new_high_20d: "20D Close High",
       bullish_close_breakout_20d: "陽線クローズブレイク20",
-      trend_turn: "75日線回復（ベース・リカバリー）",
+      trend_turn: "200日線回復（ベース・リカバリー）",
       rebound_signal: "Rebound",
       deviation25: "MA25 Dev",
       deviation75: "MA75 Dev",

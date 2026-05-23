@@ -30,6 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LOGS_DIR = ROOT / "logs"
 MANIFEST_JSON = ROOT / "data" / "manifest.json"
+OVERVIEW_LITE_INDEX_JSON = ROOT / "data" / "public_json" / "overview_lite" / "index.json"
 UPDATE_SUMMARY_JSON = ROOT / "data" / "update_summary.json"
 UPDATE_HEALTH_JSON = ROOT / "data" / "update_health.json"
 SYNC_STATE_JSON = ROOT / "data" / "jquants_sync_state.json"
@@ -83,7 +84,15 @@ def detect_legacy_processes() -> list[str]:
 
 def load_manifest_latest() -> str:
     try:
-        return str(json.loads(MANIFEST_JSON.read_text()).get("latestDate") or "").strip()
+        latest = str(json.loads(MANIFEST_JSON.read_text()).get("latestDate") or "").strip()
+        if latest:
+            return latest
+    except Exception:
+        pass
+    try:
+        index_payload = json.loads(OVERVIEW_LITE_INDEX_JSON.read_text())
+        daily_dates = [str(item).strip() for item in index_payload.get("daily") or [] if str(item).strip()]
+        return daily_dates[-1] if daily_dates else ""
     except Exception:
         return ""
 
