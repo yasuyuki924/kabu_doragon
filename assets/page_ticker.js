@@ -271,11 +271,8 @@
         try {
           const retryChart = await loadRecentTickerForChart(code, {});
           return loadPublicJsonPayload(retryChart);
-        } catch (_retryErr) {
-          const payload = await loadTickerPayload(code);
-          state.chartPayload = payload;
-          state.chartSource = "legacy-fallback";
-          return payload;
+        } catch (retryError) {
+          throw retryError;
         }
       }
     }

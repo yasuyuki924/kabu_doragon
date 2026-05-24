@@ -1916,11 +1916,10 @@
     } catch (error) {
       const reason = error?.recentFallbackReason || error?.message || String(error);
       console.info("[ticker-chart:recent:fallback]", { code, reason });
-      const legacyInspected = await loadTickerPayloadWithDiagnostics(code, options);
+      const recentInspected = await loadRecentTickerForChart(code, { ...options, selectedDate: "", allowStaleSelectedDate: true });
       return {
-        ...legacyInspected,
-        chartPayload: legacyInspected.payload,
-        chartSource: "legacy-fallback",
+        ...recentInspected,
+        chartSource: "recent-stale-fallback",
         fallbackReason: reason,
       };
     }
