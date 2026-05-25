@@ -178,11 +178,20 @@
       </div>
     </div>
 
-    <script src="./assets/app_config.js?v=1.4.112"></script>
-    <script src="./assets/app_utils.js?v=1.4.85"></script>
-    <script src="./assets/app_data.js?v=1.4.106"></script>
-    <script src="./assets/page_index_scanner_status.js?v=1.4.85"></script>
-    <script src="./assets/page_index_scanner.js?v=1.4.150"></script>
-    <script src="./assets/app.js?v=1.4.124"></script>
+    <script>
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const cacheKey = encodeURIComponent(params.get("v") || params.get("ts") || "1.4.151");
+        const scripts = [
+          "./assets/app_config.js",
+          "./assets/app_utils.js",
+          "./assets/app_data.js",
+          "./assets/page_index_scanner_status.js",
+          "./assets/page_index_scanner.js",
+          "./assets/app.js",
+        ];
+        document.write(scripts.map((src) => `<script src="${src}?v=${cacheKey}"><` + `/script>`).join(""));
+      })();
+    </script>
   </body>
 </html>

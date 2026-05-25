@@ -2584,6 +2584,19 @@
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
     }
+    if (sortKey === "strategy_strong_trend_pullback_rebound") {
+      const strategyId = "strong_trend_pullback_rebound";
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(
+            Number((b.strategyScores || {})[strategyId] || b.strongTrendPullbackReboundScore || 0),
+            Number((a.strategyScores || {})[strategyId] || a.strongTrendPullbackReboundScore || 0)
+          ) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     const strategySortMap = {
       strategy_minervini: "minervini_trend_template",
       strategy_stage2: "stan_weinstein_stage2",
@@ -2667,6 +2680,7 @@
       strategy_canslim: "CAN SLIM",
       strategy_rsi2: "上昇中の押し目（RSI(2)）",
       strategy_high_pullback_30: "高値調整（30% Pullback）",
+      strategy_strong_trend_pullback_rebound: "強トレンド押し目リバウンド",
     }[sortKey] || sortKey;
   }
 
@@ -3116,8 +3130,12 @@
           <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
         </div>
       </div>
-      ${renderHighPullbackMeta(record, state)}
+      ${renderScannerStrategyMeta(record, state)}
     `;
+  }
+
+  function renderScannerStrategyMeta(record, state) {
+    return `${renderHighPullbackMeta(record, state)}${renderStrongTrendPullbackMeta(record, state)}`;
   }
 
   function renderHighPullbackMeta(record, state) {
@@ -3141,6 +3159,31 @@
         <span class="scanner-high-pullback-arrow">→</span>
         <span>安値 ${escapeHtml(lowLabel)}</span>
         <strong>-${formatNumber(dropRate, 1)}%</strong>
+      </div>
+    `;
+  }
+
+  function renderStrongTrendPullbackMeta(record, state) {
+    if (state?.sort !== "strategy_strong_trend_pullback_rebound") {
+      return "";
+    }
+    const metrics = record?.strategyMetrics?.strong_trend_pullback_rebound || {};
+    const pullbackType = record.strongTrendPullbackReboundType || metrics.pullbackType;
+    const typeLabel = pullbackType === "deep_reset_pullback" ? "深押しリセット" : "通常押し目";
+    const risePct = record.strongTrendPullbackReboundRisePct ?? metrics.risePct;
+    const dropPct = record.strongTrendPullbackReboundDropPct ?? metrics.dropPct;
+    const score = record.strongTrendPullbackReboundScore ?? metrics.score;
+    const volumeRatio = record.strongTrendPullbackReboundVolumeRatio20 ?? metrics.volumeRatio20;
+    if (risePct == null || dropPct == null || score == null) {
+      return "";
+    }
+    return `
+      <div class="scanner-high-pullback-meta">
+        <strong>${escapeHtml(typeLabel)}</strong>
+        <span>上昇 +${formatNumber(risePct, 1)}%</span>
+        <span>押し -${formatNumber(dropPct, 1)}%</span>
+        ${volumeRatio != null ? `<span>出来高 ${formatNumber(volumeRatio, 1)}倍</span>` : ""}
+        <strong>Score ${formatNumber(score, 0)}</strong>
       </div>
     `;
   }
@@ -4318,6 +4361,7 @@
       strategy_turtle: "strategy_turtle",
       strategy_canslim: "strategy_canslim",
       strategy_rsi2: "strategy_rsi2",
+      strategy_strong_trend_pullback_rebound: "",
       code: "",
     }[sortKey] || "";
   }

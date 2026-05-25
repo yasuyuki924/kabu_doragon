@@ -42,6 +42,7 @@
       { key: "can_slim", label: "CAN SLIM" },
       { key: "rsi2_pullback", label: "RSI(2)" },
       { key: "high_pullback_30", label: "30% Pullback" },
+      { key: "strong_trend_pullback_rebound", label: "強トレンド押し目" },
     ],
     INDEX_SCANNER_SORT_OPTIONS: [
       { key: "strategy_minervini", label: "成長ブレイク（Minervini）" },
@@ -50,6 +51,7 @@
       { key: "strategy_rsi2", label: "上昇中の押し目（RSI(2)）" },
       { key: "trend_turn", label: "200日線回復（ベース・リカバリー）" },
       { key: "strategy_high_pullback_30", label: "高値調整（30% Pullback）" },
+      { key: "strategy_strong_trend_pullback_rebound", label: "強トレンド押し目リバウンド" },
     ],
     INDEX_SCANNER_RANKING_OPTIONS: [
       { key: "gainers", label: "値上がり率" },
