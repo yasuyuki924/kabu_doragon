@@ -645,6 +645,25 @@ body[data-page="index-scanner"] .page-header {
   background: linear-gradient(180deg, rgba(118, 77, 39, 0.95) 0%, rgba(86, 56, 30, 0.99) 100%);
 }
 
+.index-result-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(145, 99, 44, 0.34);
+  border-radius: 9px;
+  color: #f1e6d7;
+  background: rgba(31, 23, 17, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 233, 201, 0.04);
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.index-result-count[hidden] {
+  display: none;
+}
+
 .index-sticky-timeframe {
   flex: 0 0 auto;
 }

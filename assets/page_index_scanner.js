@@ -69,6 +69,7 @@
         const picksMenu = document.getElementById("indexPicksMenu");
         const picksMenuToggle = picksMenuButton || pickedLink;
         const updatedStatus = document.getElementById("indexUpdatedStatus");
+        const resultCount = document.getElementById("indexResultCount");
         const refreshButton = document.getElementById("indexRefreshButton");
         const addCodesButton = document.getElementById("indexAddCodesButton");
         const exportTradingViewButton = document.getElementById("indexExportTradingViewButton");
@@ -183,7 +184,7 @@
         const STRONG_TREND_PULLBACK_MIN_DROP_PCT = 15;
         const STRONG_TREND_PULLBACK_DEEP_DROP_PCT = 30;
         const STRONG_TREND_PULLBACK_MAX_DROP_PCT = 45;
-        const STRONG_TREND_PULLBACK_FILTER_CONCURRENCY = 16;
+        const STRONG_TREND_PULLBACK_FILTER_CONCURRENCY = 24;
 
         function isDailyOnlySort(sortKey = state.sort) {
           return DAILY_ONLY_SORT_KEYS.has(sortKey);
@@ -571,6 +572,27 @@
             closeBreaks5High,
             closeBreaks10High,
           };
+        }
+
+        function isStrongTrendPullbackReboundPrefilterCandidate(record) {
+          const close = finiteNumber(record?.close);
+          const ma5 = finiteNumber(record?.ma5);
+          const ma75 = finiteNumber(record?.ma75);
+          if (close == null || ma5 == null || ma75 == null || close < ma5) {
+            return false;
+          }
+          const distanceToMa75 = finiteNumber(record?.distanceToMa75) ?? distancePctFromBaseline(close, ma75);
+          if (distanceToMa75 != null && distanceToMa75 < -8) {
+            return false;
+          }
+          const high52w = finiteNumber(record?.high52w);
+          if (high52w != null && high52w > 0) {
+            const drawdownFrom52wHigh = ((high52w - close) / high52w) * 100;
+            if (drawdownFrom52wHigh < STRONG_TREND_PULLBACK_MIN_DROP_PCT) {
+              return false;
+            }
+          }
+          return true;
         }
 
         function attachStrongTrendPullbackReboundMatch(record, metrics) {
@@ -1224,6 +1246,27 @@
           }
           const pickCount = Object.keys(state.picks || {}).length;
           stickyPickedLink.textContent = pickCount > 0 ? `List ${pickCount}` : "List";
+        }
+
+        function updateIndexResultCount({ matchedCount = 0, displayedCount = 0, loading = false } = {}) {
+          if (!resultCount) {
+            return;
+          }
+          resultCount.hidden = false;
+          if (loading) {
+            resultCount.textContent = `${scannerSortLabel(state.sort)} 読込中`;
+            return;
+          }
+          const matchedLabel = isCustomCodeMode()
+            ? "指定"
+            : isListMode()
+              ? "List"
+              : scannerSortLabel(state.sort);
+          const totalText = `${matchedLabel} ${formatNumber(matchedCount, 0)}件`;
+          const displayText = Number(displayedCount) === Number(matchedCount)
+            ? ""
+            : ` / 表示 ${formatNumber(displayedCount, 0)}件`;
+          resultCount.textContent = `${totalText}${displayText}`;
         }
       
         function updateStickyFiltersUi() {
@@ -2756,6 +2799,7 @@
           }
           disconnectChartObserver();
           list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+          updateIndexResultCount({ loading: true });
           state.picks = loadScannerPicks();
           state.chartRenderedCodes = new Set();
           state.chartBaselineShape = null;
@@ -2763,6 +2807,7 @@
           renderTagOptions();
           renderThemeOptions();
           let filtered = [];
+          let matchedCount = 0;
           if (isListMode()) {
             const recordsByCode = new Map((state.overview.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
             state.activeListMissing = [];
@@ -2776,6 +2821,7 @@
               })
               .filter(Boolean);
             filtered = sortScannerRecords(listRecords, DEFAULT_INDEX_SORT);
+            matchedCount = filtered.length;
           } else if (isCustomCodeMode()) {
             const recordsByCode = new Map((state.overview.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
             state.customCodeMissing = [];
@@ -2788,6 +2834,7 @@
                 return record;
               })
               .filter(Boolean);
+            matchedCount = filtered.length;
           } else {
             state.activeListMissing = [];
             state.customCodeMissing = [];
@@ -2829,14 +2876,19 @@
               scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
             } else if (state.sort === "strategy_high_pullback_30") {
               list.innerHTML = '<div class="empty-cell">高値調整を判定中...</div>';
+              updateIndexResultCount({ loading: true });
               scannerBase = await filterHighPullback30Records(scannerBase);
             } else if (state.sort === "strategy_strong_trend_pullback_rebound") {
-              list.innerHTML = '<div class="empty-cell">強トレンド押し目を判定中...</div>';
-              scannerBase = await filterStrongTrendPullbackReboundRecords(scannerBase);
+              const prefilteredScannerBase = scannerBase.filter(isStrongTrendPullbackReboundPrefilterCandidate);
+              list.innerHTML = `<div class="empty-cell">強トレンド押し目を判定中... (${formatNumber(prefilteredScannerBase.length, 0)} / ${formatNumber(scannerBase.length, 0)})</div>`;
+              updateIndexResultCount({ loading: true });
+              scannerBase = await filterStrongTrendPullbackReboundRecords(prefilteredScannerBase);
             }
+            matchedCount = scannerBase.length;
             filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
           }
           state.visibleRecords = filtered;
+          updateIndexResultCount({ matchedCount, displayedCount: filtered.length });
           syncCurrentIndexScannerUrl();
           if (stickySortSelect) {
             stickySortSelect.value = strategyControlValue();
