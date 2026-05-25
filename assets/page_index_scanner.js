@@ -578,7 +578,10 @@
           const close = finiteNumber(record?.close);
           const ma5 = finiteNumber(record?.ma5);
           const ma75 = finiteNumber(record?.ma75);
-          if (close == null || ma5 == null || ma75 == null || close < ma5) {
+          if (close == null) {
+            return true;
+          }
+          if (ma5 != null && close < ma5) {
             return false;
           }
           const distanceToMa75 = finiteNumber(record?.distanceToMa75) ?? distancePctFromBaseline(close, ma75);
