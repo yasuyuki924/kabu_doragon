@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PYTHON_BIN="${ROOT}/.venv/bin/python"
+QUALITY_SUMMARY_JSON="${ROOT}/data/ohlcv_quality_summary.json"
+QUALITY_LOG="${ROOT}/logs/ohlcv_quality_summary.log"
 
 cd "${ROOT}"
 
@@ -65,13 +67,14 @@ if [ "${cmd_status}" -eq 0 ]; then
 
   echo "[$(timestamp)] [CHECK] OHLCV quality summary (warning-only)"
   set +e
-  "${PYTHON_BIN}" "${ROOT}/scripts/check_all_ohlcv_quality.py" --no-report --summary-json "${ROOT}/data/ohlcv_quality_summary.json"
+  "${PYTHON_BIN}" "${ROOT}/scripts/check_all_ohlcv_quality.py" --no-report --summary-json "${QUALITY_SUMMARY_JSON}" > "${QUALITY_LOG}" 2>&1
   quality_status=$?
   set -e
   if [ "${quality_status}" -ne 0 ]; then
-    echo "[$(timestamp)] [WARN] OHLCV quality summary failed (exit=${quality_status}) — update result is NOT blocked" >&2
+    echo "[$(timestamp)] [WARN] OHLCV quality summary failed (exit=${quality_status}) — update result is NOT blocked; log=${QUALITY_LOG}" >&2
   else
-    echo "[$(timestamp)] [OK] OHLCV quality summary written"
+    quality_line=$("${PYTHON_BIN}" -c 'import json,sys; d=json.load(open(sys.argv[1], encoding="utf-8")); print("status={} actionable={} critical={} warning={}".format(d.get("status","-"), d.get("actionableCount",0), d.get("criticalCount",0), d.get("warningCount",0)))' "${QUALITY_SUMMARY_JSON}" 2>/dev/null || echo "status=- actionable=- critical=- warning=-")
+    echo "[$(timestamp)] [OK] OHLCV quality summary written ${quality_line}; log=${QUALITY_LOG}"
   fi
 else
   echo "[$(timestamp)] [ERROR] incremental public_json update failed status=${cmd_status}" >&2

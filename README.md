@@ -844,6 +844,7 @@ cd "/Users/okamoto/My Project/kabu_doragon"
 更新ゲートとして使う段階になったら、危険な異常だけを対象に `--fail-on-critical` を付けて終了コードで止められます。
 日次更新では、品質チェックは警告モードでのみ実行します。チェックに失敗しても更新処理は停止しません。
 結果は `data/ohlcv_quality_summary.json` に書き出され、トップ画面の品質サマリーに重大件数と対象データを表示します。
+詳細ログは `logs/ohlcv_quality_summary.log` に出し、launchd 側には1行サマリーだけを出します。
 
 dry-run 修復計画を実際に適用する場合:
 
