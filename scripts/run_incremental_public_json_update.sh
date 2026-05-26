@@ -62,6 +62,17 @@ if [ "${cmd_status}" -eq 0 ]; then
     exit "${postcheck_status}"
   fi
   echo "[$(timestamp)] [OK] post-update check passed"
+
+  echo "[$(timestamp)] [CHECK] OHLCV quality summary (warning-only)"
+  set +e
+  "${PYTHON_BIN}" "${ROOT}/scripts/check_all_ohlcv_quality.py" --no-report --summary-json "${ROOT}/data/ohlcv_quality_summary.json"
+  quality_status=$?
+  set -e
+  if [ "${quality_status}" -ne 0 ]; then
+    echo "[$(timestamp)] [WARN] OHLCV quality summary failed (exit=${quality_status}) — update result is NOT blocked" >&2
+  else
+    echo "[$(timestamp)] [OK] OHLCV quality summary written"
+  fi
 else
   echo "[$(timestamp)] [ERROR] incremental public_json update failed status=${cmd_status}" >&2
 fi

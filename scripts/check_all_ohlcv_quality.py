@@ -24,6 +24,7 @@ DEFAULT_PUBLIC_JSON_DIR = ROOT / "data" / "public_json" / "ticker_recent" / "1y"
 DEFAULT_REPORTS_DIR = ROOT / "reports"
 DEFAULT_REPAIR_SOURCE_DIR = ROOT / "data" / "recheck_ohlcv_adjusted"
 DEFAULT_ACTIVE_CODES_PATH = ROOT / "data" / "watchlist.json"
+DEFAULT_SUMMARY_JSON = ROOT / "data" / "ohlcv_quality_summary.json"
 
 PRICE_FIELDS = ("open", "high", "low", "close")
 GATE_CANDIDATE_KINDS = {
@@ -61,6 +62,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ohlcv-dir", type=Path, default=DEFAULT_OHLCV_DIR)
     parser.add_argument("--public-json-dir", type=Path, default=DEFAULT_PUBLIC_JSON_DIR)
     parser.add_argument("--reports-dir", type=Path, default=DEFAULT_REPORTS_DIR)
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=DEFAULT_SUMMARY_JSON,
+        help="Write a compact UI summary JSON. Use an empty value to skip.",
+    )
     parser.add_argument(
         "--repair-source-dir",
         type=Path,
@@ -632,6 +639,56 @@ def build_repair_plan(
     }
 
 
+def build_ui_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    triage = payload.get("triage") if isinstance(payload.get("triage"), dict) else {}
+    counts = triage.get("counts") if isinstance(triage.get("counts"), dict) else {}
+    actionable_count = (
+        int(counts.get("repair_first") or 0)
+        + int(counts.get("gate_candidate") or 0)
+        + int(counts.get("manual_review") or 0)
+    )
+    issues = payload.get("issues") if isinstance(payload.get("issues"), list) else []
+    actionable_issues = [
+        item for item in issues
+        if isinstance(item, dict)
+        and item.get("severity") == "critical"
+        and item.get("kind") not in {"single_day_extreme_move", "large_date_gap", "too_few_rows"}
+    ]
+    samples = [
+        {
+            "code": str(item.get("code") or ""),
+            "source": str(item.get("source") or ""),
+            "kind": str(item.get("kind") or ""),
+            "date": str(item.get("date") or ""),
+            "message": str(item.get("message") or ""),
+        }
+        for item in actionable_issues[:20]
+    ]
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    return {
+        "generatedAt": payload.get("generatedAt"),
+        "status": "WARN" if actionable_count else "OK",
+        "actionableCount": actionable_count,
+        "criticalCount": int(summary.get("criticalCount") or 0),
+        "warningCount": int(summary.get("warningCount") or 0),
+        "issueCount": int(summary.get("issueCount") or 0),
+        "byKind": summary.get("byKind") if isinstance(summary.get("byKind"), dict) else {},
+        "triageCounts": counts,
+        "activeCodes": payload.get("activeCodes") if isinstance(payload.get("activeCodes"), dict) else {},
+        "samples": samples,
+    }
+
+
+def write_ui_summary(path: Path, payload: dict[str, Any]) -> None:
+    if not str(path).strip():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(build_ui_summary(payload), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def report_payload(
     args: argparse.Namespace,
     issues: list[Issue],
@@ -871,6 +928,9 @@ def main() -> int:
         json_path, md_path = write_reports(args.reports_dir, payload)
         print(f"  report_json={json_path.relative_to(ROOT)}")
         print(f"  report_md={md_path.relative_to(ROOT)}")
+    if args.summary_json:
+        write_ui_summary(args.summary_json, payload)
+        print(f"  summary_json={compact_path(args.summary_json)}")
 
     if args.fail_on_critical and summary["criticalCount"]:
         return 1

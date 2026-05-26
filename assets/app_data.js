@@ -48,6 +48,18 @@
     return payload && typeof payload === "object" ? payload : null;
   }
 
+  async function loadOhlcvQualitySummaryData(summaryPath) {
+    const response = await requestWithDesktopFallback(summaryPath);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`JSON 読み込み失敗: ${summaryPath} (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload && typeof payload === "object" ? payload : null;
+  }
+
   async function loadOverviewDateIndexData(indexPath) {
     const response = await requestWithDesktopFallback(indexPath);
     if (!response.ok) {
@@ -224,6 +236,7 @@
   window.KabuAppData = Object.freeze({
     loadManifestData,
     loadUpdateHealthData,
+    loadOhlcvQualitySummaryData,
     loadOverviewDateIndexData,
     loadOverviewData,
     loadRankingData,

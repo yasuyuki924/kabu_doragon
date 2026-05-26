@@ -104,6 +104,7 @@
         const state = {
           manifest: null,
           updateHealth: null,
+          ohlcvQualitySummary: null,
           overviewDateIndex: null,
           overview: null,
           sort: "gainers",
@@ -2113,6 +2114,7 @@
           state.selectedDate = resolveOverviewDateForTimeframe(requestedDate, state.timeframe);
           state.overview = await loadOverview(state.selectedDate, state.timeframe);
           state.updateHealth = await loadUpdateHealth();
+          state.ohlcvQualitySummary = await loadOhlcvQualitySummary();
           state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
           renderTagOptions();
           renderDateControls();
@@ -2436,11 +2438,63 @@
             return;
           }
           const summary = summarizeOverviewDataQuality(state.overview);
+          const ohlcvQualityHtml = renderOhlcvQualitySummaryChip(state.ohlcvQualitySummary);
           dataQualitySummaryBox.hidden = false;
           dataQualitySummaryBox.innerHTML = `
             <span class="index-data-quality-chip">最新一致 <strong>${formatNumber(summary.matchedCount, 0)}</strong></span>
             <span class="index-data-quality-chip">遅延 <strong>${formatNumber(summary.staleCount, 0)}</strong></span>
             <span class="index-data-quality-chip">空データ <strong>${formatNumber(summary.emptyCount, 0)}</strong></span>
+            ${ohlcvQualityHtml}
+          `;
+        }
+
+        function formatQualitySummaryGeneratedAt(value) {
+          const text = String(value || "").trim();
+          if (!text) {
+            return "";
+          }
+          const date = new Date(text);
+          if (Number.isNaN(date.getTime())) {
+            return text;
+          }
+          const pad = (number) => String(number).padStart(2, "0");
+          return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+
+        function qualityIssueLabel(item) {
+          const code = String(item?.code || "").trim();
+          const source = String(item?.source || "").trim();
+          const kind = String(item?.kind || "").trim();
+          const date = String(item?.date || "").trim();
+          return [code, source, kind, date].filter(Boolean).join(" ");
+        }
+
+        function renderOhlcvQualitySummaryChip(summary) {
+          if (!summary || typeof summary !== "object") {
+            return "";
+          }
+          const actionableCount = Number(summary.actionableCount || 0);
+          const criticalCount = Number(summary.criticalCount || 0);
+          const generatedAt = formatQualitySummaryGeneratedAt(summary.generatedAt);
+          const samples = Array.isArray(summary.samples) ? summary.samples : [];
+          const toneClass = actionableCount > 0 || criticalCount > 0 ? " index-data-quality-chip--warn" : " index-data-quality-chip--ok";
+          if (actionableCount <= 0 && criticalCount <= 0) {
+            return `<span class="index-data-quality-chip${toneClass}" title="${escapeHtml(generatedAt ? `OHLCV品質チェック ${generatedAt}` : "OHLCV品質チェック")}">OHLCV重大 <strong>0</strong></span>`;
+          }
+          const sampleItems = samples.slice(0, 12).map((item) => {
+            const label = qualityIssueLabel(item);
+            const message = String(item?.message || "").trim();
+            return `<li><span>${escapeHtml(label || "-")}</span>${message ? `<small>${escapeHtml(message)}</small>` : ""}</li>`;
+          }).join("");
+          return `
+            <details class="index-data-quality-details">
+              <summary class="index-data-quality-chip${toneClass}">OHLCV異常 <strong>${formatNumber(actionableCount || criticalCount, 0)}</strong></summary>
+              <div class="index-data-quality-popover">
+                <div class="index-data-quality-popover-title">OHLCV品質チェック${generatedAt ? ` ${escapeHtml(generatedAt)}` : ""}</div>
+                <div class="index-data-quality-popover-meta">更新は停止していません。確認対象だけ表示しています。</div>
+                <ul>${sampleItems || "<li><span>詳細なし</span></li>"}</ul>
+              </div>
+            </details>
           `;
         }
 

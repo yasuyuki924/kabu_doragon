@@ -2,6 +2,7 @@
   window.KabuAppConfig = Object.freeze({
     MANIFEST_PATH: "./data/manifest.json",
     UPDATE_HEALTH_PATH: "./data/update_health.json",
+    OHLCV_QUALITY_SUMMARY_PATH: "./data/ohlcv_quality_summary.json",
     OVERVIEW_LITE_INDEX_PATH: "./data/public_json/overview_lite/index.json",
     THEME_MAP_PATH: "./data/theme_map.json",
     WATCHLIST_PATH: "./data/watchlist.json",

@@ -126,6 +126,51 @@ class CheckAllOhlcvQualityTest(unittest.TestCase):
 
         self.assertEqual(codes, {"4022", "9600", "7203"})
 
+    def test_build_ui_summary_keeps_only_actionable_samples(self) -> None:
+        payload = {
+            "generatedAt": "2026-05-26T18:00:00",
+            "summary": {
+                "issueCount": 2,
+                "criticalCount": 1,
+                "warningCount": 1,
+                "byKind": {"ohlc_inconsistent": 1, "large_date_gap": 1},
+            },
+            "triage": {
+                "counts": {
+                    "repair_first": 1,
+                    "gate_candidate": 0,
+                    "manual_review": 0,
+                    "observe": 1,
+                }
+            },
+            "activeCodes": {"count": 10},
+            "issues": [
+                {
+                    "code": "9600",
+                    "source": "ohlcv",
+                    "severity": "critical",
+                    "kind": "ohlc_inconsistent",
+                    "date": "2022-05-17",
+                    "message": "bad ohlc",
+                },
+                {
+                    "code": "1301",
+                    "source": "ohlcv",
+                    "severity": "warning",
+                    "kind": "large_date_gap",
+                    "date": "2022-05-06",
+                    "message": "gap",
+                },
+            ],
+        }
+
+        summary = quality.build_ui_summary(payload)
+
+        self.assertEqual(summary["status"], "WARN")
+        self.assertEqual(summary["actionableCount"], 1)
+        self.assertEqual(len(summary["samples"]), 1)
+        self.assertEqual(summary["samples"][0]["code"], "9600")
+
 
 if __name__ == "__main__":
     unittest.main()

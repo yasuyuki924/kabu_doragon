@@ -2,6 +2,7 @@
   const {
     MANIFEST_PATH,
     UPDATE_HEALTH_PATH,
+    OHLCV_QUALITY_SUMMARY_PATH,
     OVERVIEW_LITE_INDEX_PATH,
     THEME_MAP_PATH,
     WATCHLIST_PATH,
@@ -52,6 +53,7 @@
   const {
     loadManifestData,
     loadUpdateHealthData,
+    loadOhlcvQualitySummaryData,
     loadOverviewDateIndexData,
     loadOverviewData,
     loadRankingData,
@@ -128,6 +130,7 @@
       loadManifest,
       loadOverviewDateIndex,
       loadOverview,
+      loadOhlcvQualitySummary,
       loadUpdateHealth,
       loadRanking,
       loadRegisteredPicks,
@@ -827,6 +830,14 @@
   async function loadUpdateHealth() {
     try {
       return await loadUpdateHealthData(UPDATE_HEALTH_PATH);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function loadOhlcvQualitySummary() {
+    try {
+      return await loadOhlcvQualitySummaryData(OHLCV_QUALITY_SUMMARY_PATH);
     } catch (_error) {
       return null;
     }
