@@ -816,3 +816,41 @@ launchctl unload ~/Library/LaunchAgents/com.okamoto.kabu_doragon_am_update.plist
 ```bash
 launchctl list | rg 'com\\.okamoto\\.kabu_doragon_(am_update|close_retry)'
 ```
+
+## OHLCV 品質チェック
+
+全銘柄の表示用データに異常がないかを確認する読み取り専用チェックです。
+通常は警告モードで動き、異常があっても日次更新やデータファイルは変更しません。
+デフォルトでは `data/watchlist.json` にある現役対象だけを検査し、上場廃止などでリストから外れた古いCSVは無視します。
+
+```bash
+cd "/Users/okamoto/My Project/kabu_doragon"
+./.venv/bin/python scripts/check_all_ohlcv_quality.py
+```
+
+確認内容:
+
+- `data/ohlcv/*.csv` の行数不足、日付順、重複日付、日付ギャップ
+- OHLC の整合性
+- 急落して数日内に急騰で戻る補正ズレ疑い
+- `data/public_json/ticker_recent/1y/ohlcv_ma/*.json` の同様の異常
+- `ohlcv` と `public_json` の終値不一致
+
+異常が見つかった場合だけ `reports/kabudragon_ohlcv_quality_*.json` と `.md` を出力します。
+レポートには `repair_first` / `gate_candidate` / `manual_review` / `observe` の分類も含めます。
+最初は `repair_first` を確認し、誤検知が少ないことを見てから更新ゲート化します。
+`data/recheck_ohlcv_adjusted` に修復候補がある場合は、実データを書き換えずに dry-run の修復計画も出します。
+修復計画では、候補データで置き換えた場合に `ohlcv` と `public_json` の何行が変わるか、候補データの期間、候補データ後に残す末尾行数を確認できます。
+更新ゲートとして使う段階になったら、危険な異常だけを対象に `--fail-on-critical` を付けて終了コードで止められます。
+
+dry-run 修復計画を実際に適用する場合:
+
+```bash
+./.venv/bin/python scripts/apply_ohlcv_repair_plan.py \
+  --quality-report reports/kabudragon_ohlcv_quality_YYYYMMDD_HHMMSS.json \
+  --apply
+```
+
+適用時は、対象の `data/ohlcv` と `data/public_json/ticker_recent/1y/ohlcv_ma` を先に
+`reports/ohlcv_repair_backup_YYYYMMDD_HHMMSS/` へ一時バックアップします。成功後は肥大化防止のため自動削除します。
+バックアップを残したい場合だけ `--keep-backups` を付けます。`data/ohlcv_raw` は変更しません。
