@@ -2479,7 +2479,8 @@
           const samples = Array.isArray(summary.samples) ? summary.samples : [];
           const toneClass = actionableCount > 0 || criticalCount > 0 ? " index-data-quality-chip--warn" : " index-data-quality-chip--ok";
           if (actionableCount <= 0 && criticalCount <= 0) {
-            return `<span class="index-data-quality-chip${toneClass}" title="${escapeHtml(generatedAt ? `OHLCV品質チェック ${generatedAt}` : "OHLCV品質チェック")}">OHLCV重大 <strong>0</strong></span>`;
+            const title = generatedAt ? `OHLCV重大異常 0件 / 品質チェック ${generatedAt}` : "OHLCV重大異常 0件";
+            return `<span class="index-data-quality-chip index-data-quality-chip--quiet${toneClass}" title="${escapeHtml(title)}">OHLCV <strong>0</strong></span>`;
           }
           const sampleItems = samples.slice(0, 12).map((item) => {
             const label = qualityIssueLabel(item);

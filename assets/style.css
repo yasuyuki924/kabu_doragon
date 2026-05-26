@@ -527,8 +527,19 @@ select option {
 }
 
 .index-data-quality-chip--ok {
-  border-color: rgba(85, 198, 146, 0.38);
-  background: rgba(20, 60, 47, 0.52);
+  border-color: rgba(140, 157, 181, 0.2);
+  background: rgba(20, 30, 42, 0.26);
+  color: rgba(184, 198, 216, 0.72);
+}
+
+.index-data-quality-chip--quiet {
+  padding: 2px 6px;
+  font-size: 0.69rem;
+  opacity: 0.82;
+}
+
+.index-data-quality-chip--quiet strong {
+  color: rgba(216, 226, 240, 0.82);
 }
 
 .index-data-quality-chip--warn {
