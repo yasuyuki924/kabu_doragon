@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -170,6 +172,117 @@ class CheckAllOhlcvQualityTest(unittest.TestCase):
         self.assertEqual(summary["actionableCount"], 1)
         self.assertEqual(len(summary["samples"]), 1)
         self.assertEqual(summary["samples"][0]["code"], "9600")
+
+    def test_warning_mode_writes_ui_summary_without_stopping_on_bad_dummy_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ohlcv_dir = root / "ohlcv"
+            public_dir = root / "public_json"
+            repair_dir = root / "repair"
+            reports_dir = root / "reports"
+            summary_path = root / "ohlcv_quality_summary.json"
+            for path in [ohlcv_dir, public_dir, repair_dir, reports_dir]:
+                path.mkdir(parents=True)
+            (root / "watchlist.json").write_text('[{"ticker":"9999"}]', encoding="utf-8")
+            (ohlcv_dir / "9999.csv").write_text(
+                "\n".join(
+                    [
+                        "date,open,high,low,close,volume",
+                        "2026-05-20,100,101,99,100,1000",
+                        "2026-05-21,100,101,99,102,1000",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    "--ohlcv-dir",
+                    str(ohlcv_dir),
+                    "--public-json-dir",
+                    str(public_dir),
+                    "--active-codes-path",
+                    str(root / "watchlist.json"),
+                    "--repair-source-dir",
+                    str(repair_dir),
+                    "--reports-dir",
+                    str(reports_dir),
+                    "--summary-json",
+                    str(summary_path),
+                    "--no-report",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            report_files = list(reports_dir.glob("*"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(summary["status"], "WARN")
+        self.assertEqual(summary["actionableCount"], 1)
+        self.assertEqual(summary["samples"][0]["code"], "9999")
+        self.assertEqual(summary["samples"][0]["kind"], "ohlc_inconsistent")
+        self.assertEqual(report_files, [])
+
+    def test_warning_mode_writes_ok_summary_for_clean_dummy_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ohlcv_dir = root / "ohlcv"
+            public_dir = root / "public_json"
+            repair_dir = root / "repair"
+            reports_dir = root / "reports"
+            summary_path = root / "ohlcv_quality_summary.json"
+            for path in [ohlcv_dir, public_dir, repair_dir, reports_dir]:
+                path.mkdir(parents=True)
+            (root / "watchlist.json").write_text('[{"ticker":"9999"}]', encoding="utf-8")
+            (ohlcv_dir / "9999.csv").write_text(
+                "\n".join(
+                    [
+                        "date,open,high,low,close,volume",
+                        "2026-05-20,100,101,99,100,1000",
+                        "2026-05-21,100,102,99,101,1100",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    "--ohlcv-dir",
+                    str(ohlcv_dir),
+                    "--public-json-dir",
+                    str(public_dir),
+                    "--active-codes-path",
+                    str(root / "watchlist.json"),
+                    "--repair-source-dir",
+                    str(repair_dir),
+                    "--reports-dir",
+                    str(reports_dir),
+                    "--summary-json",
+                    str(summary_path),
+                    "--no-report",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            report_files = list(reports_dir.glob("*"))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(summary["status"], "OK")
+        self.assertEqual(summary["actionableCount"], 0)
+        self.assertEqual(summary["samples"], [])
+        self.assertEqual(report_files, [])
 
 
 if __name__ == "__main__":
