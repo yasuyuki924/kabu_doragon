@@ -627,9 +627,36 @@
           };
         }
 
+        function strongTrendPullbackReboundMetricsFromRecord(record) {
+          const metrics = record?.strategyMetrics?.[STRONG_TREND_PULLBACK_STRATEGY_ID] || record?.strongTrendPullbackRebound || {};
+          const score = finiteNumber(record?.strongTrendPullbackReboundScore) ?? finiteNumber(record?.strategyScores?.[STRONG_TREND_PULLBACK_STRATEGY_ID]) ?? finiteNumber(metrics.score);
+          if (score == null) {
+            return null;
+          }
+          return {
+            ...metrics,
+            score,
+            pullbackType: record?.strongTrendPullbackReboundType || metrics.pullbackType,
+            reboundLabel: record?.strongTrendPullbackReboundLabel || metrics.reboundLabel,
+            risePct: finiteNumber(record?.strongTrendPullbackReboundRisePct) ?? finiteNumber(metrics.risePct),
+            dropPct: finiteNumber(record?.strongTrendPullbackReboundDropPct) ?? finiteNumber(metrics.dropPct),
+            volumeRatio20: finiteNumber(record?.strongTrendPullbackReboundVolumeRatio20) ?? finiteNumber(metrics.volumeRatio20),
+          };
+        }
+
         async function filterStrongTrendPullbackReboundRecords(records) {
           const out = [];
           await mapWithConcurrency(records, STRONG_TREND_PULLBACK_FILTER_CONCURRENCY, async (record) => {
+            const savedStrongTrendPullbackMatch =
+              record.strongTrendPullbackReboundCandidate === true ||
+              (record.strategyMatches || []).includes(STRONG_TREND_PULLBACK_STRATEGY_ID);
+            if (savedStrongTrendPullbackMatch) {
+              const metrics = strongTrendPullbackReboundMetricsFromRecord(record);
+              if (metrics) {
+                out.push(attachStrongTrendPullbackReboundMatch(record, metrics));
+                return;
+              }
+            }
             try {
               let rows = await loadHighPullbackRecentRows(record.code);
               let metrics = findStrongTrendPullbackReboundMatch(rows, state.selectedDate);
