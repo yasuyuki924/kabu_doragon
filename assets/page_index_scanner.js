@@ -2510,6 +2510,15 @@
             const title = generatedAt ? `OHLCV重大異常 0件 / 品質チェック ${generatedAt}` : "OHLCV重大異常 0件";
             return `<span class="index-data-quality-chip index-data-quality-chip--quiet${toneClass}" title="${escapeHtml(title)}">OHLCV <strong>0</strong></span>`;
           }
+          const byKind = summary.byKind && typeof summary.byKind === "object" ? summary.byKind : {};
+          const kindSummary = Object.entries(byKind)
+            .map(([kind, count]) => `${kind}: ${formatNumber(count, 0)}`)
+            .join(" / ");
+          const title = [
+            `OHLCV品質チェック 要確認 ${formatNumber(actionableCount || criticalCount, 0)}件`,
+            generatedAt ? `生成 ${generatedAt}` : "",
+            kindSummary,
+          ].filter(Boolean).join(" / ");
           const sampleItems = samples.slice(0, 12).map((item) => {
             const label = qualityIssueLabel(item);
             const message = String(item?.message || "").trim();
@@ -2517,10 +2526,10 @@
           }).join("");
           return `
             <details class="index-data-quality-details">
-              <summary class="index-data-quality-chip${toneClass}">OHLCV異常 <strong>${formatNumber(actionableCount || criticalCount, 0)}</strong></summary>
+              <summary class="index-data-quality-chip${toneClass}" title="${escapeHtml(title)}">OHLCV要確認 <strong>${formatNumber(actionableCount || criticalCount, 0)}</strong></summary>
               <div class="index-data-quality-popover">
                 <div class="index-data-quality-popover-title">OHLCV品質チェック${generatedAt ? ` ${escapeHtml(generatedAt)}` : ""}</div>
-                <div class="index-data-quality-popover-meta">更新は停止していません。確認対象だけ表示しています。</div>
+                <div class="index-data-quality-popover-meta">更新は停止していません。価格データは自動修復せず、確認対象だけ表示しています。</div>
                 <ul>${sampleItems || "<li><span>詳細なし</span></li>"}</ul>
               </div>
             </details>
