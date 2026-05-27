@@ -416,6 +416,29 @@ def evaluate_high_pullback_30(context: dict[str, Any]) -> StrategyMatchResult:
     )
 
 
+def evaluate_trend_turn(context: dict[str, Any]) -> StrategyMatchResult:
+    row = context["row"]
+    params = context["params"]
+    metrics: StrategyMetrics = {
+        "breakoutDate": row.get("trendTurnBreakoutDate"),
+        "daysAfterBreakout": row.get("trendTurnDaysAfterBreakout"),
+        "aboveMa200Days": row.get("trendTurnRangePct"),
+        "aboveMa200Ratio": row.get("trendTurnAboveMa75Ratio"),
+        "distanceToMa200": row.get("distanceToMa200"),
+        "score": row.get("trendTurnScore"),
+        "maxAboveMa200Days": params["maxAboveMa200Days"],
+        "lookbackDays": params["lookbackDays"],
+    }
+    if not row.get("trendTurnCandidate"):
+        return _base_result(metrics)
+
+    score = float(row.get("trendTurnScore") or 0)
+    reasons = [part for part in str(row.get("trendTurnReason") or "").split("|") if part]
+    if not reasons:
+        reasons.append("200日線を回復")
+    return _with_result(True, score, reasons, False, [], metrics, ["daily_only", "trend", "recovery"])
+
+
 def evaluate_strong_trend_pullback_rebound(context: dict[str, Any]) -> StrategyMatchResult:
     row = context["row"]
     params = context["params"]
@@ -552,6 +575,26 @@ STRATEGY_PRESETS: list[StrategyPreset] = [
         displayMetrics=["rsi2", "consecutiveDownDays", "distanceToMa50", "distanceToMa150", "pullbackDepthPct"],
         reasonTemplates={},
         evaluate=evaluate_rsi2_pullback,
+    ),
+    StrategyPreset(
+        id="trend_turn",
+        name="200日線回復（ベース・リカバリー）",
+        description="過去120日で200日線上の滞在が少ない状態から、当日200日線を上抜けた転換候補。",
+        params={
+            "lookbackDays": 120,
+            "maxAboveMa200Days": 10,
+            "timeframe": "daily",
+        },
+        displayMetrics=[
+            "breakoutDate",
+            "daysAfterBreakout",
+            "aboveMa200Days",
+            "aboveMa200Ratio",
+            "distanceToMa200",
+            "score",
+        ],
+        reasonTemplates={},
+        evaluate=evaluate_trend_turn,
     ),
     StrategyPreset(
         id="high_pullback_30",

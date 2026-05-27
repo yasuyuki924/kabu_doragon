@@ -42,6 +42,7 @@
       { key: "turtle_donchian_breakout", label: "Turtle" },
       { key: "can_slim", label: "CAN SLIM" },
       { key: "rsi2_pullback", label: "RSI(2)" },
+      { key: "trend_turn", label: "200日線回復" },
       { key: "high_pullback_30", label: "30% Pullback" },
       { key: "strong_trend_pullback_rebound", label: "強トレンド押し目" },
     ],
