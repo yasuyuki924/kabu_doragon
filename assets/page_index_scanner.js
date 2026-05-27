@@ -689,12 +689,13 @@
         }
 
         function highPullbackMetricsFromRecord(record) {
-          const metrics = record?.highPullback30 || {};
+          const metrics = record?.strategyMetrics?.[HIGH_PULLBACK_STRATEGY_ID] || record?.highPullback30 || {};
           const dropRate = record?.highPullback30DropRate ?? metrics.dropRate;
           if (!Number.isFinite(Number(dropRate))) {
             return null;
           }
           return {
+            ...metrics,
             highest200: record?.highPullback30Highest200 ?? metrics.highest200,
             highDate: record?.highPullback30HighDate ?? metrics.highDate,
             afterLow: record?.highPullback30AfterLow ?? metrics.afterLow,
