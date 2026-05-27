@@ -141,3 +141,14 @@ python3 scripts/kabu_daily_update.py
 | `DATA_SOURCE_LOCK.md` | データソース変更禁止 |
 | `reports/kabudragon_daily_update_postcheck.md` | post-check 運用ガイド |
 | `reports/kabudragon_ohlcv_raw_repair_plan.md` | ohlcv_raw 修復手順 |
+
+## 待ち時間が必要な検証の扱い
+
+数日後の市場データ、次回の日次更新、次回の launchd 実行など、
+実時間で待たないと確認できないように見える検証でも、
+安全なシミュレーションが可能なら「待ち」で止めない。
+
+- 小さなダミーデータ、一時ディレクトリ、偽の summary JSON、 isolated test harness を使って先に確認する
+- ダミーデータや一時バックアップは実データの `data/`、`reports/`、作業ツリーを汚さないように扱う
+- 実ファイルを一時的に差し替える場合は、必ず復元し、成功後に一時ファイルを削除する
+- 本番の自然実行ログは後で確認するが、基本的な実装・表示・ログ形式の確認を未来待ちにしない

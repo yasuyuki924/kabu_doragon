@@ -9,6 +9,8 @@ output/
 .DS_Store
 .pytest_cache/
 .mypy_cache/
+.claude/
+.playwright-mcp/
 data/intraday/*.json
 data/update_state.json
 data/current_snapshot_state.json
@@ -27,8 +29,12 @@ data/public_json/
 data/public_json_test/
 data/cache/
 data/archive/
+data/ohlcv_adjusted/
+data/recheck_ohlcv_adjusted/
+data/recheck_ohlcv_raw/
 
 # Generated repair backups
+reports/*_backup_*/
 reports/ohlcv_repair_backup_*/
 reports/ohlcv_manual_fix_backup_*/
 reports/kabudragon_ohlcv_quality_*.json
