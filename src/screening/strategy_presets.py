@@ -416,6 +416,44 @@ def evaluate_high_pullback_30(context: dict[str, Any]) -> StrategyMatchResult:
     )
 
 
+def evaluate_strong_trend_pullback_rebound(context: dict[str, Any]) -> StrategyMatchResult:
+    row = context["row"]
+    params = context["params"]
+    metrics = dict(row.get("strongTrendPullbackRebound") or {})
+    if not metrics.get("detected"):
+        return _base_result(metrics)
+
+    score = float(metrics.get("score") or 0)
+    pullback_type = str(metrics.get("pullbackType") or "")
+    type_label = "深押しリセット" if pullback_type == "deep_reset_pullback" else "通常押し目"
+    rise_pct = metrics.get("risePct")
+    drop_pct = metrics.get("dropPct")
+    reasons = []
+    if rise_pct is not None:
+        reasons.append(f"{type_label} / 上昇 +{float(rise_pct):.1f}%")
+    if drop_pct is not None:
+        reasons.append(f"高値から -{float(drop_pct):.1f}% / Score {score:.0f}")
+    if metrics.get("reboundLabel"):
+        reasons.append(str(metrics["reboundLabel"]))
+
+    return _with_result(
+        True,
+        score,
+        reasons,
+        False,
+        [],
+        {
+            **metrics,
+            "lookbackBars": params["lookbackBars"],
+            "minRisePct": params["minRisePct"],
+            "minDropPct": params["minDropPct"],
+            "deepDropPct": params["deepDropPct"],
+            "maxDropPct": params["maxDropPct"],
+        },
+        ["daily_only", "trend", "pullback", "rebound"],
+    )
+
+
 STRATEGY_PRESETS: list[StrategyPreset] = [
     StrategyPreset(
         id="minervini_trend_template",
@@ -539,6 +577,34 @@ STRATEGY_PRESETS: list[StrategyPreset] = [
         ],
         reasonTemplates={},
         evaluate=evaluate_high_pullback_30,
+    ),
+    StrategyPreset(
+        id="strong_trend_pullback_rebound",
+        name="Strong Trend Pullback Rebound",
+        description="60本内で30%以上上昇した強トレンドから15〜45%押し、MA25/75付近で反発する日足専用候補。",
+        params={
+            "lookbackBars": 60,
+            "minRisePct": 30.0,
+            "minDropPct": 15.0,
+            "deepDropPct": 30.0,
+            "maxDropPct": 45.0,
+            "timeframe": "daily",
+        },
+        displayMetrics=[
+            "pullbackType",
+            "reboundLabel",
+            "risePct",
+            "dropPct",
+            "lowDate",
+            "highDate",
+            "distanceToMa25",
+            "distanceToMa75",
+            "ma75SlopePct",
+            "volumeRatio20",
+            "riseAboveMa25Ratio",
+        ],
+        reasonTemplates={},
+        evaluate=evaluate_strong_trend_pullback_rebound,
     ),
 ]
 
