@@ -171,8 +171,6 @@
         const strategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
         const rankingSortKeys = new Set(rankingOptions.map((item) => item.key));
         const DAILY_ONLY_SORT_KEYS = new Set(["strategy_high_pullback_30", "strategy_strong_trend_pullback_rebound"]);
-        const HIGH_PULLBACK_STRATEGY_ID = "high_pullback_30";
-        const STRONG_TREND_PULLBACK_STRATEGY_ID = "strong_trend_pullback_rebound";
         const DEFAULT_HIGH_PULLBACK_DROP_PCT = 30;
 
         function isDailyOnlySort(sortKey = state.sort) {
@@ -274,145 +272,6 @@
             (dateValue) => dateValue >= requestedDate && overviewDatePeriodKey(dateValue, timeframe) === requestedPeriod
           );
           return periodEndDate || resolveAvailableDate(requestedDate, availableDates);
-        }
-
-        function finiteNumber(value) {
-          const number = Number(value);
-          return Number.isFinite(number) ? number : null;
-        }
-
-        function attachStrongTrendPullbackReboundMatch(record, metrics) {
-          const strategyMatches = [...new Set([...(record.strategyMatches || []), STRONG_TREND_PULLBACK_STRATEGY_ID])];
-          const strategyScores = { ...(record.strategyScores || {}), [STRONG_TREND_PULLBACK_STRATEGY_ID]: metrics.score };
-          const strategyMetrics = { ...(record.strategyMetrics || {}), [STRONG_TREND_PULLBACK_STRATEGY_ID]: metrics };
-          const typeLabel = metrics.pullbackType === "deep_reset_pullback" ? "深押しリセット" : "通常押し目";
-          const strategyReasons = {
-            ...(record.strategyReasons || {}),
-            [STRONG_TREND_PULLBACK_STRATEGY_ID]: [
-              `${typeLabel} / 上昇 +${formatNumber(metrics.risePct, 1)}%`,
-              `高値から -${formatNumber(metrics.dropPct, 1)}% / Score ${formatNumber(metrics.score, 0)}`,
-            ],
-          };
-          return {
-            ...record,
-            strategyMatches,
-            strategyScores,
-            strategyMetrics,
-            strategyReasons,
-            strongTrendPullbackReboundCandidate: true,
-            strongTrendPullbackReboundScore: metrics.score,
-            strongTrendPullbackReboundType: metrics.pullbackType,
-            strongTrendPullbackReboundLabel: metrics.reboundLabel,
-            strongTrendPullbackReboundRisePct: metrics.risePct,
-            strongTrendPullbackReboundDropPct: metrics.dropPct,
-            strongTrendPullbackReboundVolumeRatio20: metrics.volumeRatio20,
-          };
-        }
-
-        function strongTrendPullbackReboundMetricsFromRecord(record) {
-          const metrics = record?.strategyMetrics?.[STRONG_TREND_PULLBACK_STRATEGY_ID] || record?.strongTrendPullbackRebound || {};
-          const score = finiteNumber(record?.strongTrendPullbackReboundScore) ?? finiteNumber(record?.strategyScores?.[STRONG_TREND_PULLBACK_STRATEGY_ID]) ?? finiteNumber(metrics.score);
-          if (score == null) {
-            return null;
-          }
-          return {
-            ...metrics,
-            score,
-            pullbackType: record?.strongTrendPullbackReboundType || metrics.pullbackType,
-            reboundLabel: record?.strongTrendPullbackReboundLabel || metrics.reboundLabel,
-            risePct: finiteNumber(record?.strongTrendPullbackReboundRisePct) ?? finiteNumber(metrics.risePct),
-            dropPct: finiteNumber(record?.strongTrendPullbackReboundDropPct) ?? finiteNumber(metrics.dropPct),
-            volumeRatio20: finiteNumber(record?.strongTrendPullbackReboundVolumeRatio20) ?? finiteNumber(metrics.volumeRatio20),
-          };
-        }
-
-        function filterStrongTrendPullbackReboundRecords(records) {
-          const out = [];
-          (Array.isArray(records) ? records : []).forEach((record) => {
-            const savedStrongTrendPullbackMatch =
-              record.strongTrendPullbackReboundCandidate === true ||
-              (record.strategyMatches || []).includes(STRONG_TREND_PULLBACK_STRATEGY_ID);
-            if (savedStrongTrendPullbackMatch) {
-              const metrics = strongTrendPullbackReboundMetricsFromRecord(record);
-              if (metrics) {
-                out.push(attachStrongTrendPullbackReboundMatch(record, metrics));
-              }
-            }
-          });
-          return out;
-        }
-
-        function attachHighPullback30Match(record, metrics) {
-          const strategyMatches = [...new Set([...(record.strategyMatches || []), HIGH_PULLBACK_STRATEGY_ID])];
-          const strategyScores = { ...(record.strategyScores || {}), [HIGH_PULLBACK_STRATEGY_ID]: metrics.dropRate };
-          const strategyMetrics = { ...(record.strategyMetrics || {}), [HIGH_PULLBACK_STRATEGY_ID]: metrics };
-          const highLabel = metrics.highDate ? ` (${metrics.highDate})` : "";
-          const lowLabel = metrics.afterLowDate ? ` (${metrics.afterLowDate})` : "";
-          const barsLabel = metrics.barsToLow != null ? `${metrics.barsToLow}本後に ` : "";
-          const strategyReasons = {
-            ...(record.strategyReasons || {}),
-            [HIGH_PULLBACK_STRATEGY_ID]: [
-              `高値 ${formatNumber(metrics.highest200, 0)}${highLabel}`,
-              `${barsLabel}安値 ${formatNumber(metrics.afterLow, 0)}${lowLabel} / -${formatNumber(metrics.dropRate, 1)}%`,
-            ],
-          };
-          return {
-            ...record,
-            strategyMatches,
-            strategyScores,
-            strategyMetrics,
-            strategyReasons,
-            highPullback30Candidate: true,
-            highPullback30DropRate: metrics.dropRate,
-            highPullback30DropDistance: Math.abs(Number(metrics.dropRate) - highPullbackDropPct()),
-            highPullback30SortBand:
-              metrics.currentDrawdownPct != null &&
-              metrics.currentDrawdownPct >= highPullbackDropPct() - 5 &&
-              metrics.currentDrawdownPct <= highPullbackDropPct() + 10
-                ? 0
-                : 1,
-            highPullback30CurrentDrawdownPct: metrics.currentDrawdownPct,
-            highPullback30Highest200: metrics.highest200,
-            highPullback30AfterLow: metrics.afterLow,
-            highPullback30HighDate: metrics.highDate,
-            highPullback30LowDate: metrics.afterLowDate,
-            highPullback30BarsToLow: metrics.barsToLow,
-          };
-        }
-
-        function highPullbackMetricsFromRecord(record) {
-          const metrics = record?.strategyMetrics?.[HIGH_PULLBACK_STRATEGY_ID] || record?.highPullback30 || {};
-          const dropRate = record?.highPullback30DropRate ?? metrics.dropRate;
-          if (!Number.isFinite(Number(dropRate))) {
-            return null;
-          }
-          return {
-            ...metrics,
-            highest200: record?.highPullback30Highest200 ?? metrics.highest200,
-            highDate: record?.highPullback30HighDate ?? metrics.highDate,
-            afterLow: record?.highPullback30AfterLow ?? metrics.afterLow,
-            afterLowDate: record?.highPullback30LowDate ?? metrics.afterLowDate,
-            barsToLow: record?.highPullback30BarsToLow ?? metrics.barsToLow,
-            barsSinceLow: metrics.barsSinceLow,
-            dropRate: Number(dropRate),
-            currentClose: metrics.currentClose,
-            currentDrawdownPct: record?.highPullback30CurrentDrawdownPct ?? metrics.currentDrawdownPct,
-          };
-        }
-
-        function filterHighPullback30Records(records) {
-          const out = [];
-          (Array.isArray(records) ? records : []).forEach((record) => {
-            const savedHighPullbackMatch =
-              record.highPullback30Candidate === true || (record.strategyMatches || []).includes(HIGH_PULLBACK_STRATEGY_ID);
-            if (savedHighPullbackMatch) {
-              const metrics = highPullbackMetricsFromRecord(record);
-              if (metrics) {
-                out.push(attachHighPullback30Match(record, metrics));
-              }
-            }
-          });
-          return out;
         }
 
         function strategyControlValue() {
@@ -2584,9 +2443,9 @@
             } else if (state.sort === "strategy_rsi2") {
               scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
             } else if (state.sort === "strategy_high_pullback_30") {
-              scannerBase = filterHighPullback30Records(scannerBase);
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("high_pullback_30"));
             } else if (state.sort === "strategy_strong_trend_pullback_rebound") {
-              scannerBase = filterStrongTrendPullbackReboundRecords(scannerBase);
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("strong_trend_pullback_rebound"));
             }
             matchedCount = scannerBase.length;
             filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);

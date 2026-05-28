@@ -2587,10 +2587,16 @@
       return items.sort((a, b) => compareNullableNumbers(b.watchCandidateScore, a.watchCandidateScore));
     }
     if (sortKey === "strategy_high_pullback_30") {
+      const highPullbackMetrics = (record) => record?.strategyMetrics?.high_pullback_30 || record?.highPullback30 || {};
+      const highPullbackDropRate = (record) => record?.highPullback30DropRate ?? highPullbackMetrics(record).dropRate;
+      const highPullbackDropDistance = (record) => {
+        const dropRate = Number(highPullbackDropRate(record));
+        return Number.isFinite(dropRate) ? Math.abs(dropRate - 30) : null;
+      };
       return items.sort(
         (a, b) =>
-          compareNullableNumbers(a.highPullback30DropDistance, b.highPullback30DropDistance) ||
-          compareNullableNumbers(b.highPullback30DropRate, a.highPullback30DropRate) ||
+          compareNullableNumbers(highPullbackDropDistance(a), highPullbackDropDistance(b)) ||
+          compareNullableNumbers(highPullbackDropRate(b), highPullbackDropRate(a)) ||
           compareNullableNumbers(a.changePercent, b.changePercent) ||
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
