@@ -157,8 +157,6 @@
           chartObserver: null,
           chartPayloadCache: new Map(),
           chartRequestCache: new Map(),
-          highPullbackRecentPayloadCache: new Map(),
-          highPullbackRecentRequestCache: new Map(),
           fullChartPayloadCache: new Map(),
           fullChartRequestCache: new Map(),
           chartRenderedCodes: new Set(),
@@ -175,17 +173,7 @@
         const DAILY_ONLY_SORT_KEYS = new Set(["strategy_high_pullback_30", "strategy_strong_trend_pullback_rebound"]);
         const HIGH_PULLBACK_STRATEGY_ID = "high_pullback_30";
         const STRONG_TREND_PULLBACK_STRATEGY_ID = "strong_trend_pullback_rebound";
-        const HIGH_PULLBACK_MIN_BARS = 200;
-        const HIGH_PULLBACK_LOOKAHEAD_BARS = 10;
-        const HIGH_PULLBACK_RECENT_ACHIEVEMENT_BARS = 5;
-        const HIGH_PULLBACK_FILTER_CONCURRENCY = 24;
         const DEFAULT_HIGH_PULLBACK_DROP_PCT = 30;
-        const STRONG_TREND_PULLBACK_LOOKBACK_BARS = 60;
-        const STRONG_TREND_PULLBACK_MIN_RISE_PCT = 30;
-        const STRONG_TREND_PULLBACK_MIN_DROP_PCT = 15;
-        const STRONG_TREND_PULLBACK_DEEP_DROP_PCT = 30;
-        const STRONG_TREND_PULLBACK_MAX_DROP_PCT = 45;
-        const STRONG_TREND_PULLBACK_FILTER_CONCURRENCY = 24;
 
         function isDailyOnlySort(sortKey = state.sort) {
           return DAILY_ONLY_SORT_KEYS.has(sortKey);
@@ -288,315 +276,9 @@
           return periodEndDate || resolveAvailableDate(requestedDate, availableDates);
         }
 
-        function findHighPullback30Match(rows, selectedDate) {
-          const eligibleRows = (Array.isArray(rows) ? rows : [])
-            .filter((row) => row?.date && (!selectedDate || row.date <= selectedDate))
-            .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-          if (eligibleRows.length < HIGH_PULLBACK_MIN_BARS) {
-            return null;
-          }
-          const windowRows = eligibleRows.slice(-HIGH_PULLBACK_MIN_BARS);
-          let highIndex = -1;
-          let highest = -Infinity;
-          windowRows.forEach((row, index) => {
-            const high = Number(row.high);
-            if (Number.isFinite(high) && high >= highest) {
-              highest = high;
-              highIndex = index;
-            }
-          });
-          if (!(highest > 0) || highIndex < 0) {
-            return null;
-          }
-          const afterRows = windowRows.slice(highIndex + 1, highIndex + 1 + HIGH_PULLBACK_LOOKAHEAD_BARS);
-          if (!afterRows.length) {
-            return null;
-          }
-          let lowIndex = -1;
-          let afterLow = Infinity;
-          afterRows.forEach((row, index) => {
-            const low = Number(row.low);
-            if (Number.isFinite(low) && low < afterLow) {
-              afterLow = low;
-              lowIndex = index;
-            }
-          });
-          if (!Number.isFinite(afterLow) || lowIndex < 0) {
-            return null;
-          }
-          const barsToLow = lowIndex + 1;
-          const dropRate = ((highest - afterLow) / highest) * 100;
-          if (dropRate < highPullbackDropPct()) {
-            return null;
-          }
-          const windowStartIndex = eligibleRows.length - windowRows.length;
-          const lowWindowIndex = highIndex + 1 + lowIndex;
-          const lowEligibleIndex = windowStartIndex + lowWindowIndex;
-          const barsSinceLow = eligibleRows.length - 1 - lowEligibleIndex;
-          if (barsSinceLow >= HIGH_PULLBACK_RECENT_ACHIEVEMENT_BARS) {
-            return null;
-          }
-          const currentClose = Number(eligibleRows[eligibleRows.length - 1]?.close);
-          return {
-            highest200: roundNumber(highest, 4),
-            highDate: windowRows[highIndex].date,
-            afterLow: roundNumber(afterLow, 4),
-            afterLowDate: afterRows[lowIndex].date,
-            barsToLow,
-            barsSinceLow,
-            dropRate: roundNumber(dropRate, 4),
-            currentClose: Number.isFinite(currentClose) ? roundNumber(currentClose, 4) : null,
-            currentDrawdownPct: Number.isFinite(currentClose) ? roundNumber(((highest - currentClose) / highest) * 100, 4) : null,
-          };
-        }
-
-        function hasHighPullbackLookbackRows(rows, selectedDate) {
-          return (Array.isArray(rows) ? rows : []).filter((row) => row?.date && (!selectedDate || row.date <= selectedDate)).length >= HIGH_PULLBACK_MIN_BARS;
-        }
-
         function finiteNumber(value) {
           const number = Number(value);
           return Number.isFinite(number) ? number : null;
-        }
-
-        function distancePctFromBaseline(value, baseline) {
-          const current = finiteNumber(value);
-          const base = finiteNumber(baseline);
-          if (current == null || !(base > 0)) {
-            return null;
-          }
-          return ((current - base) / base) * 100;
-        }
-
-        function averageRows(rows, getter) {
-          const values = (Array.isArray(rows) ? rows : [])
-            .map(getter)
-            .map(finiteNumber)
-            .filter((value) => value != null);
-          return values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
-        }
-
-        function lowerWickRatio(row) {
-          const open = finiteNumber(row?.open);
-          const high = finiteNumber(row?.high);
-          const low = finiteNumber(row?.low);
-          const close = finiteNumber(row?.close);
-          if (open == null || high == null || low == null || close == null || high <= low) {
-            return null;
-          }
-          return (Math.min(open, close) - low) / (high - low);
-        }
-
-        function enrichStrongTrendRows(rows) {
-          const sourceRows = (Array.isArray(rows) ? rows : [])
-            .filter((row) => row?.date && Number.isFinite(Number(row.close)))
-            .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-          const windows = [5, 25, 75];
-          return sourceRows.map((row, index) => {
-            const enriched = { ...row };
-            windows.forEach((windowSize) => {
-              const key = `ma${windowSize}`;
-              if (finiteNumber(enriched[key]) != null) {
-                return;
-              }
-              if (index + 1 < windowSize) {
-                enriched[key] = null;
-                return;
-              }
-              const values = sourceRows.slice(index + 1 - windowSize, index + 1).map((item) => finiteNumber(item.close));
-              enriched[key] = values.every((value) => value != null)
-                ? roundNumber(values.reduce((total, value) => total + value, 0) / windowSize, 4)
-                : null;
-            });
-            return enriched;
-          });
-        }
-
-        function findStrongTrendPullbackReboundMatch(rows, selectedDate) {
-          const eligibleRows = enrichStrongTrendRows(rows)
-            .filter((row) => row?.date && (!selectedDate || row.date <= selectedDate))
-            .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-          if (eligibleRows.length < STRONG_TREND_PULLBACK_LOOKBACK_BARS + 10) {
-            return null;
-          }
-          const current = eligibleRows[eligibleRows.length - 1];
-          const currentClose = finiteNumber(current.close);
-          const currentMa5 = finiteNumber(current.ma5);
-          const currentMa25 = finiteNumber(current.ma25);
-          const currentMa75 = finiteNumber(current.ma75);
-          if (currentClose == null || currentMa5 == null || currentMa75 == null || currentClose < currentMa5) {
-            return null;
-          }
-
-          const trendWindow = eligibleRows.slice(-STRONG_TREND_PULLBACK_LOOKBACK_BARS);
-          let lowIndex = -1;
-          let low = Infinity;
-          let highIndex = -1;
-          let high = -Infinity;
-          let risePct = -Infinity;
-          trendWindow.forEach((row, index) => {
-            const rowLow = finiteNumber(row.low);
-            if (rowLow != null && rowLow < low) {
-              low = rowLow;
-              lowIndex = index;
-            }
-            const rowHigh = finiteNumber(row.high);
-            if (rowHigh != null && lowIndex >= 0 && index >= lowIndex) {
-              const candidateRisePct = ((rowHigh - low) / low) * 100;
-              if (candidateRisePct > risePct) {
-                risePct = candidateRisePct;
-                high = rowHigh;
-                highIndex = index;
-              }
-            }
-          });
-          if (!(low > 0) || !(high > 0) || highIndex <= lowIndex || risePct < STRONG_TREND_PULLBACK_MIN_RISE_PCT) {
-            return null;
-          }
-
-          const pullbackRows = trendWindow.slice(highIndex + 1);
-          if (!pullbackRows.length) {
-            return null;
-          }
-          const currentDrawdownPct = ((high - currentClose) / high) * 100;
-          if (
-            currentDrawdownPct < STRONG_TREND_PULLBACK_MIN_DROP_PCT ||
-            currentDrawdownPct > STRONG_TREND_PULLBACK_MAX_DROP_PCT
-          ) {
-            return null;
-          }
-
-          const oldMa75 = finiteNumber(eligibleRows[Math.max(0, eligibleRows.length - 21)]?.ma75);
-          const ma75SlopePct = oldMa75 && currentMa75 ? ((currentMa75 - oldMa75) / oldMa75) * 100 : null;
-          if (ma75SlopePct != null && ma75SlopePct < -3) {
-            return null;
-          }
-          const distanceToMa75 = distancePctFromBaseline(currentClose, currentMa75);
-          if (distanceToMa75 != null && distanceToMa75 < -8) {
-            return null;
-          }
-
-          const pullbackTouchesMa25 = pullbackRows.some((row) => {
-            const ma25 = finiteNumber(row.ma25);
-            if (!ma25) return false;
-            const lowDistance = Math.abs(distancePctFromBaseline(row.low, ma25) ?? Infinity);
-            const closeDistance = Math.abs(distancePctFromBaseline(row.close, ma25) ?? Infinity);
-            return Math.min(lowDistance, closeDistance) <= 3;
-          });
-          const pullbackTouchesMa75 = pullbackRows.some((row) => {
-            const ma75 = finiteNumber(row.ma75);
-            if (!ma75) return false;
-            const lowDistance = Math.abs(distancePctFromBaseline(row.low, ma75) ?? Infinity);
-            const closeDistance = Math.abs(distancePctFromBaseline(row.close, ma75) ?? Infinity);
-            return Math.min(lowDistance, closeDistance) <= 5;
-          });
-          if (!pullbackTouchesMa25 && !pullbackTouchesMa75) {
-            return null;
-          }
-
-          const previous = eligibleRows[eligibleRows.length - 2] || null;
-          const ma5SlopeUp = currentMa5 != null && finiteNumber(previous?.ma5) != null ? currentMa5 >= finiteNumber(previous.ma5) : false;
-          const recent5 = eligibleRows.slice(-6, -1);
-          const recent10 = eligibleRows.slice(-11, -1);
-          const recent5High = Math.max(...recent5.map((row) => finiteNumber(row.high) ?? -Infinity));
-          const recent10High = Math.max(...recent10.map((row) => finiteNumber(row.high) ?? -Infinity));
-          const closeBreaks5High = Number.isFinite(recent5High) && currentClose > recent5High;
-          const closeBreaks10High = Number.isFinite(recent10High) && currentClose > recent10High;
-          const volume20 = averageRows(eligibleRows.slice(-21, -1), (row) => row.volume);
-          const currentVolume = finiteNumber(current.volume);
-          const volumeRatio20 = volume20 && currentVolume != null ? currentVolume / volume20 : null;
-          const riseSegment = trendWindow.slice(lowIndex, highIndex + 1);
-          const riseAboveMa25Ratio = riseSegment.length
-            ? riseSegment.filter((row) => finiteNumber(row.close) != null && finiteNumber(row.ma25) != null && Number(row.close) > Number(row.ma25)).length / riseSegment.length
-            : 0;
-          const pullbackVolume = averageRows(pullbackRows.slice(-10), (row) => row.volume);
-          const riseVolume = averageRows(riseSegment.slice(-10), (row) => row.volume);
-          const volumeCooled = pullbackVolume != null && riseVolume != null ? pullbackVolume <= riseVolume * 0.9 : false;
-          const maxLowerWick = Math.max(...pullbackRows.slice(-10).map((row) => lowerWickRatio(row) ?? 0));
-          const hasLowerWick = maxLowerWick >= 0.35;
-
-          const pullbackType =
-            currentDrawdownPct >= STRONG_TREND_PULLBACK_DEEP_DROP_PCT ? "deep_reset_pullback" : "normal_pullback";
-          const reboundLabel =
-            pullbackType === "deep_reset_pullback"
-              ? "deep_reset_rebound"
-              : pullbackTouchesMa25 && currentClose >= (currentMa25 ?? Infinity)
-                ? "ma25_rebound"
-                : "ma75_rebound";
-
-          let score = 0;
-          score += Math.min(15, Math.max(0, ((risePct - 30) / 50) * 15 + 6));
-          if (currentDrawdownPct < 18) score += 14;
-          else if (currentDrawdownPct < 25) score += 20;
-          else if (currentDrawdownPct < 30) score += 16;
-          else if (currentDrawdownPct < 35) score += 12;
-          else score += 8;
-          if (pullbackTouchesMa25) score += 10;
-          if (pullbackTouchesMa75) score += 10;
-          if (currentClose >= currentMa5) score += 5;
-          if (currentMa25 != null && currentClose >= currentMa25) score += 6;
-          if (currentClose >= currentMa75) score += 4;
-          if (ma5SlopeUp) score += 4;
-          if (closeBreaks5High) score += 5;
-          if (closeBreaks10High) score += 4;
-          if (volumeRatio20 != null && volumeRatio20 >= 1.2) score += 8;
-          else if (volumeRatio20 != null && volumeRatio20 >= 1) score += 5;
-          if (volumeCooled) score += 4;
-          if (hasLowerWick) score += 4;
-          score += Math.min(10, riseAboveMa25Ratio * 10);
-          if (ma75SlopePct == null || ma75SlopePct >= 0) score += 5;
-          else score += 2;
-          if (pullbackType === "deep_reset_pullback") {
-            score = Math.min(score, 82);
-          }
-          if (score < (pullbackType === "deep_reset_pullback" ? 48 : 55)) {
-            return null;
-          }
-
-          return {
-            score: roundNumber(Math.min(100, score), 4),
-            pullbackType,
-            reboundLabel,
-            risePct: roundNumber(risePct, 4),
-            dropPct: roundNumber(currentDrawdownPct, 4),
-            lowDate: trendWindow[lowIndex]?.date || null,
-            highDate: trendWindow[highIndex]?.date || null,
-            high: roundNumber(high, 4),
-            low: roundNumber(low, 4),
-            distanceToMa25: currentMa25 ? roundNumber(distancePctFromBaseline(currentClose, currentMa25), 4) : null,
-            distanceToMa75: currentMa75 ? roundNumber(distancePctFromBaseline(currentClose, currentMa75), 4) : null,
-            ma75SlopePct: ma75SlopePct == null ? null : roundNumber(ma75SlopePct, 4),
-            volumeRatio20: volumeRatio20 == null ? null : roundNumber(volumeRatio20, 4),
-            riseAboveMa25Ratio: roundNumber(riseAboveMa25Ratio, 4),
-            touchedMa25: pullbackTouchesMa25,
-            touchedMa75: pullbackTouchesMa75,
-            closeBreaks5High,
-            closeBreaks10High,
-          };
-        }
-
-        function isStrongTrendPullbackReboundPrefilterCandidate(record) {
-          const close = finiteNumber(record?.close);
-          const ma5 = finiteNumber(record?.ma5);
-          const ma75 = finiteNumber(record?.ma75);
-          if (close == null) {
-            return true;
-          }
-          if (ma5 != null && close < ma5) {
-            return false;
-          }
-          const distanceToMa75 = finiteNumber(record?.distanceToMa75) ?? distancePctFromBaseline(close, ma75);
-          if (distanceToMa75 != null && distanceToMa75 < -8) {
-            return false;
-          }
-          const high52w = finiteNumber(record?.high52w);
-          if (high52w != null && high52w > 0) {
-            const drawdownFrom52wHigh = ((high52w - close) / high52w) * 100;
-            if (drawdownFrom52wHigh < STRONG_TREND_PULLBACK_MIN_DROP_PCT) {
-              return false;
-            }
-          }
-          return true;
         }
 
         function attachStrongTrendPullbackReboundMatch(record, metrics) {
@@ -644,9 +326,9 @@
           };
         }
 
-        async function filterStrongTrendPullbackReboundRecords(records) {
+        function filterStrongTrendPullbackReboundRecords(records) {
           const out = [];
-          await mapWithConcurrency(records, STRONG_TREND_PULLBACK_FILTER_CONCURRENCY, async (record) => {
+          (Array.isArray(records) ? records : []).forEach((record) => {
             const savedStrongTrendPullbackMatch =
               record.strongTrendPullbackReboundCandidate === true ||
               (record.strategyMatches || []).includes(STRONG_TREND_PULLBACK_STRATEGY_ID);
@@ -654,24 +336,7 @@
               const metrics = strongTrendPullbackReboundMetricsFromRecord(record);
               if (metrics) {
                 out.push(attachStrongTrendPullbackReboundMatch(record, metrics));
-                return;
               }
-            }
-            try {
-              let rows = await loadHighPullbackRecentRows(record.code);
-              let metrics = findStrongTrendPullbackReboundMatch(rows, state.selectedDate);
-              if (!metrics) {
-                const rowsBeforeSelectedDate = (Array.isArray(rows) ? rows : []).filter((row) => row?.date && (!state.selectedDate || row.date <= state.selectedDate));
-                if (rowsBeforeSelectedDate.length < STRONG_TREND_PULLBACK_LOOKBACK_BARS + 10) {
-                  rows = await loadFullChartRows(record.code);
-                  metrics = findStrongTrendPullbackReboundMatch(rows, state.selectedDate);
-                }
-              }
-              if (metrics) {
-                out.push(attachStrongTrendPullbackReboundMatch(record, metrics));
-              }
-            } catch (error) {
-              console.debug("[strong-trend-pullback-rebound:skip]", { code: record.code, reason: error?.message || String(error) });
             }
           });
           return out;
@@ -735,41 +400,16 @@
           };
         }
 
-        async function filterHighPullback30Records(records) {
+        function filterHighPullback30Records(records) {
           const out = [];
-          await mapWithConcurrency(records, HIGH_PULLBACK_FILTER_CONCURRENCY, async (record) => {
+          (Array.isArray(records) ? records : []).forEach((record) => {
             const savedHighPullbackMatch =
               record.highPullback30Candidate === true || (record.strategyMatches || []).includes(HIGH_PULLBACK_STRATEGY_ID);
             if (savedHighPullbackMatch) {
               const metrics = highPullbackMetricsFromRecord(record);
               if (metrics) {
                 out.push(attachHighPullback30Match(record, metrics));
-                return;
               }
-            }
-            const high52w = Number(record.high52w);
-            const low52w = Number(record.low52w);
-            const rangeDrop = high52w > 0 && Number.isFinite(low52w) ? ((high52w - low52w) / high52w) * 100 : NaN;
-            if (!Number.isFinite(rangeDrop) || rangeDrop < highPullbackDropPct()) {
-              return;
-            }
-            try {
-              let metrics = null;
-              let recentRows = null;
-              try {
-                recentRows = await loadHighPullbackRecentRows(record.code);
-                metrics = findHighPullback30Match(recentRows, state.selectedDate);
-              } catch (_recentError) {
-                metrics = null;
-              }
-              if (!metrics && !hasHighPullbackLookbackRows(recentRows, state.selectedDate)) {
-                metrics = findHighPullback30Match(await loadFullChartRows(record.code), state.selectedDate);
-              }
-              if (metrics) {
-                out.push(attachHighPullback30Match(record, metrics));
-              }
-            } catch (error) {
-              console.debug("[high-pullback-30:skip]", { code: record.code, reason: error?.message || String(error) });
             }
           });
           return out;
@@ -2616,32 +2256,6 @@
           return state.fullChartRequestCache.get(cacheKey);
         }
 
-        async function loadHighPullbackRecentRows(code) {
-          const cacheKey = String(code);
-          const cached = state.highPullbackRecentPayloadCache.get(cacheKey);
-          if (cached) {
-            return cached;
-          }
-          if (!state.highPullbackRecentRequestCache.has(cacheKey)) {
-            state.highPullbackRecentRequestCache.set(
-              cacheKey,
-              loadRecentTickerForChart(code, {
-                selectedDate: state.selectedDate,
-                allowStaleSelectedDate: true,
-              })
-                .then((inspected) => {
-                  const rows = inspected.payload?.ohlcv || [];
-                  state.highPullbackRecentPayloadCache.set(cacheKey, rows);
-                  return rows;
-                })
-                .finally(() => {
-                  state.highPullbackRecentRequestCache.delete(cacheKey);
-                })
-            );
-          }
-          return state.highPullbackRecentRequestCache.get(cacheKey);
-        }
-
         async function ensureScannerCardChart(record, options = {}) {
           const chartTimeframe = getCardChartTimeframe(record.code);
           const chartRangeMonths = getCardChartRangeMonths(chartTimeframe);
@@ -2970,14 +2584,9 @@
             } else if (state.sort === "strategy_rsi2") {
               scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
             } else if (state.sort === "strategy_high_pullback_30") {
-              list.innerHTML = '<div class="empty-cell">高値調整を判定中...</div>';
-              updateIndexResultCount({ loading: true });
-              scannerBase = await filterHighPullback30Records(scannerBase);
+              scannerBase = filterHighPullback30Records(scannerBase);
             } else if (state.sort === "strategy_strong_trend_pullback_rebound") {
-              const prefilteredScannerBase = scannerBase.filter(isStrongTrendPullbackReboundPrefilterCandidate);
-              list.innerHTML = `<div class="empty-cell">強トレンド押し目を判定中... (${formatNumber(prefilteredScannerBase.length, 0)} / ${formatNumber(scannerBase.length, 0)})</div>`;
-              updateIndexResultCount({ loading: true });
-              scannerBase = await filterStrongTrendPullbackReboundRecords(prefilteredScannerBase);
+              scannerBase = filterStrongTrendPullbackReboundRecords(scannerBase);
             }
             matchedCount = scannerBase.length;
             filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
