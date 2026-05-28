@@ -297,6 +297,14 @@ def patch_overview_lite(date_value: str, timeframe: str, updates: dict[str, dict
                 "highPullback30HighDate",
                 "highPullback30LowDate",
                 "highPullback30BarsToLow",
+                "strongTrendPullbackRebound",
+                "strongTrendPullbackReboundCandidate",
+                "strongTrendPullbackReboundScore",
+                "strongTrendPullbackReboundType",
+                "strongTrendPullbackReboundLabel",
+                "strongTrendPullbackReboundRisePct",
+                "strongTrendPullbackReboundDropPct",
+                "strongTrendPullbackReboundVolumeRatio20",
             }:
                 record[key] = value
         patched += 1

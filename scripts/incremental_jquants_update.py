@@ -82,6 +82,8 @@ DETAIL_ROW_KEYS = (
     "strategyScores",
     "strategyReasons",
     "strategyExcludedReasons",
+    "strategyMetrics",
+    "strongTrendPullbackRebound",
     "strongTrendPullbackReboundCandidate",
     "strongTrendPullbackReboundScore",
     "strongTrendPullbackReboundType",
