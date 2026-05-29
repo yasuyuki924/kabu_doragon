@@ -1502,11 +1502,11 @@
         });
         exportTradingViewButton?.addEventListener("click", () => {
           setPicksMenuOpen(false);
-          triggerExportDownloads([buildTradingViewExportEntry(currentListPicks())]);
+          triggerExportDownloads([buildTradingViewExportEntry(currentListPicks(), buildFilterSnapshotFromState(state))]);
         });
         exportHyperButton?.addEventListener("click", () => {
           setPicksMenuOpen(false);
-          triggerExportDownloads(buildHyperExportEntries(currentListPicks()));
+          triggerExportDownloads(buildHyperExportEntries(currentListPicks(), buildFilterSnapshotFromState(state)));
         });
         saveListButton?.addEventListener("click", () => {
           setPicksMenuOpen(false);
@@ -1573,7 +1573,7 @@
 
         listSaveOkButton?.addEventListener("click", () => {
           try {
-            const saved = registerAllPicks(currentListPicks(), listSaveInput?.value || "");
+            const saved = registerAllPicks(currentListPicks(), listSaveInput?.value || "", buildFilterSnapshotFromState(state));
             state.activeListName = saved?.name || state.activeListName;
             if (listSaveError) {
               listSaveError.hidden = true;

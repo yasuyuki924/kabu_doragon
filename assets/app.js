@@ -20,6 +20,7 @@
     INDEX_SCANNER_LIMITS,
     INDEX_SCANNER_MONTHS,
     INDEX_SCANNER_SORT_OPTIONS,
+    INDEX_SCANNER_RANKING_OPTIONS,
     INDEX_SCANNER_RANKING_SORTS,
     INDEX_SCANNER_TIMEFRAMES,
     INDEX_SCANNER_TIMEFRAME_RANGES,
@@ -1208,6 +1209,9 @@
       limit: Number(state.limit || 0),
       bars: Number.isFinite(bars) ? bars : 63,
       timeframe: String(state.timeframe || "daily").trim() || "daily",
+      selectedStrategies: Array.isArray(state.selectedStrategies)
+        ? state.selectedStrategies.map((strategyId) => String(strategyId || "").trim()).filter(Boolean)
+        : [],
       sourcePage: String(document.body?.dataset?.page || "").trim(),
     };
   }
@@ -1273,11 +1277,16 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
-  function buildRegisteredDisplayName(userLabel, registeredAt) {
-    return `${formatYmd(registeredAt)} ${String(userLabel || "").trim()}`;
+  function buildRegisteredDisplayName(userLabel, registeredAt, conditionLabel = "") {
+    const trimmedLabel = String(userLabel || "").trim();
+    const trimmedConditionLabel = String(conditionLabel || "").trim();
+    if (trimmedConditionLabel) {
+      return [trimmedLabel, trimmedConditionLabel].filter(Boolean).join(" / ");
+    }
+    return `${formatYmd(registeredAt)} ${trimmedLabel}`;
   }
 
-  function registerAllPicks(picks, userLabel) {
+  function registerAllPicks(picks, userLabel, filterContext = null) {
     const normalized = dedupeScannerPicks(Array.isArray(picks) ? picks : []);
     if (!normalized.length) {
       throw new Error("登録対象の選別銘柄がありません。");
@@ -1293,7 +1302,7 @@
     }
     const entry = {
       id: `reg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: buildRegisteredDisplayName(trimmedLabel, registeredAt),
+      name: buildRegisteredDisplayName(trimmedLabel, registeredAt, buildSearchConditionDisplayName(filterContext)),
       registeredAt,
       count: items.length,
       items,
@@ -1419,25 +1428,99 @@
     };
   }
 
-  function buildTradingViewExportEntry(items) {
+  function lookupConfigLabel(config, key) {
+    const normalizedKey = String(key || "").trim();
+    return (config || []).find((item) => String(item?.key || "") === normalizedKey)?.label || "";
+  }
+
+  function selectedStrategyLabels(context) {
+    const explicitStrategies = Array.isArray(context?.selectedStrategies) ? context.selectedStrategies : [];
+    const labels = explicitStrategies
+      .map((strategyId) => lookupConfigLabel(STRATEGY_CONFIG, strategyId) || String(strategyId || "").trim())
+      .filter(Boolean);
+    const sort = String(context?.sort || "").trim();
+    if (lookupConfigLabel(INDEX_SCANNER_SORT_OPTIONS, sort)) {
+      labels.push(lookupConfigLabel(INDEX_SCANNER_SORT_OPTIONS, sort));
+    }
+    return [...new Set(labels)];
+  }
+
+  function rankingLabelFromContext(context) {
+    const sort = String(context?.sort || "").trim();
+    return lookupConfigLabel(INDEX_SCANNER_RANKING_OPTIONS, sort);
+  }
+
+  function turnoverConditionLabel(value) {
+    const turnover = Number(value || 0);
+    if (!(turnover > 0)) {
+      return "売買代金指定なし";
+    }
+    if (turnover >= 100000000) {
+      const oku = turnover / 100000000;
+      return Number.isInteger(oku) ? `${oku}億円以上` : `${formatNumber(oku, 1)}億円以上`;
+    }
+    if (turnover >= 10000) {
+      return `${formatNumber(turnover / 10000, 0)}万円以上`;
+    }
+    return `${formatNumber(turnover, 0)}円以上`;
+  }
+
+  function buildSearchConditionParts(context) {
+    if (!context || typeof context !== "object") {
+      return [];
+    }
+    const parts = [];
+    const date = String(context?.date || "").trim();
+    if (date) {
+      parts.push(date);
+    }
+    selectedStrategyLabels(context).forEach((label) => parts.push(label));
+    const rankingLabel = rankingLabelFromContext(context);
+    if (rankingLabel) {
+      parts.push(rankingLabel);
+    }
+    parts.push(turnoverConditionLabel(context?.turnover));
+    return parts.filter(Boolean);
+  }
+
+  function buildSearchConditionDisplayName(context) {
+    return buildSearchConditionParts(context).join(" / ");
+  }
+
+  function sanitizeDownloadFilePart(value) {
+    return String(value || "")
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\s+/g, "")
+      .replace(/_+/g, "_");
+  }
+
+  function buildSearchConditionFileBase(context, fallback = "kabu_list") {
+    const base = buildSearchConditionParts(context).map(sanitizeDownloadFilePart).filter(Boolean).join("_");
+    return base || fallback;
+  }
+
+  function buildTradingViewExportEntry(items, filterContext = null) {
     const blob = createDownloadBlob(toTradingViewText(items));
+    const fileBase = buildSearchConditionFileBase(filterContext, "");
     return {
       key: "tradingview",
       label: "TradingView",
-      fileName: "tradingview_watchlist.txt",
+      fileName: fileBase ? `${fileBase}_TradingView.txt` : "tradingview_watchlist.txt",
       count: items.length,
       href: blob.url,
       revoke: blob.revoke,
     };
   }
 
-  function buildHyperExportEntries(items) {
+  function buildHyperExportEntries(items, filterContext = null) {
     const blob = createDownloadBlob(toHyperSbi2Csv(items), "text/csv;charset=utf-8");
+    const fileBase = buildSearchConditionFileBase(filterContext, "");
     return [
       {
         key: "hyper",
         label: "HYPER SBI 2",
-        fileName: "hyper_sbi2_codes.csv",
+        fileName: fileBase ? `${fileBase}_HYPER_SBI2.csv` : "hyper_sbi2_codes.csv",
         count: items.length,
         href: blob.url,
         revoke: blob.revoke,
