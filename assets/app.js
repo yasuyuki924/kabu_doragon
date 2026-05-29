@@ -2757,6 +2757,56 @@
     return isLock ? "lock" : "peeled";
   }
 
+  function getStopLowStatus(record) {
+    const close = Number(record?.close);
+    const low = Number(record?.low);
+    const change = Number(record?.change);
+    if (!Number.isFinite(close) || !Number.isFinite(low) || !Number.isFinite(change)) {
+      return "none";
+    }
+    const prevClose = close - change;
+    if (!(prevClose > 0)) {
+      return "none";
+    }
+    const limitWidth = getPriceLimitWidth(prevClose);
+    if (limitWidth == null) {
+      return "none";
+    }
+    const limitDownPrice = prevClose - limitWidth;
+    const reachedLimit = Math.abs(low - limitDownPrice) <= STOP_HIGH_EPSILON;
+    if (!reachedLimit) {
+      return "none";
+    }
+    const isLock = Math.abs(close - limitDownPrice) <= STOP_HIGH_EPSILON;
+    return isLock ? "lock" : "peeled";
+  }
+
+  function getLimitMoveStatus(record) {
+    const stopHighStatus = getStopHighStatus(record);
+    if (stopHighStatus !== "none") {
+      return {
+        className: stopHighStatus === "peeled" ? "scanner-limit-marker--high-peeled" : "scanner-limit-marker--high-lock",
+        label: stopHighStatus === "peeled" ? "ストップ高剥がれ" : "ストップ高",
+      };
+    }
+    const stopLowStatus = getStopLowStatus(record);
+    if (stopLowStatus !== "none") {
+      return {
+        className: stopLowStatus === "peeled" ? "scanner-limit-marker--low-peeled" : "scanner-limit-marker--low-lock",
+        label: stopLowStatus === "peeled" ? "ストップ安剥がれ" : "ストップ安",
+      };
+    }
+    return null;
+  }
+
+  function renderLimitMoveMarker(record) {
+    const status = getLimitMoveStatus(record);
+    if (!status) {
+      return "";
+    }
+    return `<span class="scanner-limit-marker ${status.className}" title="${escapeHtml(status.label)}" aria-label="${escapeHtml(status.label)}">S</span>`;
+  }
+
   function scannerSortLabel(sortKey) {
     return {
       gainers: "Gainers",
@@ -3204,10 +3254,6 @@
   }
 
   function renderScannerCompactHeader(record, rank, state, rankingKey = "") {
-    const stopHighStatus = getStopHighStatus(record);
-    const stopHighBadge = stopHighStatus === "none"
-      ? ""
-      : `<span class="scanner-stop-high-badge scanner-stop-high-badge--compact${stopHighStatus === "peeled" ? " scanner-stop-high-badge--peeled" : ""}" title="${stopHighStatus === "peeled" ? "ストップ高剥がれ" : "ストップ高"}">S</span>`;
     const qualityBadges = renderScannerQualityBadges(summarizeScannerRecordQuality(record, state.selectedDate));
     const detailHref = buildTickerUrl(record.code, state.selectedDate, rankingKey);
     return `
@@ -3221,11 +3267,10 @@
         </div>
         <div class="scanner-card-header-right">
           <span id="scanChange-${escapeHtml(record.code)}" class="num scanner-compact-change scanner-change-cell ${getChangeClass(record.changePercent)}">
-            ${formatSignedPercentHtml(record.changePercent)}
+            ${formatSignedPercentHtml(record.changePercent)}${renderLimitMoveMarker(record)}
           </span>
           <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-card-price">${formatNumber(record.close)}円</span>
           <span id="scanTurnover-${escapeHtml(record.code)}" class="scanner-card-turnover">${formatTurnoverOku(record.close, record.volume)}</span>
-          ${stopHighBadge}
           ${qualityBadges}
           <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
         </div>
@@ -3551,7 +3596,7 @@
       tradeDate.hidden = !options.showDate;
     }
     if (change) {
-      change.innerHTML = formatSignedPercentHtml(row.changePercent);
+      change.innerHTML = `${formatSignedPercentHtml(row.changePercent)}${renderLimitMoveMarker(row)}`;
       change.className = `num scanner-compact-change scanner-change-cell ${getChangeClass(row.changePercent)}`.trim();
     }
     if (turnover) {

@@ -2622,6 +2622,33 @@ body[data-page="index-scanner"] .scanner-stop-high-badge--compact {
   border-color: rgba(251, 182, 213, 0.36);
 }
 
+.scanner-limit-marker {
+  display: inline-block;
+  margin-left: 11px;
+  font-size: 1.28em;
+  font-weight: 1000;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.scanner-limit-marker--high-lock {
+  color: #ff2442;
+  text-shadow: 0 0 8px rgba(255, 36, 66, 0.28);
+}
+
+.scanner-limit-marker--high-peeled {
+  color: #ff9fbd;
+}
+
+.scanner-limit-marker--low-lock {
+  color: #1f5cff;
+  text-shadow: 0 0 8px rgba(31, 92, 255, 0.24);
+}
+
+.scanner-limit-marker--low-peeled {
+  color: #78e8ff;
+}
+
 .scanner-card-header {
   display: grid;
   grid-template-columns: minmax(0, 1.75fr) 0.7fr 0.72fr 0.62fr 22px;
@@ -2665,6 +2692,10 @@ body[data-page="index-scanner"] .scanner-card-rank {
 }
 
 body[data-page="index-scanner"] .scanner-compact-change {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0;
   font-size: 1.02rem;
   font-weight: 950;
   letter-spacing: 0.01em;
