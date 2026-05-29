@@ -1,0 +1,348 @@
+# KabuDragon OHLCV Quality Report
+
+- generatedAt: 2026-05-29T18:30:11
+- mode: warning
+- checked ohlcv files: 3741
+- checked public_json files: 3741
+- active codes: 3741
+- skipped unlisted ohlcv files: 46
+- skipped unlisted public_json files: 56
+- issues: 1971
+- critical: 0
+- warning: 1971
+
+## Issue Counts
+
+- large_date_gap: 412
+- single_day_extreme_move: 1483
+- too_few_rows: 76
+
+## Triage
+
+- repair_first: 0 - Fix or inspect before turning this check into an update blocker.
+- gate_candidate: 0 - Safe candidate for a future update gate after a few clean dry-runs.
+- manual_review: 0 - Needs human review before blocking updates.
+- observe: 1971 - Keep as report-only signal; do not block updates yet.
+
+## Repair Source Coverage
+
+- repair source: `data/recheck_ohlcv_adjusted`
+- repair-first unique codes: 0
+- available: 0
+- missing: 0
+
+## Dry-Run Repair Plan
+
+- mode: dry-run
+- candidate codes: 0
+- ready for review: 0
+
+### Repair Plan Samples
+
+
+## Repair First Samples
+
+
+## Issues
+
+- [warning] 1333 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0239
+- [warning] 1333 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3362
+- [warning] 1414 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.0788
+- [warning] 1414 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2525
+- [warning] 1436 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9266
+- [warning] 1436 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3301
+- [warning] 1450 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9833
+- [warning] 1450 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5000
+- [warning] 1491 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 0.0500
+- [warning] 1491 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 20.0000
+- [warning] 1515 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 9.6095
+- [warning] 1515 ohlcv 2022-09-29 single_day_extreme_move: large close-to-close ratio: 0.5111
+- [warning] 1515 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2017
+- [warning] 1518 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.0926
+- [warning] 1518 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2069
+- [warning] 1662 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.1143
+- [warning] 1662 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2024
+- [warning] 1736 ohlcv 2021-05-11 single_day_extreme_move: large close-to-close ratio: 2.9367
+- [warning] 1736 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3308
+- [warning] 1758 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0000
+- [warning] 1758 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3315
+- [warning] 1758 ohlcv 2022-05-09 large_date_gap: large calendar gap: 11 days
+- [warning] 1773 ohlcv 2026-04-16 large_date_gap: large calendar gap: 17 days
+- [warning] 1787 ohlcv 2022-05-06 large_date_gap: large calendar gap: 11 days
+- [warning] 1793 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 6.0000
+- [warning] 1793 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1664
+- [warning] 1793 ohlcv 2022-04-19 large_date_gap: large calendar gap: 13 days
+- [warning] 1798 ohlcv 2025-01-06 large_date_gap: large calendar gap: 11 days
+- [warning] 1807 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9740
+- [warning] 1807 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5030
+- [warning] 1822 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.9503
+- [warning] 1822 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2013
+- [warning] 1847 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0073
+- [warning] 1847 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5055
+- [warning] 1847 ohlcv 2026-03-23 single_day_extreme_move: large close-to-close ratio: 0.4757
+- [warning] 1847 ohlcv 2026-03-30 single_day_extreme_move: large close-to-close ratio: 1.9111
+- [warning] 1852 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 9.9780
+- [warning] 1852 ohlcv 2022-07-28 single_day_extreme_move: large close-to-close ratio: 0.4993
+- [warning] 1852 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2016
+- [warning] 1861 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.0256
+- [warning] 1861 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2520
+- [warning] 1866 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.0300
+- [warning] 1866 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2504
+- [warning] 1878 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.7664
+- [warning] 1878 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2026
+- [warning] 1882 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 10.0447
+- [warning] 1882 ohlcv 2023-03-30 single_day_extreme_move: large close-to-close ratio: 0.4845
+- [warning] 1882 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1998
+- [warning] 1885 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.0210
+- [warning] 1885 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2508
+- [warning] 1897 ohlcv 2021-10-19 large_date_gap: large calendar gap: 18 days
+- [warning] 1897 ohlcv 2022-01-13 large_date_gap: large calendar gap: 16 days
+- [warning] 1897 ohlcv 2022-02-14 large_date_gap: large calendar gap: 17 days
+- [warning] 1897 ohlcv 2022-03-15 large_date_gap: large calendar gap: 11 days
+- [warning] 1897 ohlcv 2023-05-10 large_date_gap: large calendar gap: 12 days
+- [warning] 1911 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.1303
+- [warning] 1911 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3376
+- [warning] 1939 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.9909
+- [warning] 1939 ohlcv 2021-09-29 single_day_extreme_move: large close-to-close ratio: 0.4860
+- [warning] 1939 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3341
+- [warning] 1946 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.8856
+- [warning] 1946 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2011
+- [warning] 1948 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.9107
+- [warning] 1948 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2023
+- [warning] 1951 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0243
+- [warning] 1951 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5073
+- [warning] 1952 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0188
+- [warning] 1952 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5007
+- [warning] 1961 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9936
+- [warning] 1961 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3360
+- [warning] 1968 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0011
+- [warning] 1968 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3397
+- [warning] 1969 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0191
+- [warning] 1969 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5140
+- [warning] 1972 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.2463
+- [warning] 1972 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2012
+- [warning] 1975 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.0402
+- [warning] 1975 ohlcv 2022-03-30 single_day_extreme_move: large close-to-close ratio: 0.4969
+- [warning] 1975 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4985
+- [warning] 1979 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0100
+- [warning] 1979 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5038
+- [warning] 1980 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 6.0000
+- [warning] 1980 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1680
+- [warning] 1981 ohlcv 2021-04-12 large_date_gap: large calendar gap: 11 days
+- [warning] 1981 ohlcv 2022-05-13 large_date_gap: large calendar gap: 15 days
+- [warning] 1981 ohlcv 2022-05-26 large_date_gap: large calendar gap: 13 days
+- [warning] 1981 ohlcv 2022-06-28 large_date_gap: large calendar gap: 12 days
+- [warning] 1981 ohlcv 2023-02-15 large_date_gap: large calendar gap: 12 days
+- [warning] 1981 ohlcv 2023-10-18 large_date_gap: large calendar gap: 12 days
+- [warning] 1981 ohlcv 2024-09-17 large_date_gap: large calendar gap: 14 days
+- [warning] 1982 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0031
+- [warning] 1982 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4946
+- [warning] 1982 ohlcv 2026-03-23 single_day_extreme_move: large close-to-close ratio: 0.4702
+- [warning] 1982 ohlcv 2026-03-30 single_day_extreme_move: large close-to-close ratio: 1.9129
+- [warning] 1992 ohlcv 2025-08-25 large_date_gap: large calendar gap: 12 days
+- [warning] 2114 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9679
+- [warning] 2114 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4986
+- [warning] 2124 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.0429
+- [warning] 2124 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2487
+- [warning] 2134 ohlcv 2023-05-26 single_day_extreme_move: large close-to-close ratio: 2.5556
+- [warning] 2146 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 14.8999
+- [warning] 2146 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.0681
+- [warning] 2164 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9974
+- [warning] 2164 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4971
+- [warning] 2173 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0215
+- [warning] 2173 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5042
+- [warning] 2181 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 10.2269
+- [warning] 2181 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1024
+- [warning] 2185 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9713
+- [warning] 2185 ohlcv 2021-09-29 single_day_extreme_move: large close-to-close ratio: 0.4819
+- [warning] 2195 ohlcv 2021-05-11 single_day_extreme_move: large close-to-close ratio: 14.1514
+- [warning] 2195 ohlcv 2021-12-29 single_day_extreme_move: large close-to-close ratio: 0.1613
+- [warning] 2195 ohlcv 2022-09-29 single_day_extreme_move: large close-to-close ratio: 0.2778
+- [warning] 2201 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0053
+- [warning] 2201 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5024
+- [warning] 2216 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 6.0410
+- [warning] 2216 ohlcv 2022-06-29 single_day_extreme_move: large close-to-close ratio: 0.4994
+- [warning] 2216 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3385
+- [warning] 2217 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 6.0000
+- [warning] 2217 ohlcv 2022-01-28 single_day_extreme_move: large close-to-close ratio: 0.5061
+- [warning] 2217 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3347
+- [warning] 2221 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9953
+- [warning] 2221 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4975
+- [warning] 2222 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.0467
+- [warning] 2222 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2017
+- [warning] 2226 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0040
+- [warning] 2226 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4974
+- [warning] 2264 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0829
+- [warning] 2264 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5136
+- [warning] 2267 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0145
+- [warning] 2267 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5048
+- [warning] 2269 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0145
+- [warning] 2269 ohlcv 2023-03-30 single_day_extreme_move: large close-to-close ratio: 0.4869
+- [warning] 2296 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 0.2047
+- [warning] 2296 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 4.9931
+- [warning] 2307 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0039
+- [warning] 2307 ohlcv 2022-03-30 single_day_extreme_move: large close-to-close ratio: 0.5050
+- [warning] 2317 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.0000
+- [warning] 2317 ohlcv 2021-11-29 single_day_extreme_move: large close-to-close ratio: 0.2485
+- [warning] 2323 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 6.1059
+- [warning] 2323 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1667
+- [warning] 2327 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0430
+- [warning] 2327 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5062
+- [warning] 2329 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9871
+- [warning] 2329 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3306
+- [warning] 2331 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.0310
+- [warning] 2331 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2036
+- [warning] 2334 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 10.4624
+- [warning] 2334 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.0955
+- [warning] 2338 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0032
+- [warning] 2338 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3347
+- [warning] 2436 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0443
+- [warning] 2436 ohlcv 2022-10-28 single_day_extreme_move: large close-to-close ratio: 0.5351
+- [warning] 2497 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0062
+- [warning] 2497 ohlcv 2023-05-30 single_day_extreme_move: large close-to-close ratio: 0.4951
+- [warning] 2498 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0386
+- [warning] 2498 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4960
+- [warning] 2501 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.9231
+- [warning] 2501 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2031
+- [warning] 2502 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9706
+- [warning] 2502 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3376
+- [warning] 2573 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0024
+- [warning] 2573 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4990
+- [warning] 2585 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2564
+- [warning] 2586 ohlcv 2024-08-14 single_day_extreme_move: large close-to-close ratio: 1.8333
+- [warning] 2590 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0076
+- [warning] 2590 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5010
+- [warning] 2612 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9714
+- [warning] 2612 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3329
+- [warning] 2612 ohlcv 2026-03-23 single_day_extreme_move: large close-to-close ratio: 0.3252
+- [warning] 2612 ohlcv 2026-03-30 single_day_extreme_move: large close-to-close ratio: 2.7797
+- [warning] 2652 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.0186
+- [warning] 2652 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2004
+- [warning] 2659 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0306
+- [warning] 2659 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5005
+- [warning] 2670 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9801
+- [warning] 2670 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3373
+- [warning] 2676 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0290
+- [warning] 2676 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5016
+- [warning] 2678 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9546
+- [warning] 2678 ohlcv 2021-05-19 single_day_extreme_move: large close-to-close ratio: 0.4896
+- [warning] 2695 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9427
+- [warning] 2695 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4944
+- [warning] 2700 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.9513
+- [warning] 2700 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2013
+- [warning] 2726 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.9825
+- [warning] 2726 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2555
+- [warning] 2733 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0242
+- [warning] 2733 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5079
+- [warning] 2736 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0496
+- [warning] 2736 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3320
+- [warning] 2753 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0318
+- [warning] 2753 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3357
+- [warning] 2760 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.1476
+- [warning] 2760 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3321
+- [warning] 2767 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0508
+- [warning] 2767 ohlcv 2023-03-17 single_day_extreme_move: large close-to-close ratio: 0.4988
+- [warning] 2768 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 0.1983
+- [warning] 2768 ohlcv 2021-09-29 single_day_extreme_move: large close-to-close ratio: 4.8719
+- [warning] 2801 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.0437
+- [warning] 2801 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2012
+- [warning] 2802 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0319
+- [warning] 2802 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5015
+- [warning] 2805 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0000
+- [warning] 2805 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5007
+- [warning] 2813 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0000
+- [warning] 2813 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3358
+- [warning] 2871 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0273
+- [warning] 2871 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5042
+- [warning] 2872 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9955
+- [warning] 2872 ohlcv 2023-02-27 single_day_extreme_move: large close-to-close ratio: 0.3363
+- [warning] 2877 ohlcv 2023-01-11 large_date_gap: large calendar gap: 14 days
+- [warning] 2897 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0268
+- [warning] 2897 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3357
+- [warning] 2932 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0696
+- [warning] 2932 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3343
+- [warning] 2961 ohlcv 2026-05-18 large_date_gap: large calendar gap: 11 days
+- [warning] 2970 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.9656
+- [warning] 2970 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2485
+- [warning] 2975 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0219
+- [warning] 2975 ohlcv 2022-11-29 single_day_extreme_move: large close-to-close ratio: 0.4908
+- [warning] 2981 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0071
+- [warning] 2981 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5242
+- [warning] 2983 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 7.9738
+- [warning] 2983 ohlcv 2022-01-28 single_day_extreme_move: large close-to-close ratio: 0.2322
+- [warning] 2983 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5108
+- [warning] 2991 ohlcv 2022-05-30 single_day_extreme_move: large close-to-close ratio: 0.5058
+- [warning] 2991 ohlcv 2022-11-29 single_day_extreme_move: large close-to-close ratio: 0.5100
+- [warning] 2991 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2486
+- [warning] 2998 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1953
+- [warning] 3002 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0224
+- [warning] 3002 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5085
+- [warning] 302A ohlcv 2026-03-23 single_day_extreme_move: large close-to-close ratio: 0.4796
+- [warning] 302A ohlcv 2026-03-30 single_day_extreme_move: large close-to-close ratio: 1.9914
+- [warning] 3041 ohlcv 2023-05-16 single_day_extreme_move: large close-to-close ratio: 2.1173
+- [warning] 3088 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0169
+- [warning] 3088 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3391
+- [warning] 3092 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0126
+- [warning] 3092 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3403
+- [warning] 3093 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9678
+- [warning] 3093 ohlcv 2023-02-27 single_day_extreme_move: large close-to-close ratio: 0.4848
+- [warning] 3097 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.7254
+- [warning] 3097 ohlcv 2023-02-27 single_day_extreme_move: large close-to-close ratio: 0.3395
+- [warning] 3132 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0181
+- [warning] 3132 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3322
+- [warning] 3134 ohlcv 2025-10-30 single_day_extreme_move: large close-to-close ratio: 0.4239
+- [warning] 3137 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9969
+- [warning] 3137 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4874
+- [warning] 3143 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.0000
+- [warning] 3143 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3283
+- [warning] 3180 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9835
+- [warning] 3180 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.4898
+- [warning] 3181 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9757
+- [warning] 3181 ohlcv 2023-02-27 single_day_extreme_move: large close-to-close ratio: 0.4733
+- [warning] 3184 ohlcv 2022-01-07 large_date_gap: large calendar gap: 11 days
+- [warning] 3184 ohlcv 2022-04-18 large_date_gap: large calendar gap: 12 days
+- [warning] 3184 ohlcv 2022-05-09 large_date_gap: large calendar gap: 13 days
+- [warning] 3184 ohlcv 2022-06-22 large_date_gap: large calendar gap: 12 days
+- [warning] 3184 ohlcv 2022-10-20 large_date_gap: large calendar gap: 17 days
+- [warning] 3184 ohlcv 2023-01-10 large_date_gap: large calendar gap: 13 days
+- [warning] 3184 ohlcv 2023-07-24 large_date_gap: large calendar gap: 11 days
+- [warning] 3184 ohlcv 2023-08-21 large_date_gap: large calendar gap: 19 days
+- [warning] 3184 ohlcv 2024-05-07 large_date_gap: large calendar gap: 11 days
+- [warning] 3231 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.0232
+- [warning] 3231 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2020
+- [warning] 3293 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0108
+- [warning] 3293 ohlcv 2022-03-30 single_day_extreme_move: large close-to-close ratio: 0.4809
+- [warning] 3317 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9881
+- [warning] 3317 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5038
+- [warning] 3349 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0244
+- [warning] 3349 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5011
+- [warning] 3350 ohlcv 2024-04-09 single_day_extreme_move: large close-to-close ratio: 1.8947
+- [warning] 3353 ohlcv 2021-08-19 large_date_gap: large calendar gap: 15 days
+- [warning] 3353 ohlcv 2021-10-18 large_date_gap: large calendar gap: 11 days
+- [warning] 3353 ohlcv 2022-02-16 large_date_gap: large calendar gap: 12 days
+- [warning] 3353 ohlcv 2022-03-29 large_date_gap: large calendar gap: 11 days
+- [warning] 3353 ohlcv 2022-04-26 large_date_gap: large calendar gap: 12 days
+- [warning] 3353 ohlcv 2022-05-23 large_date_gap: large calendar gap: 11 days
+- [warning] 3353 ohlcv 2022-06-21 large_date_gap: large calendar gap: 11 days
+- [warning] 3353 ohlcv 2022-07-27 large_date_gap: large calendar gap: 13 days
+- [warning] 3353 ohlcv 2022-08-26 large_date_gap: large calendar gap: 22 days
+- [warning] 3353 ohlcv 2022-10-21 large_date_gap: large calendar gap: 17 days
+- [warning] 3358 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 4.9273
+- [warning] 3358 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1997
+- [warning] 3371 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.0209
+- [warning] 3371 ohlcv 2023-03-30 single_day_extreme_move: large close-to-close ratio: 0.4885
+- [warning] 3382 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 2.9037
+- [warning] 3382 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.3319
+- [warning] 3387 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 1.9681
+- [warning] 3387 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.5005
+- [warning] 338A ohlcv 2026-03-23 single_day_extreme_move: large close-to-close ratio: 0.4766
+- [warning] 338A ohlcv 2026-03-30 single_day_extreme_move: large close-to-close ratio: 1.9058
+- [warning] 3391 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 5.0505
+- [warning] 3391 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2030
+- [warning] 3399 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 8.0000
+- [warning] 3399 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.1265
+- [warning] 3426 ohlcv 2024-11-13 large_date_gap: large calendar gap: 12 days
+- [warning] 3431 ohlcv 2021-05-10 single_day_extreme_move: large close-to-close ratio: 3.9932
+- [warning] 3431 ohlcv 2023-06-21 single_day_extreme_move: large close-to-close ratio: 0.2506
+- [warning] 3437 ohlcv 2021-05-11 large_date_gap: large calendar gap: 13 days
+- ... 1671 more issues in JSON report

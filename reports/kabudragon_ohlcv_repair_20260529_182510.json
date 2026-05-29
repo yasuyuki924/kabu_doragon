@@ -1,0 +1,1630 @@
+{
+  "generatedAt": "2026-05-29T18:25:10",
+  "mode": "apply",
+  "qualityReport": "reports/kabudragon_ohlcv_quality_20260529_182428.json",
+  "backupDir": "reports/ohlcv_repair_backup_20260529_182510",
+  "backupDirDeleted": false,
+  "backupPolicy": "keep",
+  "requestedCodes": [],
+  "candidateCount": 5,
+  "repairedCount": 5,
+  "skippedCount": 0,
+  "repaired": [
+    {
+      "code": "1723",
+      "mode": "apply",
+      "repairSource": "data/recheck_ohlcv_adjusted/1723.csv",
+      "ohlcvPath": "data/ohlcv/1723.csv",
+      "publicJsonPath": "data/public_json/ticker_recent/1y/ohlcv_ma/1723.json",
+      "candidateRows": 1211,
+      "candidateStartDate": "2021-05-31",
+      "candidateEndDate": "2026-05-29",
+      "tailRowsAfterCandidate": 0,
+      "outputOhlcvRows": 1211,
+      "outputPublicRows": 245,
+      "currentChangedRows": 500,
+      "publicChangedRows": 5,
+      "sampleCurrentChanges": [
+        {
+          "date": "2021-05-31",
+          "fields": [
+            {
+              "field": "open",
+              "current": 3815.0,
+              "candidate": 476.875
+            },
+            {
+              "field": "high",
+              "current": 3815.0,
+              "candidate": 476.875
+            },
+            {
+              "field": "low",
+              "current": 3760.0,
+              "candidate": 470.0
+            },
+            {
+              "field": "close",
+              "current": 3800.0,
+              "candidate": 475.0
+            },
+            {
+              "field": "volume",
+              "current": 1000,
+              "candidate": 8000
+            }
+          ]
+        },
+        {
+          "date": "2021-06-01",
+          "fields": [
+            {
+              "field": "open",
+              "current": 3765.0,
+              "candidate": 470.625
+            },
+            {
+              "field": "high",
+              "current": 3780.0,
+              "candidate": 472.5
+            },
+            {
+              "field": "low",
+              "current": 3765.0,
+              "candidate": 470.625
+            },
+            {
+              "field": "close",
+              "current": 3770.0,
+              "candidate": 471.25
+            },
+            {
+              "field": "volume",
+              "current": 300,
+              "candidate": 2400
+            }
+          ]
+        },
+        {
+          "date": "2021-06-02",
+          "fields": [
+            {
+              "field": "open",
+              "current": 3770.0,
+              "candidate": 471.25
+            },
+            {
+              "field": "high",
+              "current": 3780.0,
+              "candidate": 472.5
+            },
+            {
+              "field": "low",
+              "current": 3760.0,
+              "candidate": 470.0
+            },
+            {
+              "field": "close",
+              "current": 3760.0,
+              "candidate": 470.0
+            },
+            {
+              "field": "volume",
+              "current": 2300,
+              "candidate": 18400
+            }
+          ]
+        },
+        {
+          "date": "2021-06-03",
+          "fields": [
+            {
+              "field": "open",
+              "current": 3780.0,
+              "candidate": 472.5
+            },
+            {
+              "field": "high",
+              "current": 3780.0,
+              "candidate": 472.5
+            },
+            {
+              "field": "low",
+              "current": 3735.0,
+              "candidate": 466.875
+            },
+            {
+              "field": "close",
+              "current": 3750.0,
+              "candidate": 468.75
+            },
+            {
+              "field": "volume",
+              "current": 3100,
+              "candidate": 24800
+            }
+          ]
+        },
+        {
+          "date": "2021-06-04",
+          "fields": [
+            {
+              "field": "open",
+              "current": 3750.0,
+              "candidate": 468.75
+            },
+            {
+              "field": "high",
+              "current": 3775.0,
+              "candidate": 471.875
+            },
+            {
+              "field": "low",
+              "current": 3750.0,
+              "candidate": 468.75
+            },
+            {
+              "field": "close",
+              "current": 3750.0,
+              "candidate": 468.75
+            },
+            {
+              "field": "volume",
+              "current": 900,
+              "candidate": 7200
+            }
+          ]
+        }
+      ],
+      "samplePublicChanges": [
+        {
+          "date": "2026-03-23",
+          "fields": [
+            {
+              "field": "open",
+              "current": 614.375,
+              "candidate": 2457.5
+            },
+            {
+              "field": "high",
+              "current": 627.5,
+              "candidate": 2510
+            },
+            {
+              "field": "low",
+              "current": 591.25,
+              "candidate": 2365
+            },
+            {
+              "field": "close",
+              "current": 592.5,
+              "candidate": 2370
+            },
+            {
+              "field": "volume",
+              "current": 1057600,
+              "candidate": 264400
+            }
+          ]
+        },
+        {
+          "date": "2026-03-24",
+          "fields": [
+            {
+              "field": "open",
+              "current": 620.625,
+              "candidate": 2482.5
+            },
+            {
+              "field": "high",
+              "current": 626.875,
+              "candidate": 2507.5
+            },
+            {
+              "field": "low",
+              "current": 600.625,
+              "candidate": 2402.5
+            },
+            {
+              "field": "close",
+              "current": 610.0,
+              "candidate": 2440
+            },
+            {
+              "field": "volume",
+              "current": 928000,
+              "candidate": 232000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-25",
+          "fields": [
+            {
+              "field": "open",
+              "current": 616.875,
+              "candidate": 2467.5
+            },
+            {
+              "field": "high",
+              "current": 629.375,
+              "candidate": 2517.5
+            },
+            {
+              "field": "low",
+              "current": 616.875,
+              "candidate": 2467.5
+            },
+            {
+              "field": "close",
+              "current": 618.75,
+              "candidate": 2475
+            },
+            {
+              "field": "volume",
+              "current": 790400,
+              "candidate": 197600
+            }
+          ]
+        },
+        {
+          "date": "2026-03-26",
+          "fields": [
+            {
+              "field": "open",
+              "current": 628.125,
+              "candidate": 2512.5
+            },
+            {
+              "field": "high",
+              "current": 633.75,
+              "candidate": 2535
+            },
+            {
+              "field": "low",
+              "current": 594.375,
+              "candidate": 2377.5
+            },
+            {
+              "field": "close",
+              "current": 598.125,
+              "candidate": 2392.5
+            },
+            {
+              "field": "volume",
+              "current": 908800,
+              "candidate": 227200
+            }
+          ]
+        },
+        {
+          "date": "2026-03-27",
+          "fields": [
+            {
+              "field": "open",
+              "current": 593.75,
+              "candidate": 2375
+            },
+            {
+              "field": "high",
+              "current": 595.0,
+              "candidate": 2380
+            },
+            {
+              "field": "low",
+              "current": 570.625,
+              "candidate": 2282.5
+            },
+            {
+              "field": "close",
+              "current": 578.125,
+              "candidate": 2312.5
+            },
+            {
+              "field": "volume",
+              "current": 1088000,
+              "candidate": 272000
+            }
+          ]
+        }
+      ],
+      "backup": {
+        "ohlcv": "reports/ohlcv_repair_backup_20260529_182510/ohlcv/1723.csv",
+        "publicJson": "reports/ohlcv_repair_backup_20260529_182510/public_json/1723.json"
+      }
+    },
+    {
+      "code": "1798",
+      "mode": "apply",
+      "repairSource": "data/recheck_ohlcv_adjusted/1798.csv",
+      "ohlcvPath": "data/ohlcv/1798.csv",
+      "publicJsonPath": "data/public_json/ticker_recent/1y/ohlcv_ma/1798.json",
+      "candidateRows": 1045,
+      "candidateStartDate": "2021-06-02",
+      "candidateEndDate": "2026-05-29",
+      "tailRowsAfterCandidate": 0,
+      "outputOhlcvRows": 1045,
+      "outputPublicRows": 245,
+      "currentChangedRows": 397,
+      "publicChangedRows": 5,
+      "sampleCurrentChanges": [
+        {
+          "date": "2021-06-02",
+          "fields": [
+            {
+              "field": "open",
+              "current": 2050.0,
+              "candidate": 410.0
+            },
+            {
+              "field": "high",
+              "current": 2050.0,
+              "candidate": 410.0
+            },
+            {
+              "field": "low",
+              "current": 2050.0,
+              "candidate": 410.0
+            },
+            {
+              "field": "close",
+              "current": 2050.0,
+              "candidate": 410.0
+            },
+            {
+              "field": "volume",
+              "current": 1100,
+              "candidate": 5500
+            }
+          ]
+        },
+        {
+          "date": "2021-06-03",
+          "fields": [
+            {
+              "field": "open",
+              "current": 2027.0,
+              "candidate": 405.4
+            },
+            {
+              "field": "high",
+              "current": 2027.0,
+              "candidate": 405.4
+            },
+            {
+              "field": "low",
+              "current": 2024.0,
+              "candidate": 404.8
+            },
+            {
+              "field": "close",
+              "current": 2024.0,
+              "candidate": 404.8
+            },
+            {
+              "field": "volume",
+              "current": 700,
+              "candidate": 3500
+            }
+          ]
+        },
+        {
+          "date": "2021-06-10",
+          "fields": [
+            {
+              "field": "open",
+              "current": 2003.0,
+              "candidate": 400.6
+            },
+            {
+              "field": "high",
+              "current": 2005.0,
+              "candidate": 401.0
+            },
+            {
+              "field": "low",
+              "current": 2003.0,
+              "candidate": 400.6
+            },
+            {
+              "field": "close",
+              "current": 2005.0,
+              "candidate": 401.0
+            },
+            {
+              "field": "volume",
+              "current": 300,
+              "candidate": 1500
+            }
+          ]
+        },
+        {
+          "date": "2021-06-11",
+          "fields": [
+            {
+              "field": "open",
+              "current": 2055.0,
+              "candidate": 411.0
+            },
+            {
+              "field": "high",
+              "current": 2055.0,
+              "candidate": 411.0
+            },
+            {
+              "field": "low",
+              "current": 2005.0,
+              "candidate": 401.0
+            },
+            {
+              "field": "close",
+              "current": 2005.0,
+              "candidate": 401.0
+            },
+            {
+              "field": "volume",
+              "current": 200,
+              "candidate": 1000
+            }
+          ]
+        },
+        {
+          "date": "2021-06-15",
+          "fields": [
+            {
+              "field": "open",
+              "current": 2055.0,
+              "candidate": 411.0
+            },
+            {
+              "field": "high",
+              "current": 2055.0,
+              "candidate": 411.0
+            },
+            {
+              "field": "low",
+              "current": 2008.0,
+              "candidate": 401.6
+            },
+            {
+              "field": "close",
+              "current": 2008.0,
+              "candidate": 401.6
+            },
+            {
+              "field": "volume",
+              "current": 300,
+              "candidate": 1500
+            }
+          ]
+        }
+      ],
+      "samplePublicChanges": [
+        {
+          "date": "2026-03-23",
+          "fields": [
+            {
+              "field": "open",
+              "current": 254.4,
+              "candidate": 1272
+            },
+            {
+              "field": "high",
+              "current": 270.8,
+              "candidate": 1354
+            },
+            {
+              "field": "low",
+              "current": 238.0,
+              "candidate": 1190
+            },
+            {
+              "field": "close",
+              "current": 239.2,
+              "candidate": 1196
+            },
+            {
+              "field": "volume",
+              "current": 1085000,
+              "candidate": 217000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-24",
+          "fields": [
+            {
+              "field": "open",
+              "current": 243.2,
+              "candidate": 1216
+            },
+            {
+              "field": "high",
+              "current": 247.2,
+              "candidate": 1236
+            },
+            {
+              "field": "low",
+              "current": 239.6,
+              "candidate": 1198
+            },
+            {
+              "field": "close",
+              "current": 247.2,
+              "candidate": 1236
+            },
+            {
+              "field": "volume",
+              "current": 165000,
+              "candidate": 33000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-25",
+          "fields": [
+            {
+              "field": "open",
+              "current": 248.0,
+              "candidate": 1240
+            },
+            {
+              "field": "high",
+              "current": 259.6,
+              "candidate": 1298
+            },
+            {
+              "field": "low",
+              "current": 248.0,
+              "candidate": 1240
+            },
+            {
+              "field": "close",
+              "current": 257.6,
+              "candidate": 1288
+            },
+            {
+              "field": "volume",
+              "current": 105000,
+              "candidate": 21000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-26",
+          "fields": [
+            {
+              "field": "open",
+              "current": 257.6,
+              "candidate": 1288
+            },
+            {
+              "field": "high",
+              "current": 257.6,
+              "candidate": 1288
+            },
+            {
+              "field": "low",
+              "current": 250.4,
+              "candidate": 1252
+            },
+            {
+              "field": "close",
+              "current": 251.6,
+              "candidate": 1258
+            },
+            {
+              "field": "volume",
+              "current": 22500,
+              "candidate": 4500
+            }
+          ]
+        },
+        {
+          "date": "2026-03-27",
+          "fields": [
+            {
+              "field": "open",
+              "current": 254.4,
+              "candidate": 1272
+            },
+            {
+              "field": "high",
+              "current": 254.4,
+              "candidate": 1272
+            },
+            {
+              "field": "low",
+              "current": 250.8,
+              "candidate": 1254
+            },
+            {
+              "field": "close",
+              "current": 251.2,
+              "candidate": 1256
+            },
+            {
+              "field": "volume",
+              "current": 35000,
+              "candidate": 7000
+            }
+          ]
+        }
+      ],
+      "backup": {
+        "ohlcv": "reports/ohlcv_repair_backup_20260529_182510/ohlcv/1798.csv",
+        "publicJson": "reports/ohlcv_repair_backup_20260529_182510/public_json/1798.json"
+      }
+    },
+    {
+      "code": "1909",
+      "mode": "apply",
+      "repairSource": "data/recheck_ohlcv_adjusted/1909.csv",
+      "ohlcvPath": "data/ohlcv/1909.csv",
+      "publicJsonPath": "data/public_json/ticker_recent/1y/ohlcv_ma/1909.json",
+      "candidateRows": 1222,
+      "candidateStartDate": "2021-05-31",
+      "candidateEndDate": "2026-05-29",
+      "tailRowsAfterCandidate": 0,
+      "outputOhlcvRows": 1222,
+      "outputPublicRows": 245,
+      "currentChangedRows": 510,
+      "publicChangedRows": 5,
+      "sampleCurrentChanges": [
+        {
+          "date": "2021-05-31",
+          "fields": [
+            {
+              "field": "open",
+              "current": 1715.0,
+              "candidate": 428.75
+            },
+            {
+              "field": "high",
+              "current": 1715.0,
+              "candidate": 428.75
+            },
+            {
+              "field": "low",
+              "current": 1698.0,
+              "candidate": 424.5
+            },
+            {
+              "field": "close",
+              "current": 1705.0,
+              "candidate": 426.25
+            },
+            {
+              "field": "volume",
+              "current": 2400,
+              "candidate": 9600
+            }
+          ]
+        },
+        {
+          "date": "2021-06-01",
+          "fields": [
+            {
+              "field": "open",
+              "current": 1716.0,
+              "candidate": 429.0
+            },
+            {
+              "field": "high",
+              "current": 1737.0,
+              "candidate": 434.25
+            },
+            {
+              "field": "low",
+              "current": 1701.0,
+              "candidate": 425.25
+            },
+            {
+              "field": "close",
+              "current": 1720.0,
+              "candidate": 430.0
+            },
+            {
+              "field": "volume",
+              "current": 5700,
+              "candidate": 22800
+            }
+          ]
+        },
+        {
+          "date": "2021-06-02",
+          "fields": [
+            {
+              "field": "open",
+              "current": 1720.0,
+              "candidate": 430.0
+            },
+            {
+              "field": "high",
+              "current": 1740.0,
+              "candidate": 435.0
+            },
+            {
+              "field": "low",
+              "current": 1720.0,
+              "candidate": 430.0
+            },
+            {
+              "field": "close",
+              "current": 1733.0,
+              "candidate": 433.25
+            },
+            {
+              "field": "volume",
+              "current": 6500,
+              "candidate": 26000
+            }
+          ]
+        },
+        {
+          "date": "2021-06-03",
+          "fields": [
+            {
+              "field": "open",
+              "current": 1740.0,
+              "candidate": 435.0
+            },
+            {
+              "field": "high",
+              "current": 1839.0,
+              "candidate": 459.75
+            },
+            {
+              "field": "low",
+              "current": 1733.0,
+              "candidate": 433.25
+            },
+            {
+              "field": "close",
+              "current": 1839.0,
+              "candidate": 459.75
+            },
+            {
+              "field": "volume",
+              "current": 49500,
+              "candidate": 198000
+            }
+          ]
+        },
+        {
+          "date": "2021-06-04",
+          "fields": [
+            {
+              "field": "open",
+              "current": 1849.0,
+              "candidate": 462.25
+            },
+            {
+              "field": "high",
+              "current": 1857.0,
+              "candidate": 464.25
+            },
+            {
+              "field": "low",
+              "current": 1788.0,
+              "candidate": 447.0
+            },
+            {
+              "field": "close",
+              "current": 1853.0,
+              "candidate": 463.25
+            },
+            {
+              "field": "volume",
+              "current": 65900,
+              "candidate": 263600
+            }
+          ]
+        }
+      ],
+      "samplePublicChanges": [
+        {
+          "date": "2026-03-23",
+          "fields": [
+            {
+              "field": "open",
+              "current": 689.375,
+              "candidate": 2757.5
+            },
+            {
+              "field": "high",
+              "current": 697.5,
+              "candidate": 2790
+            },
+            {
+              "field": "low",
+              "current": 649.375,
+              "candidate": 2597.5
+            },
+            {
+              "field": "close",
+              "current": 669.375,
+              "candidate": 2677.5
+            },
+            {
+              "field": "volume",
+              "current": 1544000,
+              "candidate": 386000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-24",
+          "fields": [
+            {
+              "field": "open",
+              "current": 693.75,
+              "candidate": 2775
+            },
+            {
+              "field": "high",
+              "current": 705.0,
+              "candidate": 2820
+            },
+            {
+              "field": "low",
+              "current": 678.75,
+              "candidate": 2715
+            },
+            {
+              "field": "close",
+              "current": 688.75,
+              "candidate": 2755
+            },
+            {
+              "field": "volume",
+              "current": 758400,
+              "candidate": 189600
+            }
+          ]
+        },
+        {
+          "date": "2026-03-25",
+          "fields": [
+            {
+              "field": "open",
+              "current": 689.375,
+              "candidate": 2757.5
+            },
+            {
+              "field": "high",
+              "current": 728.75,
+              "candidate": 2915
+            },
+            {
+              "field": "low",
+              "current": 689.375,
+              "candidate": 2757.5
+            },
+            {
+              "field": "close",
+              "current": 711.25,
+              "candidate": 2845
+            },
+            {
+              "field": "volume",
+              "current": 878400,
+              "candidate": 219600
+            }
+          ]
+        },
+        {
+          "date": "2026-03-26",
+          "fields": [
+            {
+              "field": "open",
+              "current": 701.25,
+              "candidate": 2805
+            },
+            {
+              "field": "high",
+              "current": 713.125,
+              "candidate": 2852.5
+            },
+            {
+              "field": "low",
+              "current": 675.0,
+              "candidate": 2700
+            },
+            {
+              "field": "close",
+              "current": 681.25,
+              "candidate": 2725
+            },
+            {
+              "field": "volume",
+              "current": 680000,
+              "candidate": 170000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-27",
+          "fields": [
+            {
+              "field": "open",
+              "current": 662.5,
+              "candidate": 2650
+            },
+            {
+              "field": "high",
+              "current": 677.5,
+              "candidate": 2710
+            },
+            {
+              "field": "low",
+              "current": 655.0,
+              "candidate": 2620
+            },
+            {
+              "field": "close",
+              "current": 659.375,
+              "candidate": 2637.5
+            },
+            {
+              "field": "volume",
+              "current": 635200,
+              "candidate": 158800
+            }
+          ]
+        }
+      ],
+      "backup": {
+        "ohlcv": "reports/ohlcv_repair_backup_20260529_182510/ohlcv/1909.csv",
+        "publicJson": "reports/ohlcv_repair_backup_20260529_182510/public_json/1909.json"
+      }
+    },
+    {
+      "code": "2003",
+      "mode": "apply",
+      "repairSource": "data/recheck_ohlcv_adjusted/2003.csv",
+      "ohlcvPath": "data/ohlcv/2003.csv",
+      "publicJsonPath": "data/public_json/ticker_recent/1y/ohlcv_ma/2003.json",
+      "candidateRows": 1221,
+      "candidateStartDate": "2021-05-31",
+      "candidateEndDate": "2026-05-29",
+      "tailRowsAfterCandidate": 0,
+      "outputOhlcvRows": 1221,
+      "outputPublicRows": 245,
+      "currentChangedRows": 509,
+      "publicChangedRows": 5,
+      "sampleCurrentChanges": [
+        {
+          "date": "2021-05-31",
+          "fields": [
+            {
+              "field": "open",
+              "current": 7200.0,
+              "candidate": 900.0
+            },
+            {
+              "field": "high",
+              "current": 7250.0,
+              "candidate": 906.25
+            },
+            {
+              "field": "low",
+              "current": 7180.0,
+              "candidate": 897.5
+            },
+            {
+              "field": "close",
+              "current": 7180.0,
+              "candidate": 897.5
+            },
+            {
+              "field": "volume",
+              "current": 2500,
+              "candidate": 20000
+            }
+          ]
+        },
+        {
+          "date": "2021-06-01",
+          "fields": [
+            {
+              "field": "open",
+              "current": 7210.0,
+              "candidate": 901.25
+            },
+            {
+              "field": "high",
+              "current": 7210.0,
+              "candidate": 901.25
+            },
+            {
+              "field": "low",
+              "current": 7190.0,
+              "candidate": 898.75
+            },
+            {
+              "field": "close",
+              "current": 7190.0,
+              "candidate": 898.75
+            },
+            {
+              "field": "volume",
+              "current": 900,
+              "candidate": 7200
+            }
+          ]
+        },
+        {
+          "date": "2021-06-02",
+          "fields": [
+            {
+              "field": "open",
+              "current": 7180.0,
+              "candidate": 897.5
+            },
+            {
+              "field": "high",
+              "current": 7180.0,
+              "candidate": 897.5
+            },
+            {
+              "field": "low",
+              "current": 7030.0,
+              "candidate": 878.75
+            },
+            {
+              "field": "close",
+              "current": 7090.0,
+              "candidate": 886.25
+            },
+            {
+              "field": "volume",
+              "current": 2100,
+              "candidate": 16800
+            }
+          ]
+        },
+        {
+          "date": "2021-06-03",
+          "fields": [
+            {
+              "field": "open",
+              "current": 7090.0,
+              "candidate": 886.25
+            },
+            {
+              "field": "high",
+              "current": 7190.0,
+              "candidate": 898.75
+            },
+            {
+              "field": "low",
+              "current": 7090.0,
+              "candidate": 886.25
+            },
+            {
+              "field": "close",
+              "current": 7180.0,
+              "candidate": 897.5
+            },
+            {
+              "field": "volume",
+              "current": 900,
+              "candidate": 7200
+            }
+          ]
+        },
+        {
+          "date": "2021-06-04",
+          "fields": [
+            {
+              "field": "open",
+              "current": 7180.0,
+              "candidate": 897.5
+            },
+            {
+              "field": "high",
+              "current": 7180.0,
+              "candidate": 897.5
+            },
+            {
+              "field": "low",
+              "current": 7060.0,
+              "candidate": 882.5
+            },
+            {
+              "field": "close",
+              "current": 7060.0,
+              "candidate": 882.5
+            },
+            {
+              "field": "volume",
+              "current": 500,
+              "candidate": 4000
+            }
+          ]
+        }
+      ],
+      "samplePublicChanges": [
+        {
+          "date": "2026-03-23",
+          "fields": [
+            {
+              "field": "open",
+              "current": 445.0,
+              "candidate": 1780
+            },
+            {
+              "field": "high",
+              "current": 450.0,
+              "candidate": 1800
+            },
+            {
+              "field": "low",
+              "current": 440.625,
+              "candidate": 1762.5
+            },
+            {
+              "field": "close",
+              "current": 441.25,
+              "candidate": 1765
+            },
+            {
+              "field": "volume",
+              "current": 120000,
+              "candidate": 30000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-24",
+          "fields": [
+            {
+              "field": "open",
+              "current": 444.375,
+              "candidate": 1777.5
+            },
+            {
+              "field": "high",
+              "current": 452.5,
+              "candidate": 1810
+            },
+            {
+              "field": "low",
+              "current": 443.125,
+              "candidate": 1772.5
+            },
+            {
+              "field": "close",
+              "current": 452.5,
+              "candidate": 1810
+            },
+            {
+              "field": "volume",
+              "current": 68800,
+              "candidate": 17200
+            }
+          ]
+        },
+        {
+          "date": "2026-03-25",
+          "fields": [
+            {
+              "field": "open",
+              "current": 452.5,
+              "candidate": 1810
+            },
+            {
+              "field": "high",
+              "current": 456.25,
+              "candidate": 1825
+            },
+            {
+              "field": "low",
+              "current": 452.5,
+              "candidate": 1810
+            },
+            {
+              "field": "close",
+              "current": 455.625,
+              "candidate": 1822.5
+            },
+            {
+              "field": "volume",
+              "current": 102400,
+              "candidate": 25600
+            }
+          ]
+        },
+        {
+          "date": "2026-03-26",
+          "fields": [
+            {
+              "field": "open",
+              "current": 455.625,
+              "candidate": 1822.5
+            },
+            {
+              "field": "high",
+              "current": 461.875,
+              "candidate": 1847.5
+            },
+            {
+              "field": "low",
+              "current": 454.375,
+              "candidate": 1817.5
+            },
+            {
+              "field": "close",
+              "current": 461.875,
+              "candidate": 1847.5
+            },
+            {
+              "field": "volume",
+              "current": 72000,
+              "candidate": 18000
+            }
+          ]
+        },
+        {
+          "date": "2026-03-27",
+          "fields": [
+            {
+              "field": "open",
+              "current": 461.25,
+              "candidate": 1845
+            },
+            {
+              "field": "high",
+              "current": 469.375,
+              "candidate": 1877.5
+            },
+            {
+              "field": "low",
+              "current": 457.5,
+              "candidate": 1830
+            },
+            {
+              "field": "close",
+              "current": 469.375,
+              "candidate": 1877.5
+            },
+            {
+              "field": "volume",
+              "current": 161600,
+              "candidate": 40400
+            }
+          ]
+        }
+      ],
+      "backup": {
+        "ohlcv": "reports/ohlcv_repair_backup_20260529_182510/ohlcv/2003.csv",
+        "publicJson": "reports/ohlcv_repair_backup_20260529_182510/public_json/2003.json"
+      }
+    },
+    {
+      "code": "2220",
+      "mode": "apply",
+      "repairSource": "data/recheck_ohlcv_adjusted/2220.csv",
+      "ohlcvPath": "data/ohlcv/2220.csv",
+      "publicJsonPath": "data/public_json/ticker_recent/1y/ohlcv_ma/2220.json",
+      "candidateRows": 1222,
+      "candidateStartDate": "2021-05-31",
+      "candidateEndDate": "2026-05-29",
+      "tailRowsAfterCandidate": 0,
+      "outputOhlcvRows": 1222,
+      "outputPublicRows": 245,
+      "currentChangedRows": 510,
+      "publicChangedRows": 5,
+      "sampleCurrentChanges": [
+        {
+          "date": "2021-05-31",
+          "fields": [
+            {
+              "field": "open",
+              "current": 4550.0,
+              "candidate": 1516.6667
+            },
+            {
+              "field": "high",
+              "current": 4555.0,
+              "candidate": 1518.3333
+            },
+            {
+              "field": "low",
+              "current": 4450.0,
+              "candidate": 1483.3333
+            },
+            {
+              "field": "close",
+              "current": 4450.0,
+              "candidate": 1483.3333
+            },
+            {
+              "field": "volume",
+              "current": 23700,
+              "candidate": 71100
+            }
+          ]
+        },
+        {
+          "date": "2021-06-01",
+          "fields": [
+            {
+              "field": "open",
+              "current": 4455.0,
+              "candidate": 1485.0
+            },
+            {
+              "field": "high",
+              "current": 4460.0,
+              "candidate": 1486.6667
+            },
+            {
+              "field": "low",
+              "current": 4430.0,
+              "candidate": 1476.6667
+            },
+            {
+              "field": "close",
+              "current": 4435.0,
+              "candidate": 1478.3333
+            },
+            {
+              "field": "volume",
+              "current": 33000,
+              "candidate": 99000
+            }
+          ]
+        },
+        {
+          "date": "2021-06-02",
+          "fields": [
+            {
+              "field": "open",
+              "current": 4425.0,
+              "candidate": 1475.0
+            },
+            {
+              "field": "high",
+              "current": 4425.0,
+              "candidate": 1475.0
+            },
+            {
+              "field": "low",
+              "current": 4360.0,
+              "candidate": 1453.3333
+            },
+            {
+              "field": "close",
+              "current": 4365.0,
+              "candidate": 1455.0
+            },
+            {
+              "field": "volume",
+              "current": 34700,
+              "candidate": 104100
+            }
+          ]
+        },
+        {
+          "date": "2021-06-03",
+          "fields": [
+            {
+              "field": "open",
+              "current": 4365.0,
+              "candidate": 1455.0
+            },
+            {
+              "field": "high",
+              "current": 4475.0,
+              "candidate": 1491.6667
+            },
+            {
+              "field": "low",
+              "current": 4365.0,
+              "candidate": 1455.0
+            },
+            {
+              "field": "close",
+              "current": 4465.0,
+              "candidate": 1488.3333
+            },
+            {
+              "field": "volume",
+              "current": 24000,
+              "candidate": 72000
+            }
+          ]
+        },
+        {
+          "date": "2021-06-04",
+          "fields": [
+            {
+              "field": "open",
+              "current": 4450.0,
+              "candidate": 1483.3333
+            },
+            {
+              "field": "high",
+              "current": 4475.0,
+              "candidate": 1491.6667
+            },
+            {
+              "field": "low",
+              "current": 4440.0,
+              "candidate": 1480.0
+            },
+            {
+              "field": "close",
+              "current": 4455.0,
+              "candidate": 1485.0
+            },
+            {
+              "field": "volume",
+              "current": 14100,
+              "candidate": 42300
+            }
+          ]
+        }
+      ],
+      "samplePublicChanges": [
+        {
+          "date": "2026-03-23",
+          "fields": [
+            {
+              "field": "open",
+              "current": 476.1111,
+              "candidate": 1428.3333
+            },
+            {
+              "field": "high",
+              "current": 479.4445,
+              "candidate": 1438.3333
+            },
+            {
+              "field": "low",
+              "current": 472.2222,
+              "candidate": 1416.6667
+            },
+            {
+              "field": "close",
+              "current": 476.1111,
+              "candidate": 1428.3333
+            },
+            {
+              "field": "volume",
+              "current": 727200,
+              "candidate": 242400
+            }
+          ]
+        },
+        {
+          "date": "2026-03-24",
+          "fields": [
+            {
+              "field": "open",
+              "current": 476.6667,
+              "candidate": 1430
+            },
+            {
+              "field": "high",
+              "current": 482.7778,
+              "candidate": 1448.3333
+            },
+            {
+              "field": "low",
+              "current": 474.4445,
+              "candidate": 1423.3333
+            },
+            {
+              "field": "close",
+              "current": 481.6667,
+              "candidate": 1445
+            },
+            {
+              "field": "volume",
+              "current": 378900,
+              "candidate": 126300
+            }
+          ]
+        },
+        {
+          "date": "2026-03-25",
+          "fields": [
+            {
+              "field": "open",
+              "current": 483.3333,
+              "candidate": 1450
+            },
+            {
+              "field": "high",
+              "current": 490.5555,
+              "candidate": 1471.6667
+            },
+            {
+              "field": "low",
+              "current": 483.3333,
+              "candidate": 1450
+            },
+            {
+              "field": "close",
+              "current": 486.1111,
+              "candidate": 1458.3333
+            },
+            {
+              "field": "volume",
+              "current": 534600,
+              "candidate": 178200
+            }
+          ]
+        },
+        {
+          "date": "2026-03-26",
+          "fields": [
+            {
+              "field": "open",
+              "current": 486.1111,
+              "candidate": 1458.3333
+            },
+            {
+              "field": "high",
+              "current": 488.8889,
+              "candidate": 1466.6667
+            },
+            {
+              "field": "low",
+              "current": 483.8889,
+              "candidate": 1451.6667
+            },
+            {
+              "field": "close",
+              "current": 487.7778,
+              "candidate": 1463.3333
+            },
+            {
+              "field": "volume",
+              "current": 363600,
+              "candidate": 121200
+            }
+          ]
+        },
+        {
+          "date": "2026-03-27",
+          "fields": [
+            {
+              "field": "open",
+              "current": 495.5555,
+              "candidate": 1486.6667
+            },
+            {
+              "field": "high",
+              "current": 500.0,
+              "candidate": 1500
+            },
+            {
+              "field": "low",
+              "current": 491.6667,
+              "candidate": 1475
+            },
+            {
+              "field": "close",
+              "current": 493.8889,
+              "candidate": 1481.6667
+            },
+            {
+              "field": "volume",
+              "current": 779400,
+              "candidate": 259800
+            }
+          ]
+        }
+      ],
+      "backup": {
+        "ohlcv": "reports/ohlcv_repair_backup_20260529_182510/ohlcv/2220.csv",
+        "publicJson": "reports/ohlcv_repair_backup_20260529_182510/public_json/2220.json"
+      }
+    }
+  ],
+  "skipped": []
+}

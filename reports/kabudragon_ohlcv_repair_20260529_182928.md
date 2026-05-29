@@ -1,0 +1,57 @@
+# KabuDragon OHLCV Repair Report
+
+- generatedAt: 2026-05-29T18:29:28
+- mode: apply
+- qualityReport: `reports/kabudragon_ohlcv_quality_20260529_182900.json`
+- backupDir: `reports/ohlcv_repair_backup_20260529_182928`
+- backupPolicy: keep
+- backupDirDeleted: False
+- candidateCount: 43
+- repairedCount: 43
+- skippedCount: 0
+
+## Repaired
+
+- 2602: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 3104: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 3443: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 3712: currentChangedRows=506 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 4008: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 4022: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 4116: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 417A: currentChangedRows=5 publicChangedRows=5 candidate=2025-10-01..2026-05-29 tail=0
+- 4368: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 5273: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 5445: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 5729: currentChangedRows=453 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 5803: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 6085: currentChangedRows=454 publicChangedRows=2 candidate=2021-05-31..2026-05-29 tail=0
+- 6196: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 6454: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 6675: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 6731: currentChangedRows=639 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 6745: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 7012: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 7181: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 7322: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 7376: currentChangedRows=470 publicChangedRows=4 candidate=2021-07-07..2026-05-29 tail=0
+- 7380: currentChangedRows=426 publicChangedRows=5 candidate=2021-10-01..2026-05-29 tail=0
+- 7389: currentChangedRows=181 publicChangedRows=5 candidate=2022-10-03..2026-05-29 tail=0
+- 7887: currentChangedRows=439 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8012: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8046: currentChangedRows=492 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8078: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8136: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8219: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8336: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8345: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8366: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8367: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8386: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8392: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 8393: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 9008: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 9533: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 9562: currentChangedRows=169 publicChangedRows=5 candidate=2022-10-20..2026-05-29 tail=0
+- 9658: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
+- 9763: currentChangedRows=510 publicChangedRows=5 candidate=2021-05-31..2026-05-29 tail=0
