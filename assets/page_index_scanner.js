@@ -312,6 +312,16 @@
           return !isCustomCodeMode() && !isListMode() && state.timeframe === "daily" ? state.turnover : 0;
         }
 
+        function filterByEffectiveTurnover(records) {
+          const turnoverThreshold = effectiveTurnoverFilter();
+          if (state.sort !== DEFAULT_INDEX_SORT || !turnoverThreshold) {
+            return filterByTurnover(records, turnoverThreshold);
+          }
+          return records.filter((record) => {
+            return Number(record.turnoverMa5 || 0) >= turnoverThreshold || getStopHighStatus(record) !== "none";
+          });
+        }
+
         function readStrategyControlValue(control) {
           return String(control?.value || "").trim() || DEFAULT_INDEX_SORT;
         }
@@ -1649,7 +1659,7 @@
         }
       
         function renderTagOptions() {
-          const turnoverRecords = filterByTurnover(state.overview.records || [], effectiveTurnoverFilter());
+          const turnoverRecords = filterByEffectiveTurnover(state.overview.records || []);
           const industries = [...new Set(
             turnoverRecords
               .map((record) => String(record.industry || "").trim())
@@ -1676,7 +1686,7 @@
         }
       
         function renderThemeOptions() {
-          const turnoverRecords = filterByTurnover(state.overview.records || [], effectiveTurnoverFilter());
+          const turnoverRecords = filterByEffectiveTurnover(state.overview.records || []);
           const availableThemes = new Set();
           turnoverRecords.forEach((record) => {
             (record.themes || []).forEach((theme) => {
@@ -2406,7 +2416,7 @@
           } else {
             state.activeListMissing = [];
             state.customCodeMissing = [];
-            const turnoverRecords = filterByTurnover(state.overview.records || [], effectiveTurnoverFilter());
+            const turnoverRecords = filterByEffectiveTurnover(state.overview.records || []);
             const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
             const baseFiltered = priceFilteredRecords.filter(
               (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
