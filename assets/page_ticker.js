@@ -129,6 +129,7 @@
     };
 
     let stopAutoRefreshPolling = null;
+    let yahooProfileRequestId = 0;
 
     if (periodButtons) {
       periodButtons.hidden = true;
@@ -159,8 +160,8 @@
         state.selectedDate
       );
       await refreshChartPayload();
-      await refreshRankContext();
       renderTicker();
+      refreshRankContext().then(renderTicker);
     });
 
     async function refreshTickerPage(nextManifest = null) {
@@ -169,14 +170,15 @@
         const payload = await loadTickerPagePayload(manifest, state.selectedDate || manifest.latestDate);
         state.manifest = manifest;
         state.payload = payload;
-        state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
+        state.yahooProfile = null;
         const availableDates = state.payload.ohlcv.map((row) => row.date);
         state.selectedDate = resolveAvailableDate(state.selectedDate || state.manifest.latestDate, availableDates);
         tickerDatePicker.min = availableDates[0];
         tickerDatePicker.max = availableDates.at(-1);
         await refreshChartPayload();
-        await refreshRankContext();
         renderTicker();
+        loadYahooProfileDeferred();
+        refreshRankContext().then(renderTicker);
       });
     }
 
@@ -189,14 +191,15 @@
       const payload = await loadTickerPagePayload(manifest, params.get("date") || manifest.latestDate);
       state.manifest = manifest;
       state.payload = payload;
-      state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
+      state.yahooProfile = null;
       const availableDates = state.payload.ohlcv.map((row) => row.date);
       state.selectedDate = resolveAvailableDate(params.get("date") || state.manifest.latestDate, availableDates);
       tickerDatePicker.min = availableDates[0];
       tickerDatePicker.max = availableDates.at(-1);
       await refreshChartPayload();
-      await refreshRankContext();
       renderTicker();
+      loadYahooProfileDeferred();
+      refreshRankContext().then(renderTicker);
       stopAutoRefreshPolling = startAutoRefreshPolling({
         getCurrentManifest: () => state.manifest,
         onRefresh: async (latestManifest) => {
@@ -218,6 +221,25 @@
       } catch (_error) {
         state.rankingItem = null;
       }
+    }
+
+    function loadYahooProfileDeferred() {
+      const requestId = ++yahooProfileRequestId;
+      loadYahooFinanceProfile(code)
+        .then((profile) => {
+          if (requestId !== yahooProfileRequestId) {
+            return;
+          }
+          state.yahooProfile = profile;
+          setYahooFundamentals(profile);
+        })
+        .catch(() => {
+          if (requestId !== yahooProfileRequestId) {
+            return;
+          }
+          state.yahooProfile = null;
+          setYahooFundamentals(null);
+        });
     }
 
     async function loadTickerPagePayload(manifest, preferredDate = "") {
