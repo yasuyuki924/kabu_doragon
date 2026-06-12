@@ -322,7 +322,11 @@ def check_rows(
                 )
             )
 
-    paired_high_ratio = 1 / split_low_ratio
+    # Some bad rows contain split-adjusted prices for only a few sessions, then
+    # return to the original scale. Real price movement during the bad island can
+    # make the rebound smaller than the exact reciprocal factor, so use a
+    # tolerant return threshold while still requiring a paired jump.
+    paired_high_ratio = max(2.0, (1 / split_low_ratio) * 0.75)
     for index in range(1, len(rows)):
         prev_close = float(rows[index - 1].get("close") or 0)
         curr_close = float(rows[index].get("close") or 0)
