@@ -171,6 +171,7 @@
       renderRegisteredScannerItem,
       renderRegisteredSetRow,
       renderScannerCompactChart,
+      renderScannerExternalLinks,
       renderScannerItem,
       renderScannerItemLinks,
       renderStrategyBadges,

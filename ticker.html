@@ -26,25 +26,21 @@
       })();
     </script>
     <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.155" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.158" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="ticker">
     <main class="container ticker-page-shell">
       <header class="page-header panel ticker-hero">
         <div class="ticker-hero-main">
-          <p class="eyebrow"><a href="./index.html">← 銘柄一覧へ戻る</a></p>
+          <p class="eyebrow">
+            <a class="ticker-back-link" href="./index.html" title="銘柄一覧へ戻る">
+              <span class="ticker-back-link-icon" aria-hidden="true">←</span>
+              <span class="ticker-back-link-text">銘柄一覧</span>
+            </a>
+          </p>
           <h1 id="tickerTitle">銘柄詳細</h1>
           <p id="tickerMeta" class="subtle"></p>
-        </div>
-        <div class="header-actions ticker-hero-actions">
-          <div class="ticker-hero-status">
-            <span id="tickerSnapshotBadge" class="snapshot-badge" hidden></span>
-            <div id="tickerRefreshMeta" class="meta snapshot-refresh-meta"></div>
-          </div>
-          <div class="ticker-hero-command">
-            <div class="link-row" id="externalLinks"></div>
-          </div>
         </div>
       </header>
 
@@ -227,6 +223,28 @@
               <strong><span id="tickerCardHigh">-</span> / <span id="tickerCardLow">-</span></strong>
             </div>
           </div>
+          <div class="ticker-compare-fundamentals" aria-label="ファンダメンタル指標と株式構成">
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">時価総額</span>
+              <strong id="tickerCardMarketCap">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">PER / PBR</span>
+              <strong id="tickerCardValuation">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">ROE / BPS</span>
+              <strong id="tickerCardProfitability">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">発行株 / 浮動株</span>
+              <strong id="tickerCardShares">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental ticker-compare-metric--wide">
+              <span class="ticker-compare-label">株主構成</span>
+              <strong id="tickerCardShareholders">-</strong>
+            </div>
+          </div>
           <div class="ticker-chart-compare-grid">
             <section class="ticker-compare-chart-card ticker-compare-chart-card--daily">
               <div class="ticker-compare-chart-head">
@@ -273,7 +291,7 @@
     <script src="./assets/app_config.js?v=1.4.81"></script>
     <script src="./assets/app_utils.js?v=1.4.81"></script>
     <script src="./assets/app_data.js?v=1.4.100"></script>
-    <script src="./assets/page_ticker.js?v=1.4.101"></script>
-    <script src="./assets/app.js?v=1.4.154"></script>
+    <script src="./assets/page_ticker.js?v=1.4.103"></script>
+    <script src="./assets/app.js?v=1.4.155"></script>
   </body>
 </html>

@@ -29,6 +29,7 @@
       rankingLabel,
       renderStrategyBadges,
       renderStrategyReasons,
+      renderScannerExternalLinks,
       renderTickerChart,
       renderTickerIdentity,
       resolveAvailableDate,
@@ -87,6 +88,11 @@
     const tickerCardVolume = document.getElementById("tickerCardVolume");
     const tickerCardHigh = document.getElementById("tickerCardHigh");
     const tickerCardLow = document.getElementById("tickerCardLow");
+    const tickerCardMarketCap = document.getElementById("tickerCardMarketCap");
+    const tickerCardValuation = document.getElementById("tickerCardValuation");
+    const tickerCardProfitability = document.getElementById("tickerCardProfitability");
+    const tickerCardShares = document.getElementById("tickerCardShares");
+    const tickerCardShareholders = document.getElementById("tickerCardShareholders");
     const tickerCardLinks = document.getElementById("tickerCardLinks");
     const strategyBadges = document.getElementById("strategyBadges");
     const strategyReasons = document.getElementById("strategyReasons");
@@ -320,6 +326,77 @@
       }
     }
 
+    function metricText(value) {
+      const text = String(value || "").trim();
+      return text || "-";
+    }
+
+    function firstMetricValue(...values) {
+      return values.map((value) => String(value || "").trim()).find(Boolean) || "";
+    }
+
+    function formatShareholderSummary(value) {
+      if (!value) {
+        return "-";
+      }
+      if (Array.isArray(value)) {
+        return value
+          .slice(0, 3)
+          .map((item) => {
+            if (typeof item === "string") {
+              return item.trim();
+            }
+            const name = item?.name || item?.holder || item?.shareholder || "";
+            const ratio = item?.ratio || item?.ownershipRatio || item?.percent || item?.holdingRatio || "";
+            return [name, ratio].filter(Boolean).join(" ");
+          })
+          .filter(Boolean)
+          .join(" / ") || "-";
+      }
+      if (typeof value === "object") {
+        const entries = Object.entries(value)
+          .slice(0, 4)
+          .map(([label, ratio]) => [label, ratio].filter(Boolean).join(" "));
+        return entries.filter(Boolean).join(" / ") || "-";
+      }
+      return String(value).trim() || "-";
+    }
+
+    function setTickerFundamentalStrip(profile) {
+      const metrics = profile || {};
+      const per = metricText(metrics.per);
+      const pbr = metricText(metrics.pbr);
+      const roe = metricText(metrics.roe);
+      const bps = metricText(metrics.bps);
+      const freeFloat = firstMetricValue(
+        metrics.freeFloat,
+        metrics.freeFloatShares,
+        metrics.floatingShares,
+        metrics.floatShares,
+        metrics.freeFloatRatio,
+        metrics.floatingShareRatio,
+        metrics.floatRatio
+      );
+      const shareholders = firstMetricValue(metrics.shareholderSummary, metrics.shareholdersSummary)
+        || formatShareholderSummary(metrics.shareholders || metrics.majorShareholders || metrics.shareholderComposition);
+
+      if (tickerCardMarketCap) {
+        tickerCardMarketCap.textContent = metricText(metrics.marketCap);
+      }
+      if (tickerCardValuation) {
+        tickerCardValuation.textContent = metrics.per || metrics.pbr ? `PER ${per} / PBR ${pbr}` : "-";
+      }
+      if (tickerCardProfitability) {
+        tickerCardProfitability.textContent = metrics.roe || metrics.bps ? `ROE ${roe} / BPS ${bps}` : "-";
+      }
+      if (tickerCardShares) {
+        tickerCardShares.textContent = `${metricText(metrics.sharesOutstanding)} / ${metricText(freeFloat)}`;
+      }
+      if (tickerCardShareholders) {
+        tickerCardShareholders.textContent = shareholders || "-";
+      }
+    }
+
     function setTickerSummaryValues(row) {
       summaryDate.textContent = row.date || "-";
       summaryClose.textContent = formatNumber(row.close);
@@ -402,6 +479,7 @@
       if (yahooEarningsSummary) {
         yahooEarningsSummary.textContent = metrics.earningsSummary || "Yahoo Finance JP から取得した参考指標を表示します。";
       }
+      setTickerFundamentalStrip(profile);
     }
 
     function renderTicker() {
@@ -465,26 +543,24 @@
         strategyReasons.innerHTML = renderStrategyReasons(row, { limit: 6, empty: "一致理由なし" }) || "一致理由なし";
       }
 
-      externalLinks.innerHTML = Object.entries(state.payload.links || {})
-        .filter(([, href]) => href)
-        .map(
-          ([label, href]) =>
-            `<a class="link-pill" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`
-        )
-        .join("");
+      if (externalLinks) {
+        externalLinks.innerHTML = "";
+      }
       if (tickerCardLinks) {
-        const detailItems = [
-          { label: "銘柄一覧", href: `./index.html?date=${encodeURIComponent(state.selectedDate)}`, local: true },
-          { label: "Yahoo", href: state.payload.links?.quote || "" },
-        ];
-        tickerCardLinks.innerHTML = detailItems
-          .filter((item) => item.href)
-          .map((item) =>
-            item.local
-              ? `<a href="${item.href}">${escapeHtml(item.label)}</a>`
-              : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
-          )
-          .join('<span class="scanner-link-separator">|</span>');
+        const listHref = `./index.html?date=${encodeURIComponent(state.selectedDate)}`;
+        const linkRecord = {
+          ...state.payload,
+          code,
+          name: state.payload.name || code,
+          links: state.payload.links || {},
+        };
+        tickerCardLinks.innerHTML = `
+          <a class="ticker-back-link ticker-back-link--compact" href="${listHref}" title="銘柄一覧へ戻る">
+            <span class="ticker-back-link-icon" aria-hidden="true">←</span>
+            <span class="ticker-back-link-text">銘柄一覧</span>
+          </a>
+          ${renderScannerExternalLinks(linkRecord)}
+        `;
       }
 
       renderTickerChart(dailyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "3m", dailyChartMeta, (chartRow) => {
