@@ -3,7 +3,7 @@ name: Deploy KabuDragon Pages
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 8 * * 1-5"
+    - cron: "30 8 * * *"
 
 permissions:
   contents: read
