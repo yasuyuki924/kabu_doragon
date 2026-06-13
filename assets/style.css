@@ -5678,7 +5678,7 @@ body[data-page="ticker"] .period-button:hover {
    RESPONSIVE
    ========================================= */
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-width: 940px) and (max-height: 520px) {
   body[data-page="index-scanner"] {
     padding-bottom: max(28px, env(safe-area-inset-bottom));
   }
@@ -5986,10 +5986,14 @@ body[data-page="ticker"] .period-button:hover {
   }
 
   body[data-page="index-scanner"] .scanner-item-links {
+    flex-direction: row;
+    align-items: center;
     flex-wrap: nowrap;
     gap: 5px;
+    min-height: 30px;
     padding: 3px 4px 2px;
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
   }
 
@@ -6000,9 +6004,11 @@ body[data-page="ticker"] .period-button:hover {
   body[data-page="index-scanner"] .scanner-item-links a,
   body[data-page="index-scanner"] .scanner-item-links .scanner-external-link,
   body[data-page="index-scanner"] .scanner-pick-toggle {
+    flex: 0 0 auto;
     min-height: 24px;
     padding: 0 8px;
     font-size: 0.62rem;
+    white-space: nowrap;
   }
 
   body[data-page="index-scanner"] .scanner-item-links-center {
@@ -6013,6 +6019,8 @@ body[data-page="ticker"] .period-button:hover {
   }
 
   body[data-page="index-scanner"] .scanner-external-links {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
     gap: 3px;
   }
 
@@ -6024,6 +6032,9 @@ body[data-page="ticker"] .period-button:hover {
   }
 
   body[data-page="index-scanner"] .scanner-card-timeframe {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
     margin-left: auto;
     order: 4;
   }

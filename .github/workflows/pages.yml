@@ -62,7 +62,7 @@ jobs:
         run: python scripts/run_pages_jquants_update.py --recent-days 45 --history-days 430
 
       - name: Build Pages artifact
-        run: python scripts/build_pages_site.py --recent-days 45
+        run: python scripts/build_pages_site.py --recent-days 95
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

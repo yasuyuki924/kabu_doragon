@@ -34,7 +34,6 @@ DATA_FILES = (
     "watchlist.json",
 )
 PUBLIC_JSON_DIRS = (
-    "ticker_recent/1y/ohlcv_ma",
     "ticker_meta",
 )
 
@@ -61,7 +60,6 @@ OVERVIEW_RECORD_KEYS = {
     "volumeRatio25",
     "turnover",
     "turnoverMa5",
-    "dataQuality",
     "newHigh52w",
     "newHigh20d",
     "bullishCloseBreakout20d",
@@ -76,8 +74,6 @@ OVERVIEW_RECORD_KEYS = {
     "strategyMatches",
     "strategyScores",
     "strategyReasons",
-    "strategyExcludedReasons",
-    "strategyMetrics",
     "highPullback30",
     "highPullback30Candidate",
     "highPullback30DropRate",
@@ -171,6 +167,7 @@ def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -
     index_payload = read_json(index_path)
     dates_by_kind = selected_dates(index_payload if isinstance(index_payload, dict) else {}, recent_days)
     copied = 0
+    copied_codes: set[str] = set()
     filenames = {
         "daily": "market_pulse.json",
         "weekly": "market_pulse_weekly.json",
@@ -184,6 +181,9 @@ def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -
             if not source.exists():
                 continue
             payload = trim_overview_payload(read_json(source))
+            for record in payload.get("records") or []:
+                if isinstance(record, dict) and record.get("code"):
+                    copied_codes.add(str(record["code"]))
             write_json(target_root / date / filename, payload)
             copied += 1
             copied_dates_by_kind[kind].append(date)
@@ -193,7 +193,20 @@ def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -
     }
     write_json(target_root / "index.json", next_index)
     copied += 1
-    return {"copiedFiles": copied, "dates": {key: len(value) for key, value in copied_dates_by_kind.items()}}
+    return {
+        "copiedFiles": copied,
+        "dates": {key: len(value) for key, value in copied_dates_by_kind.items()},
+        "codes": sorted(copied_codes),
+    }
+
+
+def copy_ticker_recent_for_codes(source_root: Path, target_root: Path, codes: list[str]) -> int:
+    copied = 0
+    for code in codes:
+        source = source_root / f"{code}.json"
+        if copy_file(source, target_root / f"{code}.json"):
+            copied += 1
+    return copied
 
 
 def write_public_manifest_from_overview(index_payload: Any, target_path: Path) -> bool:
@@ -246,6 +259,16 @@ def build_site(output: Path, recent_days: int, max_bytes: int) -> dict[str, Any]
 
     overview_metrics = copy_overview_lite(public_source / "overview_lite", public_target / "overview_lite", recent_days)
     copied_files += int(overview_metrics["copiedFiles"])
+    overview_codes = overview_metrics.pop("codes", []) if isinstance(overview_metrics.get("codes"), list) else []
+    overview_metrics["codeCount"] = len(overview_codes)
+    ticker_recent_metrics = {
+        "copiedFiles": copy_ticker_recent_for_codes(
+            public_source / "ticker_recent" / "1y" / "ohlcv_ma",
+            public_target / "ticker_recent" / "1y" / "ohlcv_ma",
+            overview_codes,
+        )
+    }
+    copied_files += int(ticker_recent_metrics["copiedFiles"])
     overview_index = public_target / "overview_lite" / "index.json"
     if overview_index.exists() and write_public_manifest_from_overview(read_json(overview_index), data_target / "manifest.json"):
         copied_files += 1
@@ -256,6 +279,7 @@ def build_site(output: Path, recent_days: int, max_bytes: int) -> dict[str, Any]
         "recentDays": recent_days,
         "copiedFiles": copied_files,
         "overviewLite": overview_metrics,
+        "tickerRecent": ticker_recent_metrics,
         "bytes": size,
         "sizeMiB": round(size / 1024 / 1024, 2),
         "maxBytes": max_bytes,
