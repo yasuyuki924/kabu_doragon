@@ -153,7 +153,12 @@
   }
 
   async function loadTickerDetailRecentData(fetchJson, code, years = 1) {
-    return fetchJson(`./data/public_json/ticker_detail_recent/${years}y/${code}.json`);
+    try {
+      return await fetchJson(`./data/public_json/ticker_detail_recent/${years}y/${code}.json`);
+    } catch (error) {
+      console.info("[ticker-detail-recent:missing]", { code, years, reason: error.message || String(error) });
+      return null;
+    }
   }
 
   async function loadTickerSummaryData(fetchJson, date) {

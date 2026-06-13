@@ -28,6 +28,15 @@
     return `http://127.0.0.1:8010${pathWithSlash}`;
   }
 
+  function isPublicHostedSite() {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const params = new URLSearchParams(window.location?.search || "");
+    const host = String(window.location?.hostname || "");
+    return params.get("publicSite") === "1" || host.endsWith(".github.io");
+  }
+
   async function fetchJson(path) {
     const requestPath = String(path || "");
     try {
@@ -147,6 +156,7 @@
     formatRatio,
     formatSignedNumber,
     formatSignedPercent,
+    isPublicHostedSite,
     parseDate,
     roundNumber,
     shouldUseDesktopPortFallback,

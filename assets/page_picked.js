@@ -229,6 +229,9 @@
     }
 
     function shouldUseFullChartRows(timeframe, rangeMonths) {
+      if (window.KabuAppUtils?.isPublicHostedSite?.()) {
+        return false;
+      }
       return timeframe === "monthly" || (timeframe === "weekly" && Number(rangeMonths) > 12);
     }
 
