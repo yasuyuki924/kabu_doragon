@@ -26,14 +26,25 @@
       })();
     </script>
     <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.155" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.162" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
     <main class="container">
       <header class="page-header">
+        <div id="indexMobileControlRail" class="index-mobile-control-rail" aria-label="Mobile controls">
+          <span id="indexMobileConditionSummary" class="index-mobile-condition-summary">条件を読み込み中</span>
+          <button id="indexMobileFiltersButton" class="index-mobile-filters-button" type="button" aria-expanded="false" aria-controls="indexStickyBar">条件</button>
+        </div>
         <div id="indexStickyBar" class="index-sticky-bar" aria-label="Primary controls">
           <div class="index-sticky-bar-inner">
+            <div class="index-mobile-sheet-head">
+              <div>
+                <div class="index-mobile-sheet-title">条件</div>
+                <div class="index-mobile-sheet-subtitle">PC と同じストラテジー・ランキングを使用</div>
+              </div>
+              <button id="indexMobileFiltersClose" class="index-mobile-sheet-close" type="button" aria-label="条件を閉じる">閉じる</button>
+            </div>
             <span id="indexUpdatedStatus" class="index-header-status">Updated --</span>
             <div class="index-sticky-date-wrap">
               <button id="indexStickyDateButton" class="text-button index-sticky-action" type="button" aria-expanded="false">Date</button>
@@ -122,6 +133,7 @@
           </div>
         </div>
       </header>
+      <div id="indexMobileSheetBackdrop" class="index-mobile-sheet-backdrop" hidden></div>
 
       <section class="panel">
         <div id="indexError" class="status-box error" hidden></div>
@@ -182,7 +194,7 @@
     <script>
       (() => {
         const params = new URLSearchParams(window.location.search);
-        const cacheKey = encodeURIComponent(params.get("v") || params.get("ts") || "1.4.154");
+        const cacheKey = encodeURIComponent(params.get("v") || params.get("ts") || "1.4.162");
         const scripts = [
           "./assets/app_config.js",
           "./assets/app_utils.js",

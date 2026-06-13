@@ -13,6 +13,7 @@ import pandas as pd
 
 DEFAULT_INPUT = Path("data/warehouse_test/prices_by_year")
 DEFAULT_OUTPUT = Path("data/public_json/ticker_recent/1y/ohlcv_ma")
+DEFAULT_FALLBACK_CSV = Path("data/ohlcv_raw")
 MA_WINDOWS = (5, 25, 75, 200)
 OUTPUT_COLUMNS = ("date", "open", "high", "low", "close", "volume", "ma5", "ma25", "ma75", "ma200")
 
@@ -21,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--fallback-csv-dir", type=Path, default=DEFAULT_FALLBACK_CSV)
     parser.add_argument("--years", type=int, default=1)
     return parser.parse_args()
 
@@ -45,6 +47,30 @@ def read_prices(input_dir: Path) -> pd.DataFrame:
     prices["code"] = prices["code"].astype("string")
     prices["date"] = pd.to_datetime(prices["date"])
     prices = prices.sort_values(["code", "date"]).reset_index(drop=True)
+    return prices
+
+
+def read_fallback_csv_prices(fallback_dir: Path) -> pd.DataFrame:
+    if not fallback_dir.exists():
+        return pd.DataFrame(columns=["code", "date", "open", "high", "low", "close", "volume"])
+    frames = []
+    for path in sorted(fallback_dir.glob("*.csv")):
+        code = path.stem
+        try:
+            frame = pd.read_csv(path)
+        except Exception:
+            continue
+        if frame.empty or not set(["date", "open", "high", "low", "close", "volume"]).issubset(frame.columns):
+            continue
+        frame = frame[["date", "open", "high", "low", "close", "volume"]].copy()
+        frame.insert(0, "code", code)
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame(columns=["code", "date", "open", "high", "low", "close", "volume"])
+    prices = pd.concat(frames, ignore_index=True)
+    prices["code"] = prices["code"].astype("string")
+    prices["date"] = pd.to_datetime(prices["date"], errors="coerce")
+    prices = prices.dropna(subset=["date"]).sort_values(["code", "date"]).reset_index(drop=True)
     return prices
 
 
@@ -123,6 +149,15 @@ def main() -> int:
 
     read_started = time.perf_counter()
     prices = read_prices(args.input_dir)
+    input_code_count = int(prices["code"].nunique())
+    fallback_prices = read_fallback_csv_prices(args.fallback_csv_dir)
+    if not fallback_prices.empty:
+        prices = (
+            pd.concat([prices, fallback_prices], ignore_index=True)
+            .drop_duplicates(subset=["code", "date"], keep="last")
+            .sort_values(["code", "date"])
+            .reset_index(drop=True)
+        )
     read_seconds = time.perf_counter() - read_started
 
     ma_started = time.perf_counter()
@@ -134,12 +169,15 @@ def main() -> int:
 
     metrics = {
         "inputDir": str(args.input_dir),
+        "fallbackCsvDir": str(args.fallback_csv_dir),
         "outputDir": str(args.output_dir),
         "format": "ticker_recent_1y_ohlcv_ma",
         "keys": list(OUTPUT_COLUMNS),
         "excluded": ["RCI", "RSI", "strategy", "reasons", "metadata", "links"],
         "inputRows": int(len(prices)),
-        "inputCodeCount": int(prices["code"].nunique()),
+        "inputCodeCount": input_code_count,
+        "fallbackCodeCount": int(fallback_prices["code"].nunique()) if not fallback_prices.empty else 0,
+        "combinedCodeCount": int(prices["code"].nunique()),
         "inputStartDate": prices["date"].min().strftime("%Y-%m-%d"),
         "inputEndDate": prices["date"].max().strftime("%Y-%m-%d"),
         "outputCodeCount": write_metrics["codeCount"],

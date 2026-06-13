@@ -2011,12 +2011,23 @@
     } catch (error) {
       const reason = error?.recentFallbackReason || error?.message || String(error);
       console.info("[ticker-chart:recent:fallback]", { code, reason });
-      const recentInspected = await loadRecentTickerForChart(code, { ...options, selectedDate: "", allowStaleSelectedDate: true });
-      return {
-        ...recentInspected,
-        chartSource: "recent-stale-fallback",
-        fallbackReason: reason,
-      };
+      try {
+        const recentInspected = await loadRecentTickerForChart(code, { ...options, selectedDate: "", allowStaleSelectedDate: true });
+        return {
+          ...recentInspected,
+          chartSource: "recent-stale-fallback",
+          fallbackReason: reason,
+        };
+      } catch (staleError) {
+        const staleReason = staleError?.recentFallbackReason || staleError?.message || String(staleError);
+        console.info("[ticker-chart:legacy:fallback]", { code, reason: staleReason });
+        const legacyInspected = await loadTickerPayloadWithDiagnostics(code, { ...options, allowStaleSelectedDate: true });
+        return {
+          ...legacyInspected,
+          chartSource: "legacy-recent-fallback",
+          fallbackReason: `${reason}; ${staleReason}`,
+        };
+      }
     }
   }
 

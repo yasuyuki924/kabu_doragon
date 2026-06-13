@@ -20,6 +20,11 @@
         const turnoverDropdownButton = document.getElementById("indexTurnoverDropdownButton");
         const turnoverDropdownMenu = document.getElementById("indexTurnoverDropdownMenu");
         const stickyBar = document.getElementById("indexStickyBar");
+        const mobileControlRail = document.getElementById("indexMobileControlRail");
+        const mobileFiltersButton = document.getElementById("indexMobileFiltersButton");
+        const mobileFiltersClose = document.getElementById("indexMobileFiltersClose");
+        const mobileSheetBackdrop = document.getElementById("indexMobileSheetBackdrop");
+        const mobileConditionSummary = document.getElementById("indexMobileConditionSummary");
         const stickyPickedLink = document.getElementById("indexStickyPickedLink");
         const stickyRefreshButton = document.getElementById("indexStickyRefreshButton");
         const stickyDateButton = document.getElementById("indexStickyDateButton");
@@ -141,6 +146,7 @@
           dev200PopoverOpen: false,
           stickyDateOpen: false,
           stickyFiltersOpen: false,
+          mobileFiltersOpen: false,
           selectedDate: "",
           calendarMonth: null,
           picks: {},
@@ -808,6 +814,61 @@
             ? ""
             : ` / 表示 ${formatNumber(displayedCount, 0)}件`;
           resultCount.textContent = `${totalText}${displayText}`;
+          updateMobileFiltersUi();
+        }
+
+        function mobileControlSummaryText() {
+          const parts = [];
+          if (state.selectedDate) {
+            parts.push(formatScannerTradeDate(state.selectedDate));
+          }
+          parts.push(indexScannerTimeframeLabel(state.timeframe));
+          const sortLabel = scannerSortLabel(state.sort);
+          if (sortLabel) {
+            parts.push(sortLabel);
+          }
+          const effectiveTurnover = effectiveTurnoverFilter();
+          if (state.timeframe === "daily" && Number(effectiveTurnover || 0) > 0) {
+            const oku = Number(effectiveTurnover) / 100000000;
+            parts.push(`売買代金 ${oku >= 10 ? formatNumber(oku, 0) : formatNumber(oku, 1)}億以上`);
+          }
+          if (resultCount && !resultCount.hidden && resultCount.textContent) {
+            parts.push(resultCount.textContent);
+          }
+          return parts.filter(Boolean).join(" / ");
+        }
+
+        function setMobileFiltersOpen(open) {
+          state.mobileFiltersOpen = Boolean(open);
+          if (state.mobileFiltersOpen) {
+            state.stickyDateOpen = false;
+            state.stickyFiltersOpen = false;
+            updateStickyDateUi();
+            updateStickyFiltersUi();
+            closeAllHeaderDropdowns();
+          }
+          updateMobileFiltersUi();
+        }
+
+        function updateMobileFiltersUi() {
+          const isOpen = Boolean(state.mobileFiltersOpen);
+          document.body.classList.toggle("index-mobile-sheet-open", isOpen);
+          if (stickyBar) {
+            stickyBar.classList.toggle("is-mobile-sheet-open", isOpen);
+          }
+          if (mobileControlRail) {
+            mobileControlRail.classList.toggle("is-sheet-open", isOpen);
+          }
+          if (mobileFiltersButton) {
+            mobileFiltersButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            mobileFiltersButton.classList.toggle("is-active", isOpen);
+          }
+          if (mobileSheetBackdrop) {
+            mobileSheetBackdrop.hidden = !isOpen;
+          }
+          if (mobileConditionSummary) {
+            mobileConditionSummary.textContent = mobileControlSummaryText() || "条件";
+          }
         }
       
         function updateStickyFiltersUi() {
@@ -848,6 +909,7 @@
             stickyDeviationTitle.textContent = activeKey ? getDeviationSortLabel(activeKey) : "Deviation";
           }
           setStickyDeviationControls(activeDraft);
+          updateMobileFiltersUi();
         }
       
         function updateStickyDateUi() {
@@ -1214,6 +1276,41 @@
           });
         });
 
+        mobileFiltersButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setMobileFiltersOpen(!state.mobileFiltersOpen);
+        });
+
+        mobileFiltersClose?.addEventListener("click", (event) => {
+          event.preventDefault();
+          setMobileFiltersOpen(false);
+        });
+
+        mobileSheetBackdrop?.addEventListener("click", () => {
+          setMobileFiltersOpen(false);
+        });
+
+        if (stickyBar) {
+          let mobileSheetStartY = 0;
+          stickyBar.addEventListener("pointerdown", (event) => {
+            mobileSheetStartY = event.clientY || 0;
+          });
+          stickyBar.addEventListener("pointerup", (event) => {
+            if (!state.mobileFiltersOpen || !mobileSheetStartY) {
+              return;
+            }
+            const deltaY = (event.clientY || 0) - mobileSheetStartY;
+            mobileSheetStartY = 0;
+            if (deltaY > 72) {
+              setMobileFiltersOpen(false);
+            }
+          });
+          stickyBar.addEventListener("pointercancel", () => {
+            mobileSheetStartY = 0;
+          });
+        }
+
         document.addEventListener("click", (event) => {
           if (!customDropdowns().some((control) => control.root?.contains(event.target))) {
             closeAllHeaderDropdowns();
@@ -1381,6 +1478,9 @@
             if (state.stickyDateOpen) {
               state.stickyDateOpen = false;
               updateStickyDateUi();
+            }
+            if (state.mobileFiltersOpen) {
+              setMobileFiltersOpen(false);
             }
             setPicksMenuOpen(false);
             closeCustomCodeModal();
