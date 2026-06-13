@@ -194,6 +194,24 @@ def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -
     return {"copiedFiles": copied, "dates": {key: len(value) for key, value in dates_by_kind.items()}}
 
 
+def write_public_manifest_from_overview(index_payload: Any, target_path: Path) -> bool:
+    if not isinstance(index_payload, dict):
+        return False
+    daily_dates = sorted(str(item) for item in index_payload.get("daily") or [] if str(item).strip())
+    if not daily_dates:
+        return False
+    write_json(
+        target_path,
+        {
+            "generatedAt": index_payload.get("generatedAt") or "",
+            "latestDate": daily_dates[-1],
+            "availableDates": daily_dates,
+            "currentSnapshot": None,
+        },
+    )
+    return True
+
+
 def directory_size(path: Path) -> int:
     return sum(child.stat().st_size for child in path.rglob("*") if child.is_file())
 
@@ -226,6 +244,9 @@ def build_site(output: Path, recent_days: int, max_bytes: int) -> dict[str, Any]
 
     overview_metrics = copy_overview_lite(public_source / "overview_lite", public_target / "overview_lite", recent_days)
     copied_files += int(overview_metrics["copiedFiles"])
+    overview_index = public_target / "overview_lite" / "index.json"
+    if overview_index.exists() and write_public_manifest_from_overview(read_json(overview_index), data_target / "manifest.json"):
+        copied_files += 1
 
     size = directory_size(output)
     metrics = {
