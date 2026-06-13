@@ -176,6 +176,7 @@ def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -
         "weekly": "market_pulse_weekly.json",
         "monthly": "market_pulse_monthly.json",
     }
+    copied_dates_by_kind: dict[str, list[str]] = {"daily": [], "weekly": [], "monthly": []}
     for kind, dates in dates_by_kind.items():
         filename = filenames[kind]
         for date in dates:
@@ -185,13 +186,14 @@ def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -
             payload = trim_overview_payload(read_json(source))
             write_json(target_root / date / filename, payload)
             copied += 1
+            copied_dates_by_kind[kind].append(date)
     next_index = {
         "generatedAt": index_payload.get("generatedAt") if isinstance(index_payload, dict) else "",
-        **dates_by_kind,
+        **copied_dates_by_kind,
     }
     write_json(target_root / "index.json", next_index)
     copied += 1
-    return {"copiedFiles": copied, "dates": {key: len(value) for key, value in dates_by_kind.items()}}
+    return {"copiedFiles": copied, "dates": {key: len(value) for key, value in copied_dates_by_kind.items()}}
 
 
 def write_public_manifest_from_overview(index_payload: Any, target_path: Path) -> bool:
