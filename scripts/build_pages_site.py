@@ -9,6 +9,7 @@ the recent window needed by the hosted scanner.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import shutil
 from datetime import datetime, timedelta
@@ -18,7 +19,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = ROOT / "_site"
-DEFAULT_RECENT_DAYS = 45
+DEFAULT_RECENT_DAYS = 430
 
 STATIC_FILES = (
     "index.html",
@@ -97,6 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--recent-days", type=int, default=DEFAULT_RECENT_DAYS)
     parser.add_argument("--max-bytes", type=int, default=900 * 1024 * 1024)
+    parser.add_argument("--no-compress-json", action="store_false", dest="compress_json")
     return parser.parse_args()
 
 
@@ -107,6 +109,20 @@ def read_json(path: Path) -> Any:
 def write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+
+def write_json_gz(path: Path, payload: Any) -> None:
+    target = path.with_name(f"{path.name}.gz")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    target.write_bytes(gzip.compress(raw, compresslevel=9))
+
+
+def write_runtime_json(path: Path, payload: Any, *, compress: bool) -> None:
+    if compress:
+        write_json_gz(path, payload)
+    else:
+        write_json(path, payload)
 
 
 def copy_file(source: Path, target: Path) -> bool:
@@ -134,6 +150,11 @@ def selected_dates(index_payload: dict[str, Any], recent_days: int) -> dict[str,
     daily_dates = sorted(str(item) for item in index_payload.get("daily") or [] if str(item).strip())
     if not daily_dates:
         return {"daily": [], "weekly": [], "monthly": []}
+    if recent_days <= 0:
+        return {
+            key: sorted(str(item) for item in index_payload.get(key) or [] if str(item).strip())
+            for key in ("daily", "weekly", "monthly")
+        }
     latest = parse_date(daily_dates[-1])
     cutoff = latest - timedelta(days=recent_days)
     selected: dict[str, list[str]] = {}
@@ -160,7 +181,7 @@ def trim_overview_payload(payload: Any) -> Any:
     return {**payload, "records": [trim_record(record) for record in records]}
 
 
-def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -> dict[str, Any]:
+def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int, *, compress_json: bool) -> dict[str, Any]:
     index_path = source_root / "index.json"
     if not index_path.exists():
         return {"copiedFiles": 0, "dates": {"daily": [], "weekly": [], "monthly": []}}
@@ -184,7 +205,7 @@ def copy_overview_lite(source_root: Path, target_root: Path, recent_days: int) -
             for record in payload.get("records") or []:
                 if isinstance(record, dict) and record.get("code"):
                     copied_codes.add(str(record["code"]))
-            write_json(target_root / date / filename, payload)
+            write_runtime_json(target_root / date / filename, payload, compress=compress_json)
             copied += 1
             copied_dates_by_kind[kind].append(date)
     next_index = {
@@ -209,6 +230,19 @@ def copy_ticker_recent_for_codes(source_root: Path, target_root: Path, codes: li
     return copied
 
 
+def copy_compressed_json_for_codes(source_root: Path, target_root: Path, codes: list[str]) -> dict[str, int]:
+    copied = 0
+    missing = 0
+    for code in codes:
+        source = source_root / f"{code}.json"
+        if not source.exists():
+            missing += 1
+            continue
+        write_json_gz(target_root / f"{code}.json", read_json(source))
+        copied += 1
+    return {"copiedFiles": copied, "missingFiles": missing}
+
+
 def write_public_manifest_from_overview(index_payload: Any, target_path: Path) -> bool:
     if not isinstance(index_payload, dict):
         return False
@@ -231,7 +265,7 @@ def directory_size(path: Path) -> int:
     return sum(child.stat().st_size for child in path.rglob("*") if child.is_file())
 
 
-def build_site(output: Path, recent_days: int, max_bytes: int) -> dict[str, Any]:
+def build_site(output: Path, recent_days: int, max_bytes: int, *, compress_json: bool) -> dict[str, Any]:
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True)
@@ -257,18 +291,33 @@ def build_site(output: Path, recent_days: int, max_bytes: int) -> dict[str, Any]
     for item in PUBLIC_JSON_DIRS:
         copied_files += copy_tree(public_source / item, public_target / item)
 
-    overview_metrics = copy_overview_lite(public_source / "overview_lite", public_target / "overview_lite", recent_days)
+    overview_metrics = copy_overview_lite(public_source / "overview_lite", public_target / "overview_lite", recent_days, compress_json=compress_json)
     copied_files += int(overview_metrics["copiedFiles"])
     overview_codes = overview_metrics.pop("codes", []) if isinstance(overview_metrics.get("codes"), list) else []
     overview_metrics["codeCount"] = len(overview_codes)
-    ticker_recent_metrics = {
-        "copiedFiles": copy_ticker_recent_for_codes(
+    if compress_json:
+        ticker_recent_metrics = copy_compressed_json_for_codes(
             public_source / "ticker_recent" / "1y" / "ohlcv_ma",
             public_target / "ticker_recent" / "1y" / "ohlcv_ma",
             overview_codes,
         )
-    }
+        ticker_detail_metrics = copy_compressed_json_for_codes(
+            public_source / "ticker_detail_recent" / "1y",
+            public_target / "ticker_detail_recent" / "1y",
+            overview_codes,
+        )
+    else:
+        ticker_recent_metrics = {
+            "copiedFiles": copy_ticker_recent_for_codes(
+                public_source / "ticker_recent" / "1y" / "ohlcv_ma",
+                public_target / "ticker_recent" / "1y" / "ohlcv_ma",
+                overview_codes,
+            ),
+            "missingFiles": 0,
+        }
+        ticker_detail_metrics = {"copiedFiles": 0, "missingFiles": 0}
     copied_files += int(ticker_recent_metrics["copiedFiles"])
+    copied_files += int(ticker_detail_metrics["copiedFiles"])
     overview_index = public_target / "overview_lite" / "index.json"
     if overview_index.exists() and write_public_manifest_from_overview(read_json(overview_index), data_target / "manifest.json"):
         copied_files += 1
@@ -277,9 +326,11 @@ def build_site(output: Path, recent_days: int, max_bytes: int) -> dict[str, Any]
     metrics = {
         "output": str(output),
         "recentDays": recent_days,
+        "compressedJson": compress_json,
         "copiedFiles": copied_files,
         "overviewLite": overview_metrics,
         "tickerRecent": ticker_recent_metrics,
+        "tickerDetailRecent": ticker_detail_metrics,
         "bytes": size,
         "sizeMiB": round(size / 1024 / 1024, 2),
         "maxBytes": max_bytes,
@@ -296,7 +347,7 @@ def build_site(output: Path, recent_days: int, max_bytes: int) -> dict[str, Any]
 
 def main() -> int:
     args = parse_args()
-    metrics = build_site(args.output, args.recent_days, args.max_bytes)
+    metrics = build_site(args.output, args.recent_days, args.max_bytes, compress_json=args.compress_json)
     print(json.dumps(metrics, ensure_ascii=False, indent=2))
     return 0
 

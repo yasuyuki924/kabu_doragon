@@ -1946,15 +1946,10 @@
 
   async function loadRecentTickerForChart(code, options = {}) {
     const requestUrl = getRecentTickerDataUrl(code);
-    let response;
     let responseBody = "";
     try {
-      response = await fetch(requestUrl, { cache: "no-store" });
-      responseBody = await response.text();
-      if (!response.ok) {
-        throw new Error(`recent JSON 読み込み失敗: ${requestUrl} (${response.status})`);
-      }
-      const rawPayload = JSON.parse(responseBody);
+      const rawPayload = await fetchJson(requestUrl);
+      responseBody = JSON.stringify(rawPayload);
       const payload = normalizeRecentTickerPayload(code, rawPayload);
       const validation = validateTickerPayloadForChart(payload, options.selectedDate);
       if (!validation.parsedCandleCount) {
@@ -1969,7 +1964,7 @@
       return {
         code,
         requestUrl,
-        status: response.status,
+        status: 200,
         responseBody,
         payload,
         validation,
