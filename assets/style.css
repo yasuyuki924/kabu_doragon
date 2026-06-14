@@ -5943,15 +5943,15 @@ body[data-page="ticker"] .period-button:hover {
   }
 
   body[data-page="index-scanner"] .scanner-card-header {
-    grid-template-columns: minmax(0, 1fr) auto auto 20px;
-    gap: 7px;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    gap: clamp(10px, 3vw, 18px);
     min-height: 32px;
-    padding: 5px 6px 4px;
+    padding: 5px 10px 4px;
   }
 
   body[data-page="index-scanner"] .scanner-card-header-left {
     grid-column: auto;
-    gap: 5px;
+    gap: 7px;
   }
 
   body[data-page="index-scanner"] .scanner-card-rank {
@@ -5967,13 +5967,24 @@ body[data-page="ticker"] .period-button:hover {
   }
 
   body[data-page="index-scanner"] .scanner-card-price {
-    display: none;
+    display: inline-flex;
+    justify-self: center;
+    font-size: 0.78rem;
+    font-weight: 900;
   }
 
   body[data-page="index-scanner"] .scanner-compact-change,
   body[data-page="index-scanner"] .scanner-card-turnover {
     justify-self: center;
     font-size: 0.82rem;
+  }
+
+  body[data-page="index-scanner"] .scanner-card-turnover {
+    font-size: 0.76rem;
+  }
+
+  body[data-page="index-scanner"] .scanner-card-header .scanner-quality-badges {
+    display: none;
   }
 
   body[data-page="index-scanner"] .scanner-high-pullback-meta {
@@ -5985,13 +5996,18 @@ body[data-page="ticker"] .period-button:hover {
     height: 268px;
   }
 
+  body[data-page="index-scanner"] .scanner-item-chart-wrap {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   body[data-page="index-scanner"] .scanner-item-links {
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: auto minmax(112px, 1fr) auto auto;
     align-items: center;
-    flex-wrap: nowrap;
-    gap: 5px;
+    column-gap: 7px;
     min-height: 30px;
-    padding: 3px 4px 2px;
+    padding: 3px 14px 2px 10px;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
@@ -6013,9 +6029,10 @@ body[data-page="ticker"] .period-button:hover {
 
   body[data-page="index-scanner"] .scanner-item-links-center {
     display: flex;
-    flex: 0 0 auto;
-    justify-content: flex-start;
-    order: 3;
+    min-width: 0;
+    justify-content: center;
+    justify-self: center;
+    order: 2;
   }
 
   body[data-page="index-scanner"] .scanner-external-links {
@@ -6033,9 +6050,9 @@ body[data-page="ticker"] .period-button:hover {
 
   body[data-page="index-scanner"] .scanner-card-timeframe {
     display: flex;
-    flex: 0 0 auto;
     flex-wrap: nowrap;
-    margin-left: auto;
+    justify-self: end;
+    margin-left: 0;
     order: 4;
   }
 
@@ -6044,8 +6061,14 @@ body[data-page="ticker"] .period-button:hover {
     height: 22px;
   }
 
+  body[data-page="index-scanner"] .scanner-item-links-main {
+    justify-self: start;
+    order: 1;
+  }
+
   body[data-page="index-scanner"] .scanner-pick-toggle {
-    order: initial;
+    justify-self: end;
+    order: 5;
   }
 
   .scanner-toolbar-row {

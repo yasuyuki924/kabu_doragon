@@ -3777,12 +3777,22 @@
       }
       return;
     }
-    const visibleRows = useBarCount
+    const isMobileScannerCard =
+      document.body?.dataset?.page === "index-scanner" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 640px)").matches;
+    let visibleRows = useBarCount
       ? selectRowsByBarWindow(chartRows, selectedIndex, rangeValue)
       : selectRowsByMonths(chartRows, selectedDate, rangeValue, {
           selectedIndex,
           extendToLatest: Boolean(options.extendToLatest),
         });
+    if (isMobileScannerCard && timeframe === "daily" && visibleRows.length) {
+      const firstVisibleIndex = chartRows.findIndex((row) => row.date === visibleRows[0].date);
+      if (firstVisibleIndex > 0) {
+        visibleRows = chartRows.slice(Math.max(0, firstVisibleIndex - 2), firstVisibleIndex).concat(visibleRows);
+      }
+    }
     if (!visibleRows.length) {
       if (elementId) {
         renderChartFailure(elementId, "表示期間に利用できる価格データがありません");
@@ -3931,7 +3941,7 @@
     const visibleCount = visibleRows.length;
     timeScale.setVisibleLogicalRange({
       from: -0.5,
-      to: visibleCount - 1 + 3,
+      to: visibleCount - 1 + (isMobileScannerCard ? 1 : 3),
     });
     renderCompactChartEventMarkers(element, chart, visibleRows, options.events);
     renderScannerChartDateTooltip(element, chart, visibleRows);
