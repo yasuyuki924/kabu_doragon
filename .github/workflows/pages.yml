@@ -91,7 +91,7 @@ jobs:
 
       - name: Rebuild public JSON from J-Quants
         if: ${{ env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' }}
-        run: python scripts/run_pages_jquants_update.py --recent-days 45 --history-days 430
+        run: python scripts/run_pages_jquants_update.py --recent-days 430 --history-days 430
 
       - name: Rebuild public JSON from cached data
         if: ${{ env.REFRESH_PUBLIC_DATA != 'true' && steps.public-data-state.outputs.available == 'true' }}
