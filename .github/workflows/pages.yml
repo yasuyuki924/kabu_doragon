@@ -6,7 +6,7 @@ on:
       refresh_data:
         description: "Refresh public JSON from J-Quants before deploying"
         required: false
-        default: true
+        default: false
         type: boolean
   schedule:
     - cron: "30 8 * * 1-5"
@@ -44,6 +44,7 @@ jobs:
     env:
       JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
       JQUANTS_PLAN: light
+      REFRESH_PUBLIC_DATA: ${{ github.event_name == 'schedule' || inputs.refresh_data == true }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,9 +58,62 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Restore generated public data cache
+        id: generated-data-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/ohlcv
+            data/ohlcv_raw
+            data/public_json
+            data/manifest.json
+            data/update_health.json
+            data/update_summary.json
+            data/update_state.json
+            data/jquants_sync_state.json
+            data/tse_listed_components.csv
+            data/watchlist.json
+            data/inactive_codes.json
+          key: kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-
+            kabu-pages-data-${{ runner.os }}-
+
+      - name: Inspect generated public data cache
+        id: public-data-state
+        shell: bash
+        run: |
+          if compgen -G "data/ohlcv/*.csv" > /dev/null && compgen -G "data/public_json/ticker_meta/*.json" > /dev/null; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Rebuild public JSON from J-Quants
-        if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.refresh_data == true }}
+        if: ${{ env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' }}
         run: python scripts/run_pages_jquants_update.py --recent-days 45 --history-days 430
+
+      - name: Rebuild public JSON from cached data
+        if: ${{ env.REFRESH_PUBLIC_DATA != 'true' && steps.public-data-state.outputs.available == 'true' }}
+        run: python scripts/rebuild_pages_public_json_from_existing.py --recent-days 430
+
+      - name: Save generated public data cache
+        if: ${{ success() }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/ohlcv
+            data/ohlcv_raw
+            data/public_json
+            data/manifest.json
+            data/update_health.json
+            data/update_summary.json
+            data/update_state.json
+            data/jquants_sync_state.json
+            data/tse_listed_components.csv
+            data/watchlist.json
+            data/inactive_codes.json
+          key: kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Build Pages artifact
         run: python scripts/build_pages_site.py --recent-days 430
