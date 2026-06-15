@@ -25,8 +25,15 @@
         }
       })();
     </script>
-    <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.169" />
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var explicitVersion = params.get("v") || params.get("ts") || "";
+        window.KABU_ASSET_CACHE_KEY = encodeURIComponent(explicitVersion || String(Date.now()));
+        document.write('<script src="./assets/desktop_bootstrap.js?v=' + window.KABU_ASSET_CACHE_KEY + '"><' + '/script>');
+        document.write('<link rel="stylesheet" href="./assets/style.css?v=' + window.KABU_ASSET_CACHE_KEY + '" />');
+      })();
+    </script>
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
@@ -197,8 +204,7 @@
 
     <script>
       (() => {
-        const params = new URLSearchParams(window.location.search);
-        const cacheKey = encodeURIComponent(params.get("v") || params.get("ts") || "1.4.169");
+        const cacheKey = window.KABU_ASSET_CACHE_KEY || String(Date.now());
         const scripts = [
           "./assets/app_config.js",
           "./assets/app_utils.js",
