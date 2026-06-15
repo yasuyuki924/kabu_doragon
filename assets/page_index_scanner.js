@@ -149,6 +149,9 @@
           stickyDateOpen: false,
           stickyFiltersOpen: false,
           mobileFiltersOpen: false,
+          mobileRailCollapsed: false,
+          mobileRailGestureConsumed: false,
+          mobileRailLastScrollY: 0,
           selectedDate: "",
           calendarMonth: null,
           picks: {},
@@ -866,14 +869,23 @@
           updateMobileFiltersUi();
         }
 
+        function setMobileRailCollapsed(collapsed) {
+          state.mobileRailCollapsed = Boolean(collapsed);
+          updateMobileFiltersUi();
+        }
+
         function updateMobileFiltersUi() {
           const isOpen = Boolean(state.mobileFiltersOpen);
+          const isRailCollapsed = Boolean(state.mobileRailCollapsed) && !isOpen;
           document.body.classList.toggle("index-mobile-sheet-open", isOpen);
+          document.body.classList.toggle("index-mobile-rail-collapsed", isRailCollapsed);
           if (stickyBar) {
             stickyBar.classList.toggle("is-mobile-sheet-open", isOpen);
           }
           if (mobileControlRail) {
             mobileControlRail.classList.toggle("is-sheet-open", isOpen);
+            mobileControlRail.classList.toggle("is-collapsed", isRailCollapsed);
+            mobileControlRail.setAttribute("aria-expanded", isRailCollapsed ? "false" : "true");
           }
           if (mobileFiltersButton) {
             mobileFiltersButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
@@ -1295,6 +1307,10 @@
         mobileFiltersButton?.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
+          if (state.mobileRailGestureConsumed) {
+            state.mobileRailGestureConsumed = false;
+            return;
+          }
           setMobileFiltersOpen(!state.mobileFiltersOpen);
         });
 
@@ -1306,6 +1322,73 @@
         mobileSheetBackdrop?.addEventListener("click", () => {
           setMobileFiltersOpen(false);
         });
+
+        if (mobileControlRail) {
+          let mobileRailStartX = 0;
+          let mobileRailStartY = 0;
+          const finishMobileRailGesture = (clientX, clientY) => {
+            if (!mobileRailStartY) {
+              return;
+            }
+            const deltaX = Number(clientX || 0) - mobileRailStartX;
+            const deltaY = Number(clientY || 0) - mobileRailStartY;
+            mobileRailStartX = 0;
+            mobileRailStartY = 0;
+            if (Math.abs(deltaY) < 36 || Math.abs(deltaY) < Math.abs(deltaX) * 1.15) {
+              return;
+            }
+            state.mobileRailGestureConsumed = true;
+            setMobileRailCollapsed(deltaY < 0);
+          };
+          mobileControlRail.addEventListener("pointerdown", (event) => {
+            mobileRailStartX = event.clientX || 0;
+            mobileRailStartY = event.clientY || 0;
+            state.mobileRailGestureConsumed = false;
+          });
+          mobileControlRail.addEventListener("pointerup", (event) => {
+            finishMobileRailGesture(event.clientX, event.clientY);
+          });
+          mobileControlRail.addEventListener("pointercancel", () => {
+            mobileRailStartX = 0;
+            mobileRailStartY = 0;
+            state.mobileRailGestureConsumed = false;
+          });
+          mobileControlRail.addEventListener("touchstart", (event) => {
+            const touch = event.changedTouches?.[0];
+            if (!touch) {
+              return;
+            }
+            mobileRailStartX = touch.clientX || 0;
+            mobileRailStartY = touch.clientY || 0;
+            state.mobileRailGestureConsumed = false;
+          }, { passive: true });
+          mobileControlRail.addEventListener("touchend", (event) => {
+            const touch = event.changedTouches?.[0];
+            if (!touch) {
+              return;
+            }
+            finishMobileRailGesture(touch.clientX, touch.clientY);
+          }, { passive: true });
+          mobileControlRail.addEventListener("touchcancel", () => {
+            mobileRailStartX = 0;
+            mobileRailStartY = 0;
+            state.mobileRailGestureConsumed = false;
+          }, { passive: true });
+        }
+
+        window.addEventListener("scroll", () => {
+          if (!mobileControlRail || state.mobileFiltersOpen) {
+            return;
+          }
+          const currentY = Math.max(0, window.scrollY || document.documentElement.scrollTop || 0);
+          const deltaY = currentY - Number(state.mobileRailLastScrollY || 0);
+          state.mobileRailLastScrollY = currentY;
+          if (currentY > 80 && deltaY > 12) {
+            setMobileRailCollapsed(true);
+          } else if (currentY < 24 || deltaY < -24) {
+            setMobileRailCollapsed(false);
+          }
+        }, { passive: true });
 
         if (stickyBar) {
           let mobileSheetStartY = 0;
