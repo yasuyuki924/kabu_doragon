@@ -74,7 +74,9 @@
         const picksMenu = document.getElementById("indexPicksMenu");
         const picksMenuToggle = picksMenuButton || pickedLink;
         const updatedStatus = document.getElementById("indexUpdatedStatus");
+        const mobileUpdatedStatus = document.getElementById("indexMobileUpdatedStatus");
         const resultCount = document.getElementById("indexResultCount");
+        const mobileResultCount = document.getElementById("indexMobileResultCount");
         const refreshButton = document.getElementById("indexRefreshButton");
         const addCodesButton = document.getElementById("indexAddCodesButton");
         const exportTradingViewButton = document.getElementById("indexExportTradingViewButton");
@@ -796,12 +798,20 @@
         }
 
         function updateIndexResultCount({ matchedCount = 0, displayedCount = 0, loading = false } = {}) {
-          if (!resultCount) {
-            return;
+          if (resultCount) {
+            resultCount.hidden = false;
           }
-          resultCount.hidden = false;
+          if (mobileResultCount) {
+            mobileResultCount.hidden = false;
+          }
           if (loading) {
-            resultCount.textContent = `${scannerSortLabel(state.sort)} 読込中`;
+            const loadingText = `${scannerSortLabel(state.sort)} 読込中`;
+            if (resultCount) {
+              resultCount.textContent = loadingText;
+            }
+            if (mobileResultCount) {
+              mobileResultCount.textContent = "読込中";
+            }
             return;
           }
           const matchedLabel = isCustomCodeMode()
@@ -813,7 +823,13 @@
           const displayText = Number(displayedCount) === Number(matchedCount)
             ? ""
             : ` / 表示 ${formatNumber(displayedCount, 0)}件`;
-          resultCount.textContent = `${totalText}${displayText}`;
+          if (resultCount) {
+            resultCount.textContent = `${totalText}${displayText}`;
+          }
+          if (mobileResultCount) {
+            mobileResultCount.textContent = `表示 ${formatNumber(displayedCount, 0)}件`;
+            mobileResultCount.title = `${totalText}${displayText}`;
+          }
           updateMobileFiltersUi();
         }
 
@@ -1980,6 +1996,21 @@
               </span>
             </span>
           `;
+          if (mobileUpdatedStatus) {
+            mobileUpdatedStatus.hidden = false;
+            mobileUpdatedStatus.className = [
+              "index-mobile-header-status",
+              `index-mobile-header-status--${headerStateClass}`,
+              statusState.refreshing ? "index-mobile-header-status--refreshing" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            mobileUpdatedStatus.title = headerTooltip;
+            mobileUpdatedStatus.innerHTML = `
+              <span class="index-mobile-header-status-dot" aria-hidden="true"></span>
+              <span>${escapeHtml(headerLabel)}</span>
+            `;
+          }
         }
 
         function closeStrategyPopover(card) {

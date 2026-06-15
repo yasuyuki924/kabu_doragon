@@ -26,7 +26,7 @@
       })();
     </script>
     <script src="./assets/desktop_bootstrap.js?v=1.4.82"></script>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.166" />
+    <link rel="stylesheet" href="./assets/style.css?v=1.4.167" />
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
@@ -40,7 +40,11 @@
           <div class="index-sticky-bar-inner">
             <div class="index-mobile-sheet-head">
               <div>
-                <div class="index-mobile-sheet-title">条件</div>
+                <div class="index-mobile-sheet-title-row">
+                  <div class="index-mobile-sheet-title">条件</div>
+                  <span id="indexMobileUpdatedStatus" class="index-mobile-header-status" hidden></span>
+                  <span id="indexMobileResultCount" class="index-mobile-result-count" hidden></span>
+                </div>
                 <div class="index-mobile-sheet-subtitle">PC と同じストラテジー・ランキングを使用</div>
               </div>
               <button id="indexMobileFiltersClose" class="index-mobile-sheet-close" type="button" aria-label="条件を閉じる">閉じる</button>
@@ -194,7 +198,7 @@
     <script>
       (() => {
         const params = new URLSearchParams(window.location.search);
-        const cacheKey = encodeURIComponent(params.get("v") || params.get("ts") || "1.4.166");
+        const cacheKey = encodeURIComponent(params.get("v") || params.get("ts") || "1.4.167");
         const scripts = [
           "./assets/app_config.js",
           "./assets/app_utils.js",
