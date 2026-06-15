@@ -89,16 +89,37 @@ jobs:
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Determine public data rebuild scope
+        id: rebuild-scope
+        shell: bash
+        run: |
+          needs_rebuild=false
+          if [[ "${{ github.event_name }}" != "push" ]]; then
+            needs_rebuild=true
+          else
+            base_sha="${{ github.event.before }}"
+            head_sha="${{ github.sha }}"
+            if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+              needs_rebuild=true
+            else
+              changed_files="$(git diff --name-only "$base_sha" "$head_sha" || true)"
+              if echo "$changed_files" | grep -E '^(scripts/rebuild_pages_public_json_from_existing.py|scripts/run_pages_jquants_update.py|scripts/build_lightweight_detail_public_json.py|scripts/build_period_overview_lite.py|src/|requirements\.txt)' > /dev/null; then
+                needs_rebuild=true
+              fi
+            fi
+          fi
+          echo "needs_rebuild=$needs_rebuild" >> "$GITHUB_OUTPUT"
+
       - name: Rebuild public JSON from J-Quants
         if: ${{ env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' }}
         run: python scripts/run_pages_jquants_update.py --recent-days 430 --history-days 430
 
       - name: Rebuild public JSON from cached data
-        if: ${{ env.REFRESH_PUBLIC_DATA != 'true' && steps.public-data-state.outputs.available == 'true' }}
+        if: ${{ env.REFRESH_PUBLIC_DATA != 'true' && steps.public-data-state.outputs.available == 'true' && steps.rebuild-scope.outputs.needs_rebuild == 'true' }}
         run: python scripts/rebuild_pages_public_json_from_existing.py --recent-days 430
 
       - name: Save generated public data cache
-        if: ${{ success() }}
+        if: ${{ success() && (env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' || steps.rebuild-scope.outputs.needs_rebuild == 'true') }}
         uses: actions/cache/save@v4
         with:
           path: |
