@@ -95,7 +95,9 @@ jobs:
         run: |
           needs_rebuild=false
           if [[ "${{ github.event_name }}" != "push" ]]; then
-            needs_rebuild=true
+            if [[ "${REFRESH_PUBLIC_DATA}" == "true" ]]; then
+              needs_rebuild=true
+            fi
           else
             base_sha="${{ github.event.before }}"
             head_sha="${{ github.sha }}"
