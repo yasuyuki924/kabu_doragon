@@ -1948,6 +1948,24 @@
           }
         }
 
+        function setPickControlState(checkbox, picked) {
+          const control = checkbox?.closest?.(".scanner-pick-toggle");
+          if (!control) {
+            return;
+          }
+          control.classList.toggle("is-picked", picked);
+          control.title = picked ? "Listから外す" : "Listに追加";
+          checkbox.setAttribute("aria-label", picked ? "Listから外す" : "Listに追加");
+          const icon = control.querySelector(".scanner-pick-icon");
+          const label = control.querySelector(".scanner-pick-label");
+          if (icon) {
+            icon.textContent = picked ? "★" : "☆";
+          }
+          if (label) {
+            label.textContent = picked ? "Pick済" : "Pick";
+          }
+        }
+
         function renderSavedListSets() {
           if (!listSetsBody) {
             return;
@@ -2744,6 +2762,7 @@
             }
             checkbox.addEventListener("change", async () => {
               toggleScannerPick(record, checkbox.checked, state);
+              setPickControlState(checkbox, checkbox.checked);
               setCardPickedState(card, checkbox.checked);
               if (isListMode() && !checkbox.checked) {
                 state.activeListCodes = state.activeListCodes.filter((code) => String(code) !== String(record.code));
@@ -2760,6 +2779,7 @@
               const nextChecked = !Boolean(state.picks?.[record.code]);
               checkbox.checked = nextChecked;
               toggleScannerPick(record, nextChecked, state);
+              setPickControlState(checkbox, nextChecked);
               setCardPickedState(card, nextChecked);
               if (isListMode() && !nextChecked) {
                 state.activeListCodes = state.activeListCodes.filter((code) => String(code) !== String(record.code));

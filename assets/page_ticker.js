@@ -3,6 +3,7 @@
     const {
       NOTE_STORAGE_PREFIX,
       TICKER_CHART_MODES,
+      buildScannerPickPayload,
       buildTickerUrl,
       escapeHtml,
       findSelectedIndex,
@@ -17,6 +18,7 @@
       getSignedValueClass,
       isLegacyDataMode,
       loadManifest,
+      loadScannerPicks,
       loadTickerNote,
       loadRecentTickerForChart,
       loadTickerForChartWithFallback,
@@ -35,6 +37,7 @@
       resolveAvailableDate,
       resolvePickerDate,
       runRefreshAction,
+      saveScannerPicks,
       showError,
       startAutoRefreshPolling,
       syncSnapshotStatusUi,
@@ -123,6 +126,7 @@
       chartSource: "",
       rankingKey,
       rankingItem: null,
+      picks: loadScannerPicks(),
       selectedChartMode: normalizeTickerChartMode(params.get("chart") || "3m"),
       selectedDate: "",
       yahooProfile: null,
@@ -151,6 +155,14 @@
 
     noteArea.addEventListener("input", () => {
       noteStatus.textContent = "未保存";
+    });
+
+    tickerCardLinks?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-ticker-pick-button]");
+      if (!button) {
+        return;
+      }
+      toggleTickerPick(!Boolean(state.picks[String(code || "").trim()]));
     });
 
     tickerDatePicker.addEventListener("change", async () => {
@@ -504,6 +516,58 @@
       setTickerFundamentalStrip(profile);
     }
 
+    function buildTickerPickState() {
+      return {
+        selectedDate: state.selectedDate,
+        sort: state.rankingKey,
+        rangeMonths: 3,
+        timeframe: "daily",
+        limit: 0,
+        turnover: 0,
+        selectedStrategies: [],
+      };
+    }
+
+    function buildTickerPickRecord() {
+      return {
+        ...(state.rankingItem || {}),
+        code,
+        name: state.payload?.name || code,
+        market: state.payload?.market || "",
+      };
+    }
+
+    function toggleTickerPick(picked) {
+      const normalizedCode = String(code || "").trim();
+      if (!normalizedCode) {
+        return;
+      }
+      const nextPicks = loadScannerPicks();
+      if (picked) {
+        nextPicks[normalizedCode] = buildScannerPickPayload(buildTickerPickRecord(), buildTickerPickState());
+      } else {
+        delete nextPicks[normalizedCode];
+      }
+      state.picks = nextPicks;
+      saveScannerPicks(state.picks);
+      syncTickerPickButton();
+    }
+
+    function syncTickerPickButton() {
+      const button = document.querySelector("[data-ticker-pick-button]");
+      if (!button) {
+        return;
+      }
+      const picked = Boolean(state.picks[String(code || "").trim()]);
+      button.classList.toggle("is-picked", picked);
+      button.setAttribute("aria-pressed", picked ? "true" : "false");
+      button.title = picked ? "Listから外す" : "Listに追加";
+      button.innerHTML = `
+        <span class="ticker-pick-icon" aria-hidden="true">${picked ? "★" : "☆"}</span>
+        <span>${picked ? "Pick済" : "Pick"}</span>
+      `;
+    }
+
     function renderTicker() {
       const rows = state.payload.ohlcv || [];
       const chartRows = state.chartPayload?.ohlcv?.length ? state.chartPayload.ohlcv : rows;
@@ -582,7 +646,9 @@
             <span class="ticker-back-link-text">銘柄一覧</span>
           </a>
           ${renderScannerExternalLinks(linkRecord)}
+          <button class="ticker-pick-button" type="button" data-ticker-pick-button aria-pressed="false"></button>
         `;
+        syncTickerPickButton();
       }
 
       renderTickerChart(dailyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "3m", dailyChartMeta, (chartRow) => {

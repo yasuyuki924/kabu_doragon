@@ -3431,9 +3431,15 @@
           </div>
           <div class="scanner-item-links-center">${externalLinks}</div>
           ${renderScannerCardTimeframeButtons(record.code, cardChartTimeframe)}
-          <label class="scanner-pick-toggle">
-            <input type="checkbox" data-pick-code="${escapeHtml(record.code)}"${picked ? " checked" : ""} />
-            <span>Pick</span>
+          <label class="scanner-pick-toggle${picked ? " is-picked" : ""}" title="${picked ? "Listから外す" : "Listに追加"}">
+            <input
+              type="checkbox"
+              data-pick-code="${escapeHtml(record.code)}"
+              aria-label="${picked ? "Listから外す" : "Listに追加"}"
+              ${picked ? " checked" : ""}
+            />
+            <span class="scanner-pick-icon" aria-hidden="true">${picked ? "★" : "☆"}</span>
+            <span class="scanner-pick-label">${picked ? "Pick済" : "Pick"}</span>
           </label>
         </div>
       </article>
