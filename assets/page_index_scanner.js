@@ -940,6 +940,31 @@
             stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
           }
         }
+
+        function setCardPickedState(card, picked) {
+          if (!card) {
+            return;
+          }
+          card.classList.toggle("scanner-item-picked", picked);
+        }
+
+        function setPickControlState(checkbox, picked) {
+          const control = checkbox?.closest?.(".scanner-pick-toggle");
+          if (!control) {
+            return;
+          }
+          control.classList.toggle("is-picked", picked);
+          control.title = picked ? "Listから外す" : "Listに追加";
+          checkbox.setAttribute("aria-label", picked ? "Listから外す" : "Listに追加");
+          const icon = control.querySelector(".scanner-pick-icon");
+          const label = control.querySelector(".scanner-pick-label");
+          if (icon) {
+            icon.textContent = picked ? "★" : "☆";
+          }
+          if (label) {
+            label.textContent = picked ? "Pick済" : "Pick";
+          }
+        }
       
         function updateHeaderStatus() {
           if (!updatedStatus) {
@@ -1348,11 +1373,15 @@
       
           filtered.forEach((record) => {
             const checkbox = list.querySelector(`input[data-pick-code="${record.code}"]`);
+            const card = list.querySelector(`[data-scanner-card-code="${record.code}"]`);
             if (!checkbox) {
               return;
             }
             checkbox.addEventListener("change", () => {
               toggleScannerPick(record, checkbox.checked, state);
+              setPickControlState(checkbox, checkbox.checked);
+              setCardPickedState(card, checkbox.checked);
+              updateIndexHeaderActions();
             });
           });
           bindStrategyPopoverEvents();

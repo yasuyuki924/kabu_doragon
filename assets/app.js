@@ -2904,9 +2904,15 @@
             <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">Detail</a>
           </div>
           ${strategyBar ? `<div class="scanner-item-links-center">${strategyBar}</div>` : '<div class="scanner-item-links-center"></div>'}
-          <label class="scanner-pick-toggle">
-            <input type="checkbox" data-pick-code="${escapeHtml(record.code)}"${picked ? " checked" : ""} />
-            <span>Pick</span>
+          <label class="scanner-pick-toggle${picked ? " is-picked" : ""}" title="${picked ? "Listから外す" : "Listに追加"}">
+            <input
+              type="checkbox"
+              data-pick-code="${escapeHtml(record.code)}"
+              aria-label="${picked ? "Listから外す" : "Listに追加"}"
+              ${picked ? " checked" : ""}
+            />
+            <span class="scanner-pick-icon" aria-hidden="true">${picked ? "★" : "☆"}</span>
+            <span class="scanner-pick-label">${picked ? "Pick済" : "Pick"}</span>
           </label>
         </div>
       </article>
