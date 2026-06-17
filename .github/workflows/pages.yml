@@ -112,8 +112,12 @@ jobs:
           fi
           echo "needs_rebuild=$needs_rebuild" >> "$GITHUB_OUTPUT"
 
+      - name: Incremental public JSON from J-Quants
+        if: ${{ env.REFRESH_PUBLIC_DATA == 'true' && steps.public-data-state.outputs.available == 'true' }}
+        run: python scripts/incremental_jquants_update.py
+
       - name: Rebuild public JSON from J-Quants
-        if: ${{ env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' }}
+        if: ${{ steps.public-data-state.outputs.available != 'true' }}
         run: python scripts/run_pages_jquants_update.py --recent-days 430 --history-days 430
 
       - name: Rebuild public JSON from cached data
