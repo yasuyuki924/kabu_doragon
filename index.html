@@ -4,15 +4,58 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ローカル株分析ボード | ランキングチャート一覧</title>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.77" />
+    <script>
+      (function () {
+        var host = window.location.hostname || "";
+        var port = window.location.port || "";
+        var protocol = window.location.protocol || "";
+        var path = window.location.pathname || "/";
+        if (protocol === "file:" || ((host === "127.0.0.1" || host === "localhost") && port === "")) {
+          var decoded = "";
+          try {
+            decoded = decodeURIComponent(path || "");
+          } catch (_) {
+            decoded = path || "";
+          }
+          var marker = "/kabu_doragon/";
+          var markerIndex = decoded.indexOf(marker);
+          var nextPath = markerIndex >= 0 ? "/" + decoded.slice(markerIndex + marker.length).replace(/^\/+/, "") : path === "/" ? "/index.html" : path;
+          var nextUrl = "http://127.0.0.1:8010" + nextPath + (window.location.search || "") + (window.location.hash || "");
+          window.location.replace(nextUrl);
+        }
+      })();
+    </script>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var explicitVersion = params.get("v") || params.get("ts") || "";
+        window.KABU_ASSET_CACHE_KEY = encodeURIComponent(explicitVersion || String(Date.now()));
+        document.write('<script src="./assets/desktop_bootstrap.js?v=' + window.KABU_ASSET_CACHE_KEY + '"><' + '/script>');
+        document.write('<link rel="stylesheet" href="./assets/style.css?v=' + window.KABU_ASSET_CACHE_KEY + '" />');
+      })();
+    </script>
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="index-scanner">
     <main class="container">
       <header class="page-header">
+        <div id="indexMobileControlRail" class="index-mobile-control-rail" aria-label="Mobile controls">
+          <span id="indexMobileConditionSummary" class="index-mobile-condition-summary">条件を読み込み中</span>
+          <button id="indexMobileFiltersButton" class="index-mobile-filters-button" type="button" aria-expanded="false" aria-controls="indexStickyBar">条件</button>
+        </div>
         <div id="indexStickyBar" class="index-sticky-bar" aria-label="Primary controls">
           <div class="index-sticky-bar-inner">
-            <a id="indexPickedLink" class="action-button secondary scanner-picked-link index-sticky-action" href="./picked.html">Picks</a>
+            <div class="index-mobile-sheet-head">
+              <div>
+                <div class="index-mobile-sheet-title-row">
+                  <div class="index-mobile-sheet-title">条件</div>
+                  <span id="indexMobileUpdatedStatus" class="index-mobile-header-status" hidden></span>
+                  <span id="indexMobileResultCount" class="index-mobile-result-count" hidden></span>
+                </div>
+                <div class="index-mobile-sheet-subtitle">PC と同じストラテジー・ランキングを使用</div>
+              </div>
+              <button id="indexMobileFiltersClose" class="index-mobile-sheet-close" type="button" aria-label="条件を閉じる">閉じる</button>
+            </div>
             <span id="indexUpdatedStatus" class="index-header-status">Updated --</span>
             <div class="index-sticky-date-wrap">
               <button id="indexStickyDateButton" class="text-button index-sticky-action" type="button" aria-expanded="false">Date</button>
@@ -32,129 +75,146 @@
                 <div id="indexTimeframeOptions" class="index-timeframe-options"></div>
               </div>
             </div>
-            <select id="indexSort" class="index-sticky-select" aria-label="Sort">
-              <option value="gainers">値上がり</option>
-              <option value="losers">値下がり</option>
-              <option value="volume">出来高</option>
-              <option value="code">コード順</option>
-              <option value="stop_high">S高</option>
-              <option value="new_high">新高値</option>
-              <option value="new_high_20d">20D Close High</option>
-              <option value="trend_turn">ベース・リカバリー</option>
-              <option value="rebound_signal">反発</option>
-              <option value="strategy_minervini">Minervini</option>
-              <option value="strategy_stage2">Stage 2</option>
-              <option value="strategy_turtle">Turtle</option>
-              <option value="strategy_canslim">CAN SLIM</option>
-              <option value="strategy_rsi2">RSI(2)</option>
-              <option value="deviation25">25日乖離</option>
-              <option value="deviation75">75日乖離</option>
-              <option value="deviation200">200日乖離</option>
-              <option value="lower_shadow">下ひげ</option>
-              <option value="watch_candidates">監視候補</option>
-            </select>
-            <select id="indexLimit" class="index-sticky-select index-sticky-limit" aria-label="Rows">
-              <option value="50">50</option>
-              <option value="100" selected>100</option>
-              <option value="200">200</option>
-            </select>
-            <div class="index-sticky-filters-wrap index-sticky-filters-wrap--left">
-                <button id="indexStickyFiltersButton" class="text-button index-sticky-action" type="button" aria-expanded="false">Filters</button>
-                <div id="indexStickyFiltersPopover" class="index-sticky-filters-popover" hidden>
-                  <div class="index-sticky-section-title">Filters</div>
-                  <div class="index-sticky-filters-grid">
-                    <label>
-                      <span>Sector</span>
-                      <select id="indexStickyTag">
-                        <option value="">All</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Theme</span>
-                      <select id="indexStickyTheme">
-                        <option value="">All</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Turnover</span>
-                      <select id="indexStickyTurnover">
-                        <option value="0">0</option>
-                        <option value="50000000">50M</option>
-                        <option value="100000000">100M</option>
-                        <option value="500000000">500M</option>
-                        <option value="1000000000">1B</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Strategy</span>
-                      <select id="indexStickyStrategy">
-                        <option value="">All</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div id="indexStickyAdvanced" class="index-sticky-advanced" hidden>
-                    <div class="index-sticky-section-title">Advanced</div>
-                    <div class="index-sticky-advanced-grid index-sticky-advanced-grid--slider">
-                      <div id="indexStickyDeviationTitle" class="index-dev200-popover-title">Deviation (%)</div>
-                      <div class="index-deviation-compact-row">
-                        <label class="index-deviation-input-group">
-                          <span>Min</span>
-                          <div class="index-deviation-input-shell">
-                            <input id="indexStickyDev200MinNumber" type="number" inputmode="decimal" step="0.1" min="-20" max="20" value="" placeholder="-∞" aria-label="Deviation min value" />
-                            <span>%</span>
-                          </div>
-                        </label>
-                        <div class="index-deviation-slider-compact">
-                          <div class="index-deviation-slider-scale index-deviation-slider-scale--compact">
-                            <span>-20</span>
-                            <span>0</span>
-                            <span>+20</span>
-                          </div>
-                          <div class="index-deviation-slider-stack index-deviation-slider-stack--compact">
-                            <div class="index-deviation-slider-track"></div>
-                            <div id="indexStickyDev200RangeFill" class="index-deviation-slider-fill"></div>
-                            <div class="index-deviation-slider-zero"></div>
-                            <input id="indexStickyDev200Min" class="index-deviation-slider index-deviation-slider--min" type="range" min="-20" max="20" step="0.5" value="-5" aria-label="Deviation min" />
-                            <input id="indexStickyDev200Max" class="index-deviation-slider index-deviation-slider--max" type="range" min="-20" max="20" step="0.5" value="8" aria-label="Deviation max" />
-                          </div>
-                        </div>
-                        <label class="index-deviation-input-group">
-                          <span>Max</span>
-                          <div class="index-deviation-input-shell">
-                            <input id="indexStickyDev200MaxNumber" type="number" inputmode="decimal" step="0.1" min="-20" max="20" value="" placeholder="+∞" aria-label="Deviation max value" />
-                            <span>%</span>
-                          </div>
-                        </label>
-                      </div>
-                      <div class="index-dev200-popover-actions index-dev200-popover-actions--compact">
-                        <button id="indexStickyDev200Reset" class="action-button secondary" type="button">Reset</button>
-                        <button id="indexStickyDev200Apply" class="action-button" type="button">Apply</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div id="indexStrategyDropdown" class="index-strategy-dropdown">
+              <select id="indexSort" class="index-sticky-select index-strategy-native-select" aria-label="Sort" tabindex="-1">
+                <option value="">ストラテジー</option>
+                <option value="strategy_minervini">成長ブレイク（Minervini）</option>
+                <option value="strategy_stage2">中期上昇入り（Stage 2）</option>
+                <option value="strategy_turtle">高値ブレイク（Turtle）</option>
+                <option value="strategy_rsi2">上昇中の押し目（RSI(2)）</option>
+                <option value="trend_turn">200日線回復（ベース・リカバリー）</option>
+                <option value="strategy_high_pullback_30">高値調整（30% Pullback）</option>
+              </select>
+              <button id="indexStrategyDropdownButton" class="index-sticky-select index-strategy-dropdown-button" type="button" aria-haspopup="listbox" aria-expanded="false">ストラテジー</button>
+              <div id="indexStrategyDropdownMenu" class="index-strategy-dropdown-menu" role="listbox" hidden></div>
+            </div>
+            <div id="indexRankingDropdown" class="index-strategy-dropdown index-ranking-dropdown">
+              <span id="indexRankingLabel" class="index-sticky-label index-sticky-ranking-label" hidden>ランキング</span>
+              <select id="indexExtraFilter" class="index-sticky-select index-sticky-extra-filter index-strategy-native-select" aria-label="ランキング" tabindex="-1">
+                <option value="" selected>ランキング</option>
+              </select>
+              <button id="indexRankingDropdownButton" class="index-sticky-select index-strategy-dropdown-button index-ranking-dropdown-button" type="button" aria-haspopup="listbox" aria-expanded="false">ランキング</button>
+              <div id="indexRankingDropdownMenu" class="index-strategy-dropdown-menu index-ranking-dropdown-menu" role="listbox" hidden></div>
+            </div>
+            <div id="indexLimitDropdown" class="index-strategy-dropdown index-limit-dropdown">
+              <select id="indexLimit" class="index-sticky-select index-sticky-limit index-strategy-native-select" aria-label="Rows" tabindex="-1">
+                <option value="">表示件数</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200" selected>200</option>
+              </select>
+              <button id="indexLimitDropdownButton" class="index-sticky-select index-strategy-dropdown-button index-limit-dropdown-button" type="button" aria-haspopup="listbox" aria-expanded="false">表示件数</button>
+              <div id="indexLimitDropdownMenu" class="index-strategy-dropdown-menu index-limit-dropdown-menu" role="listbox" hidden></div>
+            </div>
+            <div class="index-sticky-turnover-wrap" aria-label="売買代金フィルター">
+              <div id="indexTurnoverDropdown" class="index-strategy-dropdown index-turnover-dropdown">
+                <select id="indexStickyTurnover" class="index-sticky-select index-sticky-turnover index-strategy-native-select" aria-label="売買代金" tabindex="-1">
+                  <option value="0">売買代金</option>
+                  <option value="50000000">5,000万円以上</option>
+                  <option value="100000000">1億円以上</option>
+                  <option value="500000000">5億円以上</option>
+                  <option value="1000000000" selected>10億円以上</option>
+                </select>
+                <button id="indexTurnoverDropdownButton" class="index-sticky-select index-strategy-dropdown-button index-turnover-dropdown-button" type="button" aria-haspopup="listbox" aria-expanded="false">売買代金</button>
+                <div id="indexTurnoverDropdownMenu" class="index-strategy-dropdown-menu index-turnover-dropdown-menu" role="listbox" hidden></div>
               </div>
+              <span id="indexResultCount" class="index-result-count" hidden></span>
+              <div class="index-hidden-filters" hidden>
+                <select id="indexStickyTag"><option value="">すべて</option></select>
+                <select id="indexStickyTheme"><option value="">すべて</option></select>
+                <select id="indexStickyStrategy"><option value="">すべて</option></select>
+              </div>
+            </div>
             <div class="index-right-actions">
-              <div class="index-selection-actions">
-                <button id="indexSelectAllButton" class="text-button index-sticky-action index-sticky-action--selectall" type="button">Select All</button>
-                <button id="indexResetPicksButton" class="text-button index-sticky-action index-sticky-action--clear" type="button">Clear</button>
+              <div class="index-picked-split">
+                <button id="indexPickedLink" class="action-button secondary scanner-picked-link index-sticky-action index-picked-main" type="button" aria-label="List menu" aria-expanded="false">List</button>
+                <div id="indexPicksMenu" class="index-picked-menu" hidden>
+                  <button id="indexAddCodesButton" class="index-picked-menu-item" type="button">コードを追加</button>
+                  <button id="indexExportTradingViewButton" class="index-picked-menu-item" type="button">TradingView TXT</button>
+                  <button id="indexExportHyperButton" class="index-picked-menu-item" type="button">HYPER SBI 2 CSV</button>
+                  <button id="indexViewListButton" class="index-picked-menu-item" type="button">リストを見る</button>
+                  <button id="indexSaveListButton" class="index-picked-menu-item" type="button">Listを保存</button>
+                  <button id="indexOpenListButton" class="index-picked-menu-item" type="button">保存Listを開く</button>
+                  <button id="indexExitListButton" class="index-picked-menu-item" type="button">通常表示へ戻す</button>
+                  <button id="indexSelectAllButton" class="index-picked-menu-item index-picked-menu-item--selectall" type="button">すべて選択</button>
+                  <button id="indexResetPicksButton" class="index-picked-menu-item index-picked-menu-item--clear" type="button">クリア</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </header>
+      <div id="indexMobileSheetBackdrop" class="index-mobile-sheet-backdrop" hidden></div>
 
       <section class="panel">
         <div id="indexError" class="status-box error" hidden></div>
+        <div id="indexDataQualitySummary" class="index-data-quality-summary" hidden></div>
         <div id="indexList" class="scanner-list index-scanner-list"></div>
       </section>
     </main>
 
-    <script src="./assets/app_config.js?v=1.4.77"></script>
-    <script src="./assets/app_utils.js?v=1.4.77"></script>
-    <script src="./assets/app_data.js?v=1.4.77"></script>
-    <script src="./assets/page_index_scanner_status.js?v=1.4.77"></script>
-    <script src="./assets/page_index_scanner.js?v=1.4.77"></script>
-    <script src="./assets/app.js?v=1.4.77"></script>
+    <div id="indexCustomCodeModal" class="index-custom-code-modal" hidden>
+      <div class="index-custom-code-dialog" role="dialog" aria-modal="true" aria-labelledby="indexCustomCodeTitle">
+        <div class="index-custom-code-header">
+          <div>
+            <div id="indexCustomCodeTitle" class="index-custom-code-title">コードをListに追加</div>
+            <div class="index-custom-code-subtitle">銘柄コードをスペース・改行・カンマ区切りで貼り付け</div>
+          </div>
+          <button id="indexCustomCodeClose" class="index-custom-code-icon-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <textarea id="indexCustomCodeInput" class="index-custom-code-input" rows="8" placeholder="7203 9984 7011&#10;8306,6758"></textarea>
+        <div id="indexCustomCodeMeta" class="index-custom-code-meta">0件</div>
+        <div class="index-custom-code-actions">
+          <button id="indexCustomCodeClear" class="index-custom-code-button secondary" type="button">クリア</button>
+          <button id="indexCustomCodeExit" class="index-custom-code-button secondary" type="button">通常表示へ戻す</button>
+          <button id="indexCustomCodeCancel" class="index-custom-code-button secondary" type="button">キャンセル</button>
+          <button id="indexCustomCodeApply" class="index-custom-code-button primary" type="button">Listに追加</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="indexListSaveModal" class="register-name-modal is-hidden" hidden>
+      <div class="register-name-dialog" role="dialog" aria-modal="true" aria-labelledby="indexListSaveTitle">
+        <h2 id="indexListSaveTitle">Listを保存</h2>
+        <p class="subtle register-name-note">現在のListを重複なしで保存します。</p>
+        <label class="register-name-field">
+          <span>保存名</span>
+          <input id="indexListSaveInput" type="text" maxlength="80" placeholder="例: 5月ブレイク候補" />
+        </label>
+        <div id="indexListSaveError" class="register-name-error" hidden></div>
+        <div class="register-name-actions">
+          <button id="indexListSaveOk" class="action-button" type="button">保存</button>
+          <button id="indexListSaveCancel" class="action-button secondary" type="button">キャンセル</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="indexListSetsModal" class="index-custom-code-modal" hidden>
+      <div class="index-custom-code-dialog index-list-sets-dialog" role="dialog" aria-modal="true" aria-labelledby="indexListSetsTitle">
+        <div class="index-custom-code-header">
+          <div>
+            <div id="indexListSetsTitle" class="index-custom-code-title">保存Listを開く</div>
+            <div class="index-custom-code-subtitle">開いたListだけを値上がり率順で表示します</div>
+          </div>
+          <button id="indexListSetsClose" class="index-custom-code-icon-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <div id="indexListSetsBody" class="index-list-sets-body"></div>
+      </div>
+    </div>
+
+    <script>
+      (() => {
+        const cacheKey = window.KABU_ASSET_CACHE_KEY || String(Date.now());
+        const scripts = [
+          "./assets/app_config.js",
+          "./assets/app_utils.js",
+          "./assets/app_data.js",
+          "./assets/page_index_scanner_status.js",
+          "./assets/page_index_scanner.js",
+          "./assets/app.js",
+        ];
+        document.write(scripts.map((src) => `<script src="${src}?v=${cacheKey}"><` + `/script>`).join(""));
+      })();
+    </script>
   </body>
 </html>

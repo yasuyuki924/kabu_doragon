@@ -6,6 +6,7 @@ import csv
 import json
 import math
 import os
+import sys
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -20,6 +21,8 @@ from requests.exceptions import HTTPError, RetryError
 
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DATA_DIR = ROOT / "data"
 OHLCV_DIR = DATA_DIR / "ohlcv"
 OHLCV_RAW_DIR = DATA_DIR / "ohlcv_raw"
@@ -33,8 +36,19 @@ THEME_MAP_JSON = DATA_DIR / "theme_map.json"
 SUMMARY_JSON = DATA_DIR / "market_summary.json"
 SYNC_STATE_JSON = DATA_DIR / "jquants_sync_state.json"
 NIKKEI_COMPONENTS_CSV = DATA_DIR / "nikkei225_components.csv"
+RETRY_PENDING_JSON = DATA_DIR / "retry_pending.json"
+INACTIVE_CODES_JSON = DATA_DIR / "inactive_codes.json"
 RANKINGS_DIR = DATA_DIR / "rankings"
 OVERVIEW_DIR = DATA_DIR / "overview"
+
+from src.data_source.inactive_codes import (
+    build_inactive_registry,
+    fetch_jpx_delisted_lookup,
+    load_existing_watchlist_candidates,
+    load_inactive_lookup,
+    load_retry_pending_candidates,
+    write_inactive_codes,
+)
 
 SEGMENT_LABELS = {
     "prime": "プライム",
@@ -62,6 +76,8 @@ class ProviderPaths:
     am_snapshot_json: Path
     current_snapshot_state_json: Path
     update_state_json: Path
+    retry_pending_json: Path
+    inactive_codes_json: Path
 
 
 @dataclass(frozen=True)
@@ -90,6 +106,8 @@ def default_paths() -> ProviderPaths:
         am_snapshot_json=AM_SNAPSHOT_JSON,
         current_snapshot_state_json=CURRENT_SNAPSHOT_STATE_JSON,
         update_state_json=UPDATE_STATE_JSON,
+        retry_pending_json=RETRY_PENDING_JSON,
+        inactive_codes_json=INACTIVE_CODES_JSON,
     )
 
 
@@ -126,7 +144,8 @@ def today_jst() -> str:
 
 
 def load_auth_config(root: Path) -> AuthConfig:
-    load_dotenv(root / ".env", override=False)
+    # Treat the repo-local .env as the source of truth for local scheduled jobs.
+    load_dotenv(root / ".env", override=True)
     api_key = os.environ.get("JQUANTS_API_KEY", "").strip()
     refresh_token = os.environ.get("JQUANTS_API_REFRESH_TOKEN", "").strip()
     mail_address = os.environ.get("JQUANTS_API_MAIL_ADDRESS", "").strip()
@@ -332,6 +351,26 @@ def build_watchlist(
             }
         )
     return watchlist
+
+
+def build_inactive_candidate_entries(
+    current_components: list[dict[str, str]],
+    existing_watchlist: list[dict[str, str]],
+    retry_pending: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    entries: dict[str, dict[str, str]] = {}
+    for item in [*current_components, *existing_watchlist, *retry_pending]:
+        code = normalize_repo_code(item.get("code") or item.get("ticker"))
+        if not code:
+            continue
+        current = entries.setdefault(code, {"code": code, "name": "", "market": ""})
+        name = str(item.get("name") or "").strip()
+        market = str(item.get("market") or "").strip()
+        if name and not current["name"]:
+            current["name"] = name
+        if market and not current["market"]:
+            current["market"] = market
+    return list(entries.values())
 
 
 def coerce_frame_dates(frame: pd.DataFrame) -> pd.DataFrame:
@@ -905,6 +944,11 @@ def current_sync_latest_date(paths: ProviderPaths) -> str | None:
     return text or None
 
 
+def choose_latest_successful_date(*candidates: object) -> str | None:
+    dates = [str(item).strip() for item in candidates if str(item or "").strip()]
+    return max(dates) if dates else None
+
+
 def resolve_latest_trading_date(client: object, api_version: str, as_of: date | None = None) -> str:
     today = as_of or datetime.now().astimezone().date()
     trading_dates = fetch_trading_dates(client, api_version, today - timedelta(days=14), today)
@@ -1422,21 +1466,44 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
         codes=selected_codes,
         nikkei_codes=nikkei_codes,
     )
+    current_components_all = select_components(
+        master_records,
+        universe=args.universe,
+        selected_segments=selected_segments,
+        max_tickers=0,
+        codes=[],
+        nikkei_codes=nikkei_codes,
+    )
+    inactive_checked_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    existing_watchlist = load_existing_watchlist_candidates(paths.watchlist_json)
+    retry_pending = load_retry_pending_candidates(paths.retry_pending_json)
+    existing_inactive = load_inactive_lookup(paths.inactive_codes_json)
+    jpx_lookup = fetch_jpx_delisted_lookup()
+    inactive_items = build_inactive_registry(
+        candidate_entries=build_inactive_candidate_entries(current_components_all, existing_watchlist, retry_pending),
+        active_codes={str(item["code"]) for item in current_components_all},
+        as_of_date=today_jst(),
+        existing_lookup=existing_inactive,
+        jpx_lookup=jpx_lookup,
+        checked_at=inactive_checked_at,
+    )
+    write_inactive_codes(
+        inactive_items,
+        as_of_date=today_jst(),
+        jpx_fetch_ok=bool(jpx_lookup),
+        path=paths.inactive_codes_json,
+    )
+    inactive_codes = {str(item["code"]) for item in inactive_items}
+    components = [row for row in components if str(row.get("code") or "") not in inactive_codes]
+    current_components_all = [row for row in current_components_all if str(row.get("code") or "") not in inactive_codes]
     if not components:
-        raise ValueError("No components matched the selected universe/segments.")
+        raise ValueError("No active components matched the selected universe/segments.")
 
     theme_lookup = build_theme_lookup(load_theme_map(paths.theme_map_json))
     sync_watchlist = build_watchlist(components, args.universe, theme_lookup)
     persisted_watchlist = sync_watchlist
     if selected_codes:
-        persisted_components = select_components(
-            master_records,
-            universe=args.universe,
-            selected_segments=selected_segments,
-            max_tickers=0,
-            codes=[],
-            nikkei_codes=nikkei_codes,
-        )
+        persisted_components = current_components_all
         persisted_watchlist = build_watchlist(persisted_components, args.universe, theme_lookup)
     paths.watchlist_json.write_text(json.dumps(persisted_watchlist, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -1495,7 +1562,7 @@ def run_sync(args: argparse.Namespace, paths: ProviderPaths | None = None) -> in
             plan=config.plan,
             universe=args.universe,
             segments=selected_segments,
-            last_successful_date=latest_date or state.get("lastSuccessfulDate"),
+            last_successful_date=choose_latest_successful_date(latest_date, state.get("lastSuccessfulDate")),
         )
     print(f"done ({len(sync_watchlist)} tickers)")
     return 0

@@ -151,8 +151,9 @@ def sort_trend_turn_records(records: list[dict[str, object]]) -> list[dict[str, 
     items = [record for record in records if bool(record.get("trendTurnCandidate"))]
     items.sort(
         key=lambda item: (
-            -float(item.get("trendTurnScore") or 0),
-            -float(item.get("trendTurnAboveMa75Ratio") or 0),
+            float(item.get("trendTurnRangePct") or 0),
+            abs(float(item.get("distanceToMa200") or 0)),
+            -float(item.get("volumeRatio25") or 0),
             -float(item.get("changePercent") or 0),
             str(item.get("code") or ""),
         )
@@ -249,6 +250,13 @@ def normalize_item(rank: int, record: dict[str, object]) -> dict[str, object]:
         "strategyReasons": record.get("strategyReasons", {}),
         "strategyExcludedReasons": record.get("strategyExcludedReasons", {}),
         "strategyMetrics": record.get("strategyMetrics", {}),
+        "strongTrendPullbackReboundCandidate": record.get("strongTrendPullbackReboundCandidate"),
+        "strongTrendPullbackReboundScore": record.get("strongTrendPullbackReboundScore"),
+        "strongTrendPullbackReboundType": record.get("strongTrendPullbackReboundType"),
+        "strongTrendPullbackReboundLabel": record.get("strongTrendPullbackReboundLabel"),
+        "strongTrendPullbackReboundRisePct": record.get("strongTrendPullbackReboundRisePct"),
+        "strongTrendPullbackReboundDropPct": record.get("strongTrendPullbackReboundDropPct"),
+        "strongTrendPullbackReboundVolumeRatio20": record.get("strongTrendPullbackReboundVolumeRatio20"),
         "open": record.get("open"),
         "high": record.get("high"),
         "low": record.get("low"),

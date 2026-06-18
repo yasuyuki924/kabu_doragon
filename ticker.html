@@ -4,25 +4,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ローカル株分析ボード | 銘柄詳細</title>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.76" />
+    <script>
+      (function () {
+        var host = window.location.hostname || "";
+        var port = window.location.port || "";
+        var protocol = window.location.protocol || "";
+        var path = window.location.pathname || "/";
+        if (protocol === "file:" || ((host === "127.0.0.1" || host === "localhost") && port === "")) {
+          var decoded = "";
+          try {
+            decoded = decodeURIComponent(path || "");
+          } catch (_) {
+            decoded = path || "";
+          }
+          var marker = "/kabu_doragon/";
+          var markerIndex = decoded.indexOf(marker);
+          var nextPath = markerIndex >= 0 ? "/" + decoded.slice(markerIndex + marker.length).replace(/^\/+/, "") : path === "/" ? "/index.html" : path;
+          var nextUrl = "http://127.0.0.1:8010" + nextPath + (window.location.search || "") + (window.location.hash || "");
+          window.location.replace(nextUrl);
+        }
+      })();
+    </script>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var explicitVersion = params.get("v") || params.get("ts") || "";
+        window.KABU_ASSET_CACHE_KEY = encodeURIComponent(explicitVersion || String(Date.now()));
+        document.write('<script src="./assets/desktop_bootstrap.js?v=' + window.KABU_ASSET_CACHE_KEY + '"><' + '/script>');
+        document.write('<link rel="stylesheet" href="./assets/style.css?v=' + window.KABU_ASSET_CACHE_KEY + '" />');
+      })();
+    </script>
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="ticker">
     <main class="container ticker-page-shell">
       <header class="page-header panel ticker-hero">
         <div class="ticker-hero-main">
-          <p class="eyebrow"><a href="./index.html">← 銘柄一覧へ戻る</a></p>
+          <p class="eyebrow">
+            <a class="ticker-back-link" href="./index.html" title="銘柄一覧へ戻る">
+              <span class="ticker-back-link-icon" aria-hidden="true">←</span>
+              <span class="ticker-back-link-text">銘柄一覧</span>
+            </a>
+          </p>
           <h1 id="tickerTitle">銘柄詳細</h1>
           <p id="tickerMeta" class="subtle"></p>
-        </div>
-        <div class="header-actions ticker-hero-actions">
-          <div class="ticker-hero-status">
-            <span id="tickerSnapshotBadge" class="snapshot-badge" hidden></span>
-            <div id="tickerRefreshMeta" class="meta snapshot-refresh-meta"></div>
-          </div>
-          <div class="ticker-hero-command">
-            <div class="link-row" id="externalLinks"></div>
-          </div>
         </div>
       </header>
 
@@ -181,42 +206,76 @@
 
       <section class="panel ticker-analysis-panel">
         <div id="detailErrorBox" class="status-box error" hidden></div>
-        <article class="scanner-item scanner-item--detail">
-          <div class="scanner-rank-table">
-            <table>
-              <thead>
-                <tr>
-                  <th class="num scanner-col-rank">順位</th>
-                  <th class="scanner-col-code">コード</th>
-                  <th class="num scanner-col-close">取引値</th>
-                  <th class="num scanner-col-change">前日比</th>
-                  <th class="num scanner-col-volume">出来高</th>
-                  <th class="num scanner-col-high">高値</th>
-                  <th class="num scanner-col-low">安値</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td id="tickerCardRank" class="num">-</td>
-                  <td id="tickerCardCode" class="scanner-name-cell">-</td>
-                  <td class="scanner-trade-cell">
-                    <div class="scanner-trade-split">
-                      <span id="tickerCardTradeDate" class="scanner-trade-date">-</span>
-                      <span id="tickerCardTradePrice" class="scanner-trade-price">-</span>
-                    </div>
-                  </td>
-                  <td id="tickerCardChange" class="num">-</td>
-                  <td id="tickerCardVolume" class="num">-</td>
-                  <td id="tickerCardHigh" class="num">-</td>
-                  <td id="tickerCardLow" class="num">-</td>
-                </tr>
-              </tbody>
-            </table>
+        <article class="ticker-compare-shell">
+          <div class="ticker-compare-summary">
+            <div id="tickerCardCode" class="ticker-compare-identity">-</div>
+            <div class="ticker-compare-metric">
+              <span class="ticker-compare-label">基準日</span>
+              <strong id="tickerCardTradeDate">-</strong>
+            </div>
+            <div class="ticker-compare-metric">
+              <span class="ticker-compare-label">取引値</span>
+              <strong id="tickerCardTradePrice">-</strong>
+            </div>
+            <div class="ticker-compare-metric">
+              <span class="ticker-compare-label">前日比</span>
+              <strong id="tickerCardChange">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--sub">
+              <span class="ticker-compare-label">出来高</span>
+              <strong id="tickerCardVolume">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--sub">
+              <span class="ticker-compare-label">高値 / 安値</span>
+              <strong><span id="tickerCardHigh">-</span> / <span id="tickerCardLow">-</span></strong>
+            </div>
           </div>
-          <div class="scanner-item-chart-wrap scanner-item-chart-wrap--detail">
-            <div id="chart" class="chart scanner-chart scanner-chart--detail"></div>
+          <div class="ticker-compare-fundamentals" aria-label="ファンダメンタル指標と株式構成">
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">時価総額</span>
+              <strong id="tickerCardMarketCap">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">PER / PBR</span>
+              <strong id="tickerCardValuation">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">ROE / BPS</span>
+              <strong id="tickerCardProfitability">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental">
+              <span class="ticker-compare-label">発行株 / 浮動株</span>
+              <strong id="tickerCardShares">-</strong>
+            </div>
+            <div class="ticker-compare-metric ticker-compare-metric--fundamental ticker-compare-metric--wide">
+              <span class="ticker-compare-label">株主構成</span>
+              <strong id="tickerCardShareholders">-</strong>
+            </div>
           </div>
-          <div class="scanner-item-links scanner-item-links--detail">
+          <div class="ticker-chart-compare-grid">
+            <section class="ticker-compare-chart-card ticker-compare-chart-card--daily">
+              <div class="ticker-compare-chart-head">
+                <h2>日足</h2>
+                <span id="dailyChartMeta" class="meta"></span>
+              </div>
+              <div id="dailyChart" class="chart scanner-chart ticker-compare-chart"></div>
+            </section>
+            <section class="ticker-compare-chart-card ticker-compare-chart-card--weekly">
+              <div class="ticker-compare-chart-head">
+                <h2>週足</h2>
+                <span id="weeklyChartMeta" class="meta"></span>
+              </div>
+              <div id="weeklyChart" class="chart scanner-chart ticker-compare-chart"></div>
+            </section>
+            <section class="ticker-compare-chart-card ticker-compare-chart-card--monthly">
+              <div class="ticker-compare-chart-head">
+                <h2>月足</h2>
+                <span id="monthlyChartMeta" class="meta"></span>
+              </div>
+              <div id="monthlyChart" class="chart scanner-chart ticker-compare-chart"></div>
+            </section>
+          </div>
+          <div class="scanner-item-links scanner-item-links--detail ticker-compare-links">
             <div id="tickerCardLinks" class="scanner-item-links-main"></div>
             <div class="meta" id="chartMeta"></div>
           </div>
@@ -236,10 +295,18 @@
       </section>
     </main>
 
-    <script src="./assets/app_config.js?v=1.4.77"></script>
-    <script src="./assets/app_utils.js?v=1.4.77"></script>
-    <script src="./assets/app_data.js?v=1.4.77"></script>
-    <script src="./assets/page_ticker.js?v=1.4.77"></script>
-    <script src="./assets/app.js?v=1.4.77"></script>
+    <script>
+      (() => {
+        const cacheKey = window.KABU_ASSET_CACHE_KEY || String(Date.now());
+        const scripts = [
+          "./assets/app_config.js",
+          "./assets/app_utils.js",
+          "./assets/app_data.js",
+          "./assets/page_ticker.js",
+          "./assets/app.js",
+        ];
+        document.write(scripts.map((src) => `<script src="${src}?v=${cacheKey}"><` + `/script>`).join(""));
+      })();
+    </script>
   </body>
 </html>
