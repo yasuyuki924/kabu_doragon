@@ -49,6 +49,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            assets
+            scripts
+            src
+            index.html
+            ticker.html
+            picked.html
+            registered.html
+            requirements.txt
+            AGENTS.md
+            CLAUDE.md
+          sparse-checkout-cone-mode: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
