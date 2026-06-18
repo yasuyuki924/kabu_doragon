@@ -3,8 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ローカル株分析ボード | 選別銘柄一覧</title>
-    <link rel="stylesheet" href="./assets/style.css?v=1.4.68" />
+    <title>ローカル株分析ボード | List</title>
+    <script>
+      (function () {
+        var host = window.location.hostname || "";
+        var port = window.location.port || "";
+        var protocol = window.location.protocol || "";
+        var path = window.location.pathname || "/";
+        if (protocol === "file:" || ((host === "127.0.0.1" || host === "localhost") && port === "")) {
+          var decoded = "";
+          try {
+            decoded = decodeURIComponent(path || "");
+          } catch (_) {
+            decoded = path || "";
+          }
+          var marker = "/kabu_doragon/";
+          var markerIndex = decoded.indexOf(marker);
+          var nextPath = markerIndex >= 0 ? "/" + decoded.slice(markerIndex + marker.length).replace(/^\/+/, "") : path === "/" ? "/index.html" : path;
+          var nextUrl = "http://127.0.0.1:8010" + nextPath + (window.location.search || "") + (window.location.hash || "");
+          window.location.replace(nextUrl);
+        }
+      })();
+    </script>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var explicitVersion = params.get("v") || params.get("ts") || "";
+        window.KABU_ASSET_CACHE_KEY = encodeURIComponent(explicitVersion || String(Date.now()));
+        document.write('<script src="./assets/desktop_bootstrap.js?v=' + window.KABU_ASSET_CACHE_KEY + '"><' + '/script>');
+        document.write('<link rel="stylesheet" href="./assets/style.css?v=' + window.KABU_ASSET_CACHE_KEY + '" />');
+      })();
+    </script>
     <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
   </head>
   <body data-page="picked">
@@ -12,14 +41,14 @@
       <header class="page-header">
         <div class="picked-header-toolbar">
           <a class="action-button secondary picked-header-action" href="./index.html">Back</a>
-          <span class="picked-header-title">Picks</span>
+          <span class="picked-header-title">List</span>
           <span id="pickedCountBadge" class="picked-kpi-badge">Count 0</span>
           <span id="pickedSetsBadge" class="picked-kpi-badge">Sets 0</span>
           <span id="pickedUpdatedBadge" class="picked-kpi-badge picked-kpi-badge--muted">Updated --</span>
         </div>
         <div class="picked-header-actions">
           <button id="pickedHeaderExportButton" class="action-button secondary picked-header-action" type="button">Export</button>
-          <button id="pickedHeaderSaveButton" class="action-button picked-header-action" type="button">Save Set</button>
+          <button id="pickedHeaderSaveButton" class="action-button picked-header-action" type="button">Save List</button>
         </div>
       </header>
 
@@ -38,7 +67,7 @@
           </section>
           <section id="pickedRegisterPanel" class="picked-action-panel picked-action-panel--saved">
             <div class="picked-action-panel-head">
-              <h2>Saved Sets</h2>
+              <h2>Saved Lists</h2>
               <span id="pickedRegisterCount" class="picked-action-count">0</span>
             </div>
             <div class="picked-register-actions">
@@ -86,10 +115,18 @@
       </div>
     </div>
 
-    <script src="./assets/app_config.js?v=1.4.77"></script>
-    <script src="./assets/app_utils.js?v=1.4.77"></script>
-    <script src="./assets/app_data.js?v=1.4.77"></script>
-    <script src="./assets/page_picked.js?v=1.4.77"></script>
-    <script src="./assets/app.js?v=1.4.77"></script>
+    <script>
+      (() => {
+        const cacheKey = window.KABU_ASSET_CACHE_KEY || String(Date.now());
+        const scripts = [
+          "./assets/app_config.js",
+          "./assets/app_utils.js",
+          "./assets/app_data.js",
+          "./assets/page_picked.js",
+          "./assets/app.js",
+        ];
+        document.write(scripts.map((src) => `<script src="${src}?v=${cacheKey}"><` + `/script>`).join(""));
+      })();
+    </script>
   </body>
 </html>

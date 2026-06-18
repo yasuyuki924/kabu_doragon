@@ -1,6 +1,9 @@
 (function () {
   window.KabuAppConfig = Object.freeze({
     MANIFEST_PATH: "./data/manifest.json",
+    UPDATE_HEALTH_PATH: "./data/update_health.json",
+    OHLCV_QUALITY_SUMMARY_PATH: "./data/ohlcv_quality_summary.json",
+    OVERVIEW_LITE_INDEX_PATH: "./data/public_json/overview_lite/index.json",
     THEME_MAP_PATH: "./data/theme_map.json",
     WATCHLIST_PATH: "./data/watchlist.json",
     WATCHLIST_STORAGE_KEY: "local-stock-dashboard.watchlist.v6",
@@ -39,7 +42,33 @@
       { key: "turtle_donchian_breakout", label: "Turtle" },
       { key: "can_slim", label: "CAN SLIM" },
       { key: "rsi2_pullback", label: "RSI(2)" },
+      { key: "trend_turn", label: "200日線回復" },
+      { key: "high_pullback_30", label: "30% Pullback" },
+      { key: "strong_trend_pullback_rebound", label: "強トレンド押し目" },
     ],
+    INDEX_SCANNER_SORT_OPTIONS: [
+      { key: "strategy_minervini", label: "成長ブレイク（Minervini）" },
+      { key: "strategy_stage2", label: "中期上昇入り（Stage 2）" },
+      { key: "strategy_turtle", label: "高値ブレイク（Turtle）" },
+      { key: "strategy_rsi2", label: "上昇中の押し目（RSI(2)）" },
+      { key: "trend_turn", label: "200日線回復（ベース・リカバリー）" },
+      { key: "strategy_high_pullback_30", label: "高値調整（30% Pullback）" },
+      { key: "strategy_strong_trend_pullback_rebound", label: "強トレンド押し目リバウンド" },
+    ],
+    INDEX_SCANNER_RANKING_OPTIONS: [
+      { key: "gainers", label: "値上がり率" },
+      { key: "volume", label: "出来高増加" },
+      { key: "deviation25", label: "25日線乖離" },
+      { key: "deviation75", label: "75日線乖離" },
+      { key: "deviation200", label: "200日線乖離" },
+    ],
+    INDEX_SCANNER_RANKING_SORTS: Object.freeze({
+      gainers: { key: "changePercent", direction: "desc" },
+      volume: { key: "volumeRatio25", direction: "desc" },
+      deviation25: { key: "distanceToMa25", direction: "desc" },
+      deviation75: { key: "distanceToMa75", direction: "desc" },
+      deviation200: { key: "distanceToMa200", direction: "desc" },
+    }),
     TSE_MARKETS: new Set(["TSE", "プライム", "スタンダード", "グロース"]),
     MARKET_TAGS: new Set(["tse", "prime", "standard", "growth"]),
     TYPE_FILTERS: [
@@ -65,12 +94,12 @@
         { months: 36, label: "3Y" },
       ],
       monthly: [
-        { months: 36, label: "3Y" },
         { months: 60, label: "5Y" },
       ],
     },
     INDEX_SCANNER_TURNOVER_OPTIONS: [0, 50000000, 100000000, 500000000, 1000000000],
     INDEX_SCANNER_MIN_CLOSE: 50,
+    STALE_TOLERANCE_BUSINESS_DAYS: 1,
     STOP_HIGH_EPSILON: 0.5,
     JPX_PRICE_LIMIT_TABLE: [
       [100, 30], [200, 50], [500, 80], [700, 100], [1000, 150], [1500, 300], [2000, 400], [3000, 500],

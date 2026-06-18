@@ -6,6 +6,7 @@ import json
 from src.common.io import load_json_dict, write_json
 from src.common.paths import (
     DAILY_RECORDS_DIR,
+    OHLCV_ADJUSTED_DIR,
     OHLCV_DIR,
     TICKERS_DIR,
     THEME_MAP_JSON,
@@ -82,6 +83,17 @@ def load_update_state() -> dict[str, object]:
 
 def load_ohlcv_rows(code: str) -> list[dict[str, float | int | str]]:
     path = OHLCV_DIR / f"{code}.csv"
+    return load_ohlcv_rows_from_path(path)
+
+
+def load_ohlcv_rows_prefer_adjusted(code: str) -> list[dict[str, float | int | str]]:
+    adjusted_path = OHLCV_ADJUSTED_DIR / f"{code}.csv"
+    if adjusted_path.exists():
+        return load_ohlcv_rows_from_path(adjusted_path)
+    return load_ohlcv_rows(code)
+
+
+def load_ohlcv_rows_from_path(path) -> list[dict[str, float | int | str]]:
     if not path.exists():
         return []
 
@@ -180,6 +192,7 @@ def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[
         "recoveryFrom52wLowPct": row.get("recoveryFrom52wLowPct"),
         "newHigh52w": row.get("newHigh52w"),
         "newHigh20d": row.get("newHigh20d"),
+        "bullishCloseBreakout20d": row.get("bullishCloseBreakout20d"),
         "donchian20High": row.get("donchian20High"),
         "donchian55High": row.get("donchian55High"),
         "distanceToDonchian20Pct": row.get("distanceToDonchian20Pct"),
@@ -206,6 +219,20 @@ def build_daily_record(meta: dict[str, object], row: dict[str, object]) -> dict[
         "trendTurnAboveMa75Ratio": row.get("trendTurnAboveMa75Ratio"),
         "trendTurnScore": row.get("trendTurnScore"),
         "trendTurnReason": row.get("trendTurnReason"),
+        "highPullback30": row.get("highPullback30"),
+        "highPullback30Candidate": row.get("highPullback30Candidate"),
+        "highPullback30DropRate": row.get("highPullback30DropRate"),
+        "highPullback30HighDate": row.get("highPullback30HighDate"),
+        "highPullback30LowDate": row.get("highPullback30LowDate"),
+        "highPullback30BarsToLow": row.get("highPullback30BarsToLow"),
+        "strongTrendPullbackRebound": row.get("strongTrendPullbackRebound"),
+        "strongTrendPullbackReboundCandidate": row.get("strongTrendPullbackReboundCandidate"),
+        "strongTrendPullbackReboundScore": row.get("strongTrendPullbackReboundScore"),
+        "strongTrendPullbackReboundType": row.get("strongTrendPullbackReboundType"),
+        "strongTrendPullbackReboundLabel": row.get("strongTrendPullbackReboundLabel"),
+        "strongTrendPullbackReboundRisePct": row.get("strongTrendPullbackReboundRisePct"),
+        "strongTrendPullbackReboundDropPct": row.get("strongTrendPullbackReboundDropPct"),
+        "strongTrendPullbackReboundVolumeRatio20": row.get("strongTrendPullbackReboundVolumeRatio20"),
         "strategyMatches": row.get("strategyMatches", []),
         "strategyScores": row.get("strategyScores", {}),
         "strategyReasons": row.get("strategyReasons", {}),

@@ -130,15 +130,3 @@ python3 scripts/kabu_daily_update.py
 | `reports/kabudragon_daily_update_postcheck.md` | post-check 運用ガイド |
 | `reports/kabudragon_ohlcv_raw_repair_plan.md` | ohlcv_raw 修復手順 |
 | `reports/kabudragon_daily_update_stability_plan.md` | 日次更新安定化計画 |
-
----
-
-## 全作業共通の注意
-
-Claude Code and other coding agents must also follow the root `AGENTS.md` before changing files in this repository.
-
-- Keep small UI requests small.
-- Separate UI, data, workflow, and docs work.
-- Do not run J-Quants or data rebuilds for UI-only changes.
-- Do not equate `git push` with public release.
-- Do not report public completion until the deployed public URL or asset is verified.

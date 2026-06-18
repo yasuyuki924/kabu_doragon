@@ -378,6 +378,105 @@ def evaluate_rsi2_pullback(context: dict[str, Any]) -> StrategyMatchResult:
     return _with_result(matched, score, reasons, False, [], metrics, ["pullback", "mean_reversion"])
 
 
+def evaluate_high_pullback_30(context: dict[str, Any]) -> StrategyMatchResult:
+    row = context["row"]
+    params = context["params"]
+    metrics = dict(row.get("highPullback30") or {})
+    if not metrics.get("detected"):
+        return _base_result(metrics)
+
+    drop_rate = metrics.get("dropRate")
+    bars_to_low = metrics.get("barsToLow")
+    current_drawdown = metrics.get("currentDrawdownPct")
+    reasons: list[str] = []
+    score = float(drop_rate or 0)
+    if drop_rate is not None:
+        reasons.append(f"200本最高値から{drop_rate:.1f}%調整")
+    if bars_to_low is not None:
+        reasons.append(f"高値後{bars_to_low}本で安値形成")
+    if metrics.get("barsSinceLow") is not None:
+        reasons.append(f"下落達成から{metrics['barsSinceLow']}本以内")
+    if current_drawdown is not None:
+        reasons.append(f"現在値は高値から{current_drawdown:.1f}%下")
+
+    return _with_result(
+        True,
+        score,
+        reasons,
+        False,
+        [],
+        {
+            **metrics,
+            "lookbackBars": params["lookbackBars"],
+            "lookaheadBars": params["lookaheadBars"],
+            "recentAchievementBars": params["recentAchievementBars"],
+            "minDropPct": params["minDropPct"],
+        },
+        ["daily_only", "pullback", "reset"],
+    )
+
+
+def evaluate_trend_turn(context: dict[str, Any]) -> StrategyMatchResult:
+    row = context["row"]
+    params = context["params"]
+    metrics: StrategyMetrics = {
+        "breakoutDate": row.get("trendTurnBreakoutDate"),
+        "daysAfterBreakout": row.get("trendTurnDaysAfterBreakout"),
+        "aboveMa200Days": row.get("trendTurnRangePct"),
+        "aboveMa200Ratio": row.get("trendTurnAboveMa75Ratio"),
+        "distanceToMa200": row.get("distanceToMa200"),
+        "score": row.get("trendTurnScore"),
+        "maxAboveMa200Days": params["maxAboveMa200Days"],
+        "lookbackDays": params["lookbackDays"],
+    }
+    if not row.get("trendTurnCandidate"):
+        return _base_result(metrics)
+
+    score = float(row.get("trendTurnScore") or 0)
+    reasons = [part for part in str(row.get("trendTurnReason") or "").split("|") if part]
+    if not reasons:
+        reasons.append("200日線を回復")
+    return _with_result(True, score, reasons, False, [], metrics, ["daily_only", "trend", "recovery"])
+
+
+def evaluate_strong_trend_pullback_rebound(context: dict[str, Any]) -> StrategyMatchResult:
+    row = context["row"]
+    params = context["params"]
+    metrics = dict(row.get("strongTrendPullbackRebound") or {})
+    if not metrics.get("detected"):
+        return _base_result(metrics)
+
+    score = float(metrics.get("score") or 0)
+    pullback_type = str(metrics.get("pullbackType") or "")
+    type_label = "深押しリセット" if pullback_type == "deep_reset_pullback" else "通常押し目"
+    rise_pct = metrics.get("risePct")
+    drop_pct = metrics.get("dropPct")
+    reasons = []
+    if rise_pct is not None:
+        reasons.append(f"{type_label} / 上昇 +{float(rise_pct):.1f}%")
+    if drop_pct is not None:
+        reasons.append(f"高値から -{float(drop_pct):.1f}% / Score {score:.0f}")
+    if metrics.get("reboundLabel"):
+        reasons.append(str(metrics["reboundLabel"]))
+
+    return _with_result(
+        True,
+        score,
+        reasons,
+        False,
+        [],
+        {
+            **metrics,
+            "lookbackBars": params["lookbackBars"],
+            "minRisePct": params["minRisePct"],
+            "minDropPct": params["minDropPct"],
+            "deepDropPct": params["deepDropPct"],
+            "maxDropPct": params["maxDropPct"],
+        },
+        ["daily_only", "trend", "pullback", "rebound"],
+    )
+
+
 STRATEGY_PRESETS: list[StrategyPreset] = [
     StrategyPreset(
         id="minervini_trend_template",
@@ -476,6 +575,79 @@ STRATEGY_PRESETS: list[StrategyPreset] = [
         displayMetrics=["rsi2", "consecutiveDownDays", "distanceToMa50", "distanceToMa150", "pullbackDepthPct"],
         reasonTemplates={},
         evaluate=evaluate_rsi2_pullback,
+    ),
+    StrategyPreset(
+        id="trend_turn",
+        name="200日線回復（ベース・リカバリー）",
+        description="過去120日で200日線上の滞在が少ない状態から、当日200日線を上抜けた転換候補。",
+        params={
+            "lookbackDays": 120,
+            "maxAboveMa200Days": 10,
+            "timeframe": "daily",
+        },
+        displayMetrics=[
+            "breakoutDate",
+            "daysAfterBreakout",
+            "aboveMa200Days",
+            "aboveMa200Ratio",
+            "distanceToMa200",
+            "score",
+        ],
+        reasonTemplates={},
+        evaluate=evaluate_trend_turn,
+    ),
+    StrategyPreset(
+        id="high_pullback_30",
+        name="High Pullback 30%",
+        description="直近200本高値の後、10本以内に30%以上調整し、その達成日が直近5本以内の銘柄を拾う。",
+        params={
+            "lookbackBars": 200,
+            "lookaheadBars": 10,
+            "recentAchievementBars": 5,
+            "minDropPct": 30.0,
+            "timeframe": "daily",
+        },
+        displayMetrics=[
+            "highest200",
+            "highDate",
+            "afterLow",
+            "afterLowDate",
+            "barsToLow",
+            "barsSinceLow",
+            "dropRate",
+            "currentClose",
+            "currentDrawdownPct",
+        ],
+        reasonTemplates={},
+        evaluate=evaluate_high_pullback_30,
+    ),
+    StrategyPreset(
+        id="strong_trend_pullback_rebound",
+        name="Strong Trend Pullback Rebound",
+        description="60本内で30%以上上昇した強トレンドから15〜45%押し、MA25/75付近で反発する日足専用候補。",
+        params={
+            "lookbackBars": 60,
+            "minRisePct": 30.0,
+            "minDropPct": 15.0,
+            "deepDropPct": 30.0,
+            "maxDropPct": 45.0,
+            "timeframe": "daily",
+        },
+        displayMetrics=[
+            "pullbackType",
+            "reboundLabel",
+            "risePct",
+            "dropPct",
+            "lowDate",
+            "highDate",
+            "distanceToMa25",
+            "distanceToMa75",
+            "ma75SlopePct",
+            "volumeRatio20",
+            "riseAboveMa25Ratio",
+        ],
+        reasonTemplates={},
+        evaluate=evaluate_strong_trend_pullback_rebound,
     ),
 ]
 

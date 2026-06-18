@@ -4,19 +4,6 @@
 ## Project role
 This repository is a production-grade Japanese stock screening dashboard.
 
-## Rule loading requirement
-
-Every coding agent, in every worktree and from every subdirectory, must treat this root `AGENTS.md` as the highest-priority local operating rule for KabuDragon work.
-
-Before changing code, data, workflow files, or deployment settings:
-
-1. Read this file.
-2. Read any closer `AGENTS.md` in the target subdirectory.
-3. State the intended scope in terms of UI, data, workflow, or documentation.
-4. Keep the implementation inside that scope unless the user explicitly expands it.
-
-Do not rely on memory, prior chat summaries, or assumptions when the repository rule files are available. If a different worktree does not contain these rules, stop and copy or inspect the rules before continuing.
-
 ## Primary goals
 - preserve stable ranking flow
 - keep scanner rendering fast
@@ -45,27 +32,6 @@ Do not rely on memory, prior chat summaries, or assumptions when the repository 
 
 ## If uncertain
 prefer minimal diff changes
-
-## Cost And Scope Control
-
-Small requests must stay small. A narrow UI request must not become a data refresh, workflow redesign, branch migration, broad refactor, or deployment experiment unless the user explicitly asks for that expansion.
-
-For each task, classify the work before acting:
-
-- `UI-only`: HTML, CSS, client JS, visual behavior, browser checks.
-- `Data`: `data/`, J-Quants, market files, public JSON generation, manifests.
-- `Workflow`: GitHub Actions, Pages deployment, launchd, automation.
-- `Docs`: README, manuals, operating notes, AGENTS/CLAUDE guidance.
-
-Rules:
-
-- Do only the classified work.
-- If the classification changes, stop and explain why before doing more.
-- Prefer local/static checks for UI-only work.
-- Do not run heavy workflows to validate a one-button UI change.
-- Do not say "done", "published", "safe", or "updated" until the exact target state has been verified.
-- Report separate statuses for local code, public site, public data, and automation.
-- When the user is worried about cost or trust, reduce action count and ask before running expensive or irreversible steps.
 
 ---
 
@@ -197,27 +163,3 @@ python3 scripts/kabu_daily_update.py
 - Use J-Quants refresh only when the requested market data has not been acquired/generated yet, or when the user explicitly asks to fetch fresh market data.
 - For existing generated data that simply is not public yet, prefer a cached/public-data rebuild or artifact publish path over a fresh J-Quants fetch.
 - Keep these concerns separate in status updates: UI deploy, public data publish, and J-Quants data acquisition.
-
-## Small UI Change Deployment Discipline
-
-For small UI-only changes, such as changing the Pick button icon, label, style, or placement, do not expand the task into data refresh, J-Quants acquisition, broad rebuilds, or unrelated deployment experiments.
-
-Required workflow:
-
-1. Confirm the exact target UI and file scope.
-2. Make the smallest UI diff possible.
-3. Verify locally with the browser or a focused DOM/static check.
-4. Deploy only through the configured Pages path.
-5. Verify the public asset or page after deploy.
-6. Report UI status, data status, and deploy status separately.
-
-Important rules:
-
-- A `git push` is not the same as public release. Public release only happens after the configured GitHub Pages workflow runs and deploys successfully.
-- Before saying "published" or "reflected on public", confirm the deployed public URL or public asset content.
-- Do not run J-Quants for UI-only work unless the user explicitly asks for fresh market data.
-- Do not run manual data refresh or cached data rebuild just to publish UI.
-- Do not let a UI-only deploy publish older `data/manifest.json` than the currently public site. If the artifact data is older, stop and report it instead of deploying.
-- If public mobile differs from local mobile, first check branch, workflow trigger, artifact freshness, browser cache, and public asset content before changing code.
-- Keep cost proportional to the change. A one-button UI change should not consume heavy workflow time unless a real deploy blocker is proven.
-- When uncertain, stop and explain the separation: UI change, public Pages deploy, existing generated data publish, and fresh J-Quants acquisition.

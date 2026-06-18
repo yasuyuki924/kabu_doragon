@@ -7,7 +7,24 @@
           resolveHeaderStatusState,
         } = window.KabuPageIndexScannerStatus;
         const sortSelect = document.getElementById("indexSort");
+        const strategyDropdown = document.getElementById("indexStrategyDropdown");
+        const strategyDropdownButton = document.getElementById("indexStrategyDropdownButton");
+        const strategyDropdownMenu = document.getElementById("indexStrategyDropdownMenu");
+        const rankingDropdown = document.getElementById("indexRankingDropdown");
+        const rankingDropdownButton = document.getElementById("indexRankingDropdownButton");
+        const rankingDropdownMenu = document.getElementById("indexRankingDropdownMenu");
+        const limitDropdown = document.getElementById("indexLimitDropdown");
+        const limitDropdownButton = document.getElementById("indexLimitDropdownButton");
+        const limitDropdownMenu = document.getElementById("indexLimitDropdownMenu");
+        const turnoverDropdown = document.getElementById("indexTurnoverDropdown");
+        const turnoverDropdownButton = document.getElementById("indexTurnoverDropdownButton");
+        const turnoverDropdownMenu = document.getElementById("indexTurnoverDropdownMenu");
         const stickyBar = document.getElementById("indexStickyBar");
+        const mobileControlRail = document.getElementById("indexMobileControlRail");
+        const mobileFiltersButton = document.getElementById("indexMobileFiltersButton");
+        const mobileFiltersClose = document.getElementById("indexMobileFiltersClose");
+        const mobileSheetBackdrop = document.getElementById("indexMobileSheetBackdrop");
+        const mobileConditionSummary = document.getElementById("indexMobileConditionSummary");
         const stickyPickedLink = document.getElementById("indexStickyPickedLink");
         const stickyRefreshButton = document.getElementById("indexStickyRefreshButton");
         const stickyDateButton = document.getElementById("indexStickyDateButton");
@@ -45,35 +62,70 @@
         const themeSelect = document.getElementById("indexTheme") || stickyThemeSelect;
         const turnoverSelect = document.getElementById("indexTurnover") || stickyTurnoverSelect;
         const limitSelect = document.getElementById("indexLimit");
+        const rankingSelect = document.getElementById("indexExtraFilter");
+        const rankingLabel = document.getElementById("indexRankingLabel");
         const timeframeGroup = document.getElementById("indexTimeframe");
         const timeframePopover = document.getElementById("indexTimeframePopover");
         const timeframePopoverTitle = document.getElementById("indexTimeframePopoverTitle");
         const timeframeOptions = document.getElementById("indexTimeframeOptions");
         const rangeChip = document.getElementById("indexRangeChip");
         const pickedLink = document.getElementById("indexPickedLink");
+        const picksMenuButton = document.getElementById("indexPicksMenuButton");
+        const picksMenu = document.getElementById("indexPicksMenu");
+        const picksMenuToggle = picksMenuButton || pickedLink;
         const updatedStatus = document.getElementById("indexUpdatedStatus");
+        const mobileUpdatedStatus = document.getElementById("indexMobileUpdatedStatus");
+        const resultCount = document.getElementById("indexResultCount");
+        const mobileResultCount = document.getElementById("indexMobileResultCount");
         const refreshButton = document.getElementById("indexRefreshButton");
+        const addCodesButton = document.getElementById("indexAddCodesButton");
+        const exportTradingViewButton = document.getElementById("indexExportTradingViewButton");
+        const exportHyperButton = document.getElementById("indexExportHyperButton");
+        const viewListButton = document.getElementById("indexViewListButton");
+        const saveListButton = document.getElementById("indexSaveListButton");
+        const openListButton = document.getElementById("indexOpenListButton");
+        const exitListButton = document.getElementById("indexExitListButton");
         const selectAllPicksButton = document.getElementById("indexSelectAllButton");
         const resetPicksButton = document.getElementById("indexResetPicksButton");
+        const customCodeModal = document.getElementById("indexCustomCodeModal");
+        const customCodeInput = document.getElementById("indexCustomCodeInput");
+        const customCodeMeta = document.getElementById("indexCustomCodeMeta");
+        const customCodeApplyButton = document.getElementById("indexCustomCodeApply");
+        const customCodeCancelButton = document.getElementById("indexCustomCodeCancel");
+        const customCodeCloseButton = document.getElementById("indexCustomCodeClose");
+        const customCodeClearButton = document.getElementById("indexCustomCodeClear");
+        const customCodeExitButton = document.getElementById("indexCustomCodeExit");
+        const listSaveModal = document.getElementById("indexListSaveModal");
+        const listSaveInput = document.getElementById("indexListSaveInput");
+        const listSaveError = document.getElementById("indexListSaveError");
+        const listSaveOkButton = document.getElementById("indexListSaveOk");
+        const listSaveCancelButton = document.getElementById("indexListSaveCancel");
+        const listSetsModal = document.getElementById("indexListSetsModal");
+        const listSetsBody = document.getElementById("indexListSetsBody");
+        const listSetsCloseButton = document.getElementById("indexListSetsClose");
         const miniCalendar = document.getElementById("indexMiniCalendar") || stickyMiniCalendar;
         const errorBox = document.getElementById("indexError");
+        const dataQualitySummaryBox = document.getElementById("indexDataQualitySummary");
         const list = document.getElementById("indexList");
       
         const state = {
           manifest: null,
           updateHealth: null,
+          ohlcvQualitySummary: null,
+          overviewDateIndex: null,
           overview: null,
           sort: "gainers",
           tag: "",
           theme: "",
-          turnover: 500000000,
-          limit: 100,
+          turnover: 1000000000,
+          limit: 200,
           timeframe: "daily",
           rangeMonths: 3,
+          highPullbackDropPct: 30,
           rangeMonthsByTimeframe: {
             daily: 3,
             weekly: 12,
-            monthly: 36,
+            monthly: 60,
           },
           timeframePopoverOpen: false,
           timeframePopoverTarget: "",
@@ -96,18 +148,381 @@
           dev200PopoverOpen: false,
           stickyDateOpen: false,
           stickyFiltersOpen: false,
+          mobileFiltersOpen: false,
+          mobileRailCollapsed: false,
+          mobileRailGestureConsumed: false,
+          mobileRailLastScrollY: 0,
           selectedDate: "",
           calendarMonth: null,
           picks: {},
           themeOrder: [],
           visibleRecords: [],
           selectedStrategies: [],
+          customCodeText: "",
+          customCodes: [],
+          customCodeMissing: [],
+          activeListName: "",
+          activeListCodes: [],
+          activeListMissing: [],
+          activeListViewing: false,
           chartObserver: null,
           chartPayloadCache: new Map(),
           chartRequestCache: new Map(),
+          fullChartPayloadCache: new Map(),
+          fullChartRequestCache: new Map(),
           chartRenderedCodes: new Set(),
+          cardChartTimeframes: new Map(),
           chartBaselineShape: null,
         };
+        const DEFAULT_INDEX_SORT = "gainers";
+        const DEFAULT_INDEX_LIMIT = 200;
+        const CUSTOM_CODE_SORT = "custom_codes";
+        const CARD_CHART_RANGE_MONTHS = Object.freeze({ daily: 3, weekly: 36, monthly: 60 });
+        const rankingOptions = window.KabuAppConfig?.INDEX_SCANNER_RANKING_OPTIONS || [];
+        const strategySortKeys = new Set(INDEX_SCANNER_SORT_OPTIONS.map((item) => item.key));
+        const rankingSortKeys = new Set(rankingOptions.map((item) => item.key));
+        const DAILY_ONLY_SORT_KEYS = new Set(["strategy_high_pullback_30", "strategy_strong_trend_pullback_rebound"]);
+        const DEFAULT_HIGH_PULLBACK_DROP_PCT = 30;
+
+        function isDailyOnlySort(sortKey = state.sort) {
+          return DAILY_ONLY_SORT_KEYS.has(sortKey);
+        }
+
+        function enforceDailyOnlySortTimeframe() {
+          if (!isDailyOnlySort()) {
+            return false;
+          }
+          if (state.timeframe === "daily") {
+            return false;
+          }
+          state.timeframe = "daily";
+          state.rangeMonths = normalizeIndexScannerRangeMonths("daily", state.rangeMonthsByTimeframe.daily, 3);
+          state.rangeMonthsByTimeframe.daily = state.rangeMonths;
+          state.timeframePopoverOpen = false;
+          state.timeframePopoverTarget = "";
+          return true;
+        }
+
+        function normalizeHighPullbackDropPct(value) {
+          return DEFAULT_HIGH_PULLBACK_DROP_PCT;
+        }
+
+        function highPullbackDropPct() {
+          return normalizeHighPullbackDropPct(state.highPullbackDropPct);
+        }
+
+        function syncCurrentIndexScannerUrl() {
+          if (!state.selectedDate) {
+            return;
+          }
+          syncIndexScannerUrl(
+            state.selectedDate,
+            isCustomCodeMode() || isListMode() ? DEFAULT_INDEX_SORT : state.sort,
+            state.tag,
+            state.theme,
+            effectiveTurnoverFilter(),
+            state.limit,
+            state.rangeMonths,
+            state.timeframe,
+            state.deviationFilters,
+            state.selectedStrategies,
+            isDailyOnlySort() ? highPullbackDropPct() : ""
+          );
+        }
+
+        function normalizeOverviewDateList(values) {
+          return [...new Set((Array.isArray(values) ? values : [])
+            .map((value) => String(value || "").trim())
+            .filter(Boolean))]
+            .sort();
+        }
+
+        function compactOverviewDatesByPeriod(dates, timeframe) {
+          if (timeframe === "daily") {
+            return dates;
+          }
+          const latestByPeriod = new Map();
+          dates.forEach((dateValue) => {
+            latestByPeriod.set(overviewDatePeriodKey(dateValue, timeframe), dateValue);
+          });
+          return [...latestByPeriod.values()].sort();
+        }
+
+        function getOverviewDatesForTimeframe(timeframe = state.timeframe) {
+          const key = timeframe === "weekly" ? "weekly" : timeframe === "monthly" ? "monthly" : "daily";
+          const indexedDates = normalizeOverviewDateList(state.overviewDateIndex?.[key]);
+          if (indexedDates.length) {
+            return compactOverviewDatesByPeriod(indexedDates, key);
+          }
+          return compactOverviewDatesByPeriod(normalizeOverviewDateList(state.manifest?.availableDates || []), key);
+        }
+
+        function overviewDatePeriodKey(dateValue, timeframe) {
+          if (timeframe === "monthly") {
+            return String(dateValue || "").slice(0, 7);
+          }
+          if (timeframe === "weekly") {
+            const date = parseDate(dateValue);
+            if (Number.isNaN(date.getTime())) {
+              return "";
+            }
+            const monday = new Date(date);
+            monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+            return formatDateKey(monday);
+          }
+          return String(dateValue || "");
+        }
+
+        function resolveOverviewDateForTimeframe(requestedDate, timeframe = state.timeframe) {
+          const availableDates = getOverviewDatesForTimeframe(timeframe);
+          if (!requestedDate || !availableDates.length || timeframe === "daily" || availableDates.includes(requestedDate)) {
+            return resolveAvailableDate(requestedDate, availableDates);
+          }
+          const requestedPeriod = overviewDatePeriodKey(requestedDate, timeframe);
+          const periodEndDate = availableDates.find(
+            (dateValue) => dateValue >= requestedDate && overviewDatePeriodKey(dateValue, timeframe) === requestedPeriod
+          );
+          return periodEndDate || resolveAvailableDate(requestedDate, availableDates);
+        }
+
+        function strategyControlValue() {
+          return strategySortKeys.has(state.sort) && state.sort !== DEFAULT_INDEX_SORT ? state.sort : "";
+        }
+
+        function rankingControlValue() {
+          if (isDailyOnlySort()) {
+            return "";
+          }
+          return rankingSortKeys.has(state.sort) ? state.sort : "";
+        }
+
+        function isStrategySortActive() {
+          return strategySortKeys.has(state.sort) && state.sort !== DEFAULT_INDEX_SORT;
+        }
+
+        function isRankingSortActive() {
+          return rankingSortKeys.has(state.sort) || state.sort === DEFAULT_INDEX_SORT;
+        }
+
+        function isCustomCodeMode() {
+          return state.sort === CUSTOM_CODE_SORT;
+        }
+
+        function isListMode() {
+          return state.activeListViewing === true;
+        }
+
+        function limitControlValue() {
+          return String(state.limit);
+        }
+
+        function effectiveTurnoverFilter() {
+          if (isDailyOnlySort()) {
+            return 0;
+          }
+          return !isCustomCodeMode() && !isListMode() && state.timeframe === "daily" ? state.turnover : 0;
+        }
+
+        function filterByEffectiveTurnover(records) {
+          const turnoverThreshold = effectiveTurnoverFilter();
+          if (state.sort !== DEFAULT_INDEX_SORT || !turnoverThreshold) {
+            return filterByTurnover(records, turnoverThreshold);
+          }
+          return records.filter((record) => {
+            return Number(record.turnoverMa5 || 0) >= turnoverThreshold || getStopHighStatus(record) !== "none";
+          });
+        }
+
+        function readStrategyControlValue(control) {
+          return String(control?.value || "").trim() || DEFAULT_INDEX_SORT;
+        }
+
+        function readRankingControlValue(control) {
+          return String(control?.value || "").trim() || DEFAULT_INDEX_SORT;
+        }
+
+        function readLimitControlValue(control) {
+          const value = Number(control?.value || DEFAULT_INDEX_LIMIT);
+          return INDEX_SCANNER_LIMITS.includes(value) ? value : DEFAULT_INDEX_LIMIT;
+        }
+
+        function normalizeCustomCodeInput(text) {
+          const seen = new Set();
+          return String(text || "")
+            .replace(/[，、\n\r\t]+/g, " ")
+            .split(/[\s,]+/)
+            .map((item) => item.trim().replace(/\.T$/i, "").replace(/[^\dA-Za-z]/g, "").toUpperCase())
+            .filter(Boolean)
+            .filter((code) => {
+              if (seen.has(code)) {
+                return false;
+              }
+              seen.add(code);
+              return true;
+            });
+        }
+
+        function formatCustomCodeText(codes) {
+          return normalizeCustomCodeInput(codes).join(" ");
+        }
+
+        function updateCustomCodeMeta() {
+          if (!customCodeMeta) {
+            return;
+          }
+          const codes = normalizeCustomCodeInput(customCodeInput?.value || "");
+          customCodeMeta.textContent = `${codes.length}件${codes.length ? " / 既存Listと重複するコードは1件に統合" : ""}`;
+        }
+
+        function openCustomCodeModal() {
+          if (!customCodeModal || !customCodeInput) {
+            return;
+          }
+          customCodeInput.value = state.customCodeText || formatCustomCodeText(state.customCodes);
+          updateCustomCodeMeta();
+          customCodeModal.hidden = false;
+          customCodeModal.classList.add("is-open");
+          window.setTimeout(() => customCodeInput.focus(), 0);
+        }
+
+        function closeCustomCodeModal() {
+          if (!customCodeModal) {
+            return;
+          }
+          customCodeModal.hidden = true;
+          customCodeModal.classList.remove("is-open");
+        }
+
+        function exitCustomCodeMode() {
+          state.sort = DEFAULT_INDEX_SORT;
+          closeCustomCodeModal();
+          if (rankingSelect) rankingSelect.value = rankingControlValue();
+          if (sortSelect) sortSelect.value = strategyControlValue();
+          if (stickySortSelect) stickySortSelect.value = strategyControlValue();
+          syncHeaderDropdownsUi();
+        }
+
+        function openListSaveModal() {
+          if (!listSaveModal || !listSaveInput || !listSaveError) {
+            return;
+          }
+          listSaveInput.value = "";
+          listSaveError.hidden = true;
+          listSaveError.textContent = "";
+          listSaveModal.hidden = false;
+          listSaveModal.classList.remove("is-hidden");
+          window.setTimeout(() => listSaveInput.focus(), 0);
+        }
+
+        function closeListSaveModal() {
+          if (!listSaveModal) {
+            return;
+          }
+          listSaveModal.hidden = true;
+          listSaveModal.classList.add("is-hidden");
+        }
+
+        function openListSetsModal() {
+          if (!listSetsModal) {
+            return;
+          }
+          renderSavedListSets();
+          listSetsModal.hidden = false;
+          listSetsModal.classList.add("is-open");
+        }
+
+        function closeListSetsModal() {
+          if (!listSetsModal) {
+            return;
+          }
+          listSetsModal.hidden = true;
+          listSetsModal.classList.remove("is-open");
+        }
+
+        function currentListPicks() {
+          const picks = loadScannerPicks();
+          const values = sortedScannerPicks(picks);
+          if (!isListMode()) {
+            return dedupeScannerPicks(values);
+          }
+          const byCode = new Map(values.map((pick) => [String(pick.code || "").trim().toUpperCase(), pick]));
+          return state.activeListCodes
+            .map((code) => byCode.get(String(code).toUpperCase()) || { code })
+            .filter((pick) => String(pick.code || "").trim());
+        }
+
+        function setActiveListFromPicks(picks, name = "List") {
+          const normalized = dedupeScannerPicks(Array.isArray(picks) ? picks : []);
+          const next = {};
+          normalized.forEach((pick) => {
+            const code = String(pick.code || "").trim().toUpperCase();
+            if (!code) {
+              return;
+            }
+            next[code] = { ...pick, code };
+          });
+          saveScannerPicks(next);
+          state.picks = next;
+          state.activeListCodes = Object.keys(next);
+          state.activeListName = name;
+          state.activeListViewing = true;
+        }
+
+        function viewCurrentPickList() {
+          const picks = loadScannerPicks();
+          const normalized = dedupeScannerPicks(sortedScannerPicks(picks));
+          state.picks = picks;
+          state.activeListCodes = normalized.map((pick) => String(pick.code || "").trim().toUpperCase()).filter(Boolean);
+          state.activeListMissing = [];
+          state.activeListName = "現在のList";
+          state.activeListViewing = true;
+        }
+
+        function exitListMode() {
+          state.activeListCodes = [];
+          state.activeListMissing = [];
+          state.activeListName = "";
+          state.activeListViewing = false;
+          state.customCodes = [];
+          state.customCodeMissing = [];
+          state.customCodeText = "";
+          if (isCustomCodeMode()) {
+            exitCustomCodeMode();
+          }
+        }
+
+        function buildManualPick(code, record = null) {
+          if (record) {
+            return buildScannerPickPayload(record, state);
+          }
+          const filterSnapshot = buildFilterSnapshotFromState(state);
+          return {
+            code: String(code || "").trim().toUpperCase(),
+            name: "",
+            market: "",
+            selectedAt: new Date().toISOString(),
+            filterSnapshot,
+            filterSummary: "手入力コード",
+          };
+        }
+
+        function addCodesToList(codes) {
+          const normalized = normalizeCustomCodeInput(codes);
+          if (!normalized.length) {
+            return;
+          }
+          const recordsByCode = new Map((state.overview?.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
+          const next = { ...(loadScannerPicks() || {}) };
+          normalized.forEach((code) => {
+            next[code] = buildManualPick(code, recordsByCode.get(code));
+          });
+          saveScannerPicks(next);
+          state.picks = next;
+          state.activeListCodes = Object.keys(next);
+          state.activeListName = "手入力List";
+          state.customCodes = normalized;
+          state.customCodeText = formatCustomCodeText(normalized);
+        }
 
         let stopAutoRefreshPolling = null;
       
@@ -117,40 +532,155 @@
         if (stickyFiltersPopover && stickyBar && stickyFiltersPopover.parentElement !== stickyBar.parentElement) {
           stickyBar.insertAdjacentElement("afterend", stickyFiltersPopover);
         }
+
+        function renderSortOptions(select) {
+          if (!select) {
+            return;
+          }
+          select.innerHTML = [
+            '<option value="">ストラテジー</option>',
+            ...INDEX_SCANNER_SORT_OPTIONS.map(
+              (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
+            ),
+          ].join("");
+        }
+
+        function strategyDropdownLabel() {
+          if (!sortSelect) {
+            return "ストラテジー";
+          }
+          const selected = sortSelect.options[sortSelect.selectedIndex];
+          return selected?.textContent?.trim() || "ストラテジー";
+        }
+
+        function customDropdowns() {
+          return [
+            { root: strategyDropdown, select: sortSelect, button: strategyDropdownButton, menu: strategyDropdownMenu, fallback: "ストラテジー", optionAttribute: "data-strategy-dropdown-value" },
+            { root: rankingDropdown, select: rankingSelect, button: rankingDropdownButton, menu: rankingDropdownMenu, fallback: "ランキング", optionAttribute: "data-ranking-dropdown-value" },
+            { root: limitDropdown, select: limitSelect, button: limitDropdownButton, menu: limitDropdownMenu, fallback: "表示件数", optionAttribute: "data-limit-dropdown-value" },
+            { root: turnoverDropdown, select: turnoverSelect, button: turnoverDropdownButton, menu: turnoverDropdownMenu, fallback: "売買代金", optionAttribute: "data-turnover-dropdown-value" },
+          ];
+        }
+
+        function customDropdownLabel(control) {
+          const selected = control.select?.options?.[control.select.selectedIndex];
+          return selected?.textContent?.trim() || control.fallback;
+        }
+
+        function closeCustomDropdown(control) {
+          if (!control.menu || !control.button) {
+            return;
+          }
+          control.menu.hidden = true;
+          control.button.setAttribute("aria-expanded", "false");
+        }
+
+        function closeStrategyDropdown() {
+          closeCustomDropdown(customDropdowns()[0]);
+        }
+
+        function closeAllHeaderDropdowns(exceptControl = null) {
+          customDropdowns().forEach((control) => {
+            if (control !== exceptControl) {
+              closeCustomDropdown(control);
+            }
+          });
+        }
+
+        function syncCustomDropdownUi(control) {
+          if (!control.select || !control.button || !control.menu) {
+            return;
+          }
+          control.button.textContent = customDropdownLabel(control);
+          control.button.classList.toggle("index-sticky-select--muted", control.select.classList.contains("index-sticky-select--muted"));
+          control.menu.querySelectorAll(`[${control.optionAttribute}]`).forEach((option) => {
+            const isSelected = option.getAttribute(control.optionAttribute) === control.select.value;
+            option.classList.toggle("is-selected", isSelected);
+            option.setAttribute("aria-selected", isSelected ? "true" : "false");
+          });
+        }
+
+        function syncStrategyDropdownUi() {
+          syncCustomDropdownUi(customDropdowns()[0]);
+        }
+
+        function syncHeaderDropdownsUi() {
+          customDropdowns().forEach(syncCustomDropdownUi);
+        }
+
+        function renderCustomDropdownOptions(control) {
+          if (!control.select || !control.menu) {
+            return;
+          }
+          control.menu.innerHTML = [...control.select.options].map((option) => {
+            const value = escapeHtml(option.value);
+            const label = escapeHtml(option.textContent || "");
+            return `<button class="index-strategy-dropdown-option" type="button" role="option" ${control.optionAttribute}="${value}">${label}</button>`;
+          }).join("");
+          syncCustomDropdownUi(control);
+        }
+
+        function renderStrategyDropdownOptions() {
+          renderCustomDropdownOptions(customDropdowns()[0]);
+        }
+
+        function renderHeaderDropdownOptions() {
+          customDropdowns().forEach(renderCustomDropdownOptions);
+        }
+
+        function renderRankingOptions(select) {
+          if (rankingLabel) {
+            rankingLabel.hidden = true;
+          }
+          if (!select) {
+            return;
+          }
+          select.disabled = false;
+          select.hidden = false;
+          select.innerHTML = [
+            '<option value="">ランキング</option>',
+            ...rankingOptions.map(
+              (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
+            ),
+          ].join("");
+        }
+
+        function updateSortPriorityUi() {
+          const strategyActive = isStrategySortActive();
+          const rankingActive = isRankingSortActive();
+          [sortSelect, stickySortSelect].filter(Boolean).forEach((select) => {
+            select.classList.toggle("index-sticky-select--muted", rankingActive && !strategyActive);
+          });
+          strategyDropdownButton?.classList.toggle("index-sticky-select--muted", rankingActive && !strategyActive);
+          [rankingSelect, rankingLabel].filter(Boolean).forEach((control) => {
+            control.classList.toggle("index-sticky-select--muted", strategyActive);
+          });
+          rankingDropdownButton?.classList.toggle("index-sticky-select--muted", strategyActive);
+        }
+
+        renderSortOptions(sortSelect);
+        renderSortOptions(stickySortSelect);
+        renderRankingOptions(rankingSelect);
+        renderHeaderDropdownOptions();
       
         const params = new URLSearchParams(window.location.search);
-        state.sort = params.get("sort") || state.sort;
-        state.tag = params.get("tag") || "";
-        state.theme = params.get("theme") || "";
-        state.selectedStrategies = params.get("strategy") ? [params.get("strategy")] : [];
-        state.turnover = INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
+        const indexSortKeys = new Set([...strategySortKeys, ...rankingSortKeys]);
+        const requestedSort = params.get("sort") || state.sort;
+        state.sort = indexSortKeys.has(requestedSort) && requestedSort !== CUSTOM_CODE_SORT ? requestedSort : DEFAULT_INDEX_SORT;
+        state.tag = "";
+        state.theme = "";
+        state.selectedStrategies = [];
+        state.turnover = params.has("turnover") && INDEX_SCANNER_TURNOVER_OPTIONS.includes(Number(params.get("turnover")))
           ? Number(params.get("turnover"))
           : state.turnover;
         state.limit = INDEX_SCANNER_LIMITS.includes(Number(params.get("limit"))) ? Number(params.get("limit")) : state.limit;
         state.timeframe = INDEX_SCANNER_TIMEFRAMES.includes(params.get("timeframe")) ? params.get("timeframe") : state.timeframe;
         state.rangeMonths = normalizeIndexScannerRangeMonths(state.timeframe, params.get("range"), state.rangeMonths);
         state.rangeMonthsByTimeframe[state.timeframe] = state.rangeMonths;
-        state.deviationFilters.deviation25 = {
-          mode: normalizeDeviationFilterInputMode(params.get("dev25_mode")),
-          min: normalizeDeviationFilterValue(params.get("dev25_min")),
-          max: normalizeDeviationFilterValue(params.get("dev25_max")),
-        };
-        state.deviationFilters.deviation75 = {
-          mode: normalizeDeviationFilterInputMode(params.get("dev75_mode")),
-          min: normalizeDeviationFilterValue(params.get("dev75_min")),
-          max: normalizeDeviationFilterValue(params.get("dev75_max")),
-        };
-        state.deviationFilters.deviation200 = {
-          mode: normalizeDeviationFilterInputMode(params.get("dev200_mode")),
-          min: normalizeDeviationFilterValue(params.get("dev200_min")),
-          max: normalizeDeviationFilterValue(params.get("dev200_max")),
-        };
-        const genericDevMin = normalizeDeviationFilterValue(params.get("devMin"));
-        const genericDevMax = normalizeDeviationFilterValue(params.get("devMax"));
-        const activeDeviationKeyFromUrl = getActiveDeviationSortKey(state.sort);
-        if (activeDeviationKeyFromUrl && (genericDevMin !== "" || genericDevMax !== "")) {
-          state.deviationFilters[activeDeviationKeyFromUrl] = buildDeviationFilterFromBounds(genericDevMin, genericDevMax);
-        }
+        state.highPullbackDropPct = normalizeHighPullbackDropPct(params.get("pullback"));
+        enforceDailyOnlySortTimeframe();
+        renderRankingOptions(rankingSelect);
+        renderHeaderDropdownOptions();
         state.deviationDrafts = {
           deviation25: { ...state.deviationFilters.deviation25 },
           deviation75: { ...state.deviationFilters.deviation75 },
@@ -158,25 +688,30 @@
         };
         state.picks = loadScannerPicks();
         if (sortSelect) {
-          sortSelect.value = state.sort;
+          sortSelect.value = strategyControlValue();
+        }
+        if (rankingSelect) {
+          rankingSelect.value = rankingControlValue();
         }
         themeSelect.value = state.theme;
-        turnoverSelect.value = String(state.turnover);
-        limitSelect.value = String(state.limit);
+        turnoverSelect.value = String(effectiveTurnoverFilter());
+        limitSelect.value = limitControlValue();
+        updateSortPriorityUi();
+        syncHeaderDropdownsUi();
         if (stickySortSelect) {
-          stickySortSelect.value = state.sort;
+          stickySortSelect.value = strategyControlValue();
         }
         if (stickyLimitSelect) {
-          stickyLimitSelect.value = String(state.limit);
+          stickyLimitSelect.value = limitControlValue();
         }
         if (stickyTurnoverSelect) {
-          stickyTurnoverSelect.value = String(state.turnover);
+          stickyTurnoverSelect.value = String(effectiveTurnoverFilter());
         }
         if (stickyStrategySelect) {
-          stickyStrategySelect.innerHTML = STRATEGY_CONFIG.map(
+          stickyStrategySelect.innerHTML = INDEX_SCANNER_SORT_OPTIONS.map(
             (item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`
           ).join("");
-          stickyStrategySelect.value = state.selectedStrategies[0] || "";
+          stickyStrategySelect.value = state.sort;
         }
         const initialDeviationFilter = getActiveDeviationFilter(state);
         if (dev200ModeSelect) {
@@ -200,9 +735,15 @@
             return;
           }
           timeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
-            const isActive = btn.dataset.value === state.timeframe;
+            const timeframe = btn.dataset.value;
+            const isDisabled = isDailyOnlySort() && timeframe !== "daily";
+            const isActive = timeframe === state.timeframe;
             btn.classList.toggle("active", isActive);
+            btn.classList.toggle("is-disabled", isDisabled);
+            btn.disabled = isDisabled;
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+            btn.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+            btn.title = isDisabled ? "高値調整（30% Pullback）は日足のみ対応です" : "";
           });
         }
       
@@ -218,10 +759,30 @@
             return;
           }
           stickyTimeframeGroup.querySelectorAll(".group-btn").forEach((btn) => {
-            const isActive = btn.dataset.value === state.timeframe;
+            const timeframe = btn.dataset.value;
+            const isDisabled = isDailyOnlySort() && timeframe !== "daily";
+            const isActive = timeframe === state.timeframe;
             btn.classList.toggle("active", isActive);
+            btn.classList.toggle("is-disabled", isDisabled);
+            btn.disabled = isDisabled;
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+            btn.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+            btn.title = isDisabled ? "高値調整（30% Pullback）は日足のみ対応です" : "";
           });
+        }
+
+        function updateDailyOnlySortUi() {
+          renderRankingOptions(rankingSelect);
+          renderCustomDropdownOptions(customDropdowns()[1]);
+          if (rankingSelect) {
+            rankingSelect.value = rankingControlValue();
+          }
+          updateSortPriorityUi();
+          syncHeaderDropdownsUi();
+          updateTimeframeUI();
+          updateStickyTimeframeUI();
+          updateRangeChip();
+          updateTimeframePopover();
         }
       
         function updateStickyBarVisibility() {
@@ -236,15 +797,115 @@
             return;
           }
           const pickCount = Object.keys(state.picks || {}).length;
-          stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+          stickyPickedLink.textContent = pickCount > 0 ? `List ${pickCount}` : "List";
+        }
+
+        function updateIndexResultCount({ matchedCount = 0, displayedCount = 0, loading = false } = {}) {
+          if (resultCount) {
+            resultCount.hidden = false;
+          }
+          if (mobileResultCount) {
+            mobileResultCount.hidden = false;
+          }
+          if (loading) {
+            const loadingText = `${scannerSortLabel(state.sort)} 読込中`;
+            if (resultCount) {
+              resultCount.textContent = loadingText;
+            }
+            if (mobileResultCount) {
+              mobileResultCount.textContent = "読込中";
+            }
+            return;
+          }
+          const matchedLabel = isCustomCodeMode()
+            ? "指定"
+            : isListMode()
+              ? "List"
+              : scannerSortLabel(state.sort);
+          const totalText = `${matchedLabel} ${formatNumber(matchedCount, 0)}件`;
+          const displayText = Number(displayedCount) === Number(matchedCount)
+            ? ""
+            : ` / 表示 ${formatNumber(displayedCount, 0)}件`;
+          if (resultCount) {
+            resultCount.textContent = `${totalText}${displayText}`;
+          }
+          if (mobileResultCount) {
+            mobileResultCount.textContent = `表示 ${formatNumber(displayedCount, 0)}件`;
+            mobileResultCount.title = `${totalText}${displayText}`;
+          }
+          updateMobileFiltersUi();
+        }
+
+        function mobileControlSummaryText() {
+          const parts = [];
+          if (state.selectedDate) {
+            parts.push(formatScannerTradeDate(state.selectedDate));
+          }
+          parts.push(indexScannerTimeframeLabel(state.timeframe));
+          const sortLabel = scannerSortLabel(state.sort);
+          if (sortLabel) {
+            parts.push(sortLabel);
+          }
+          const effectiveTurnover = effectiveTurnoverFilter();
+          if (state.timeframe === "daily" && Number(effectiveTurnover || 0) > 0) {
+            const oku = Number(effectiveTurnover) / 100000000;
+            parts.push(`売買代金 ${oku >= 10 ? formatNumber(oku, 0) : formatNumber(oku, 1)}億以上`);
+          }
+          if (resultCount && !resultCount.hidden && resultCount.textContent) {
+            parts.push(resultCount.textContent);
+          }
+          return parts.filter(Boolean).join(" / ");
+        }
+
+        function setMobileFiltersOpen(open) {
+          state.mobileFiltersOpen = Boolean(open);
+          if (state.mobileFiltersOpen) {
+            state.stickyDateOpen = false;
+            state.stickyFiltersOpen = false;
+            updateStickyDateUi();
+            updateStickyFiltersUi();
+            closeAllHeaderDropdowns();
+          }
+          updateMobileFiltersUi();
+        }
+
+        function setMobileRailCollapsed(collapsed) {
+          state.mobileRailCollapsed = Boolean(collapsed);
+          updateMobileFiltersUi();
+        }
+
+        function updateMobileFiltersUi() {
+          const isOpen = Boolean(state.mobileFiltersOpen);
+          const isRailCollapsed = Boolean(state.mobileRailCollapsed) && !isOpen;
+          document.body.classList.toggle("index-mobile-sheet-open", isOpen);
+          document.body.classList.toggle("index-mobile-rail-collapsed", isRailCollapsed);
+          if (stickyBar) {
+            stickyBar.classList.toggle("is-mobile-sheet-open", isOpen);
+          }
+          if (mobileControlRail) {
+            mobileControlRail.classList.toggle("is-sheet-open", isOpen);
+            mobileControlRail.classList.toggle("is-collapsed", isRailCollapsed);
+            mobileControlRail.setAttribute("aria-expanded", isRailCollapsed ? "false" : "true");
+          }
+          if (mobileFiltersButton) {
+            mobileFiltersButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            mobileFiltersButton.classList.toggle("is-active", isOpen);
+          }
+          if (mobileSheetBackdrop) {
+            mobileSheetBackdrop.hidden = !isOpen;
+          }
+          if (mobileConditionSummary) {
+            mobileConditionSummary.textContent = mobileControlSummaryText() || "条件";
+          }
         }
       
         function updateStickyFiltersUi() {
           const activeKey = getActiveDeviationSortKey(state.sort);
           const activeFilter = getActiveDeviationFilter(state);
           const activeDraft = getActiveDeviationDraft(state);
+          const effectiveTurnover = effectiveTurnoverFilter();
           const hasFilterSettings =
-            Boolean(state.tag) || Boolean(state.theme) || Number(state.turnover || 0) > 0 || Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
+            Boolean(state.tag) || Boolean(state.theme) || Number(effectiveTurnover || 0) > 0 || Boolean(activeFilter.mode || activeFilter.min || activeFilter.max);
           if (stickyFiltersButton) {
             const deviationSummary = activeKey ? formatDeviationFilterSummary(activeFilter) : "";
             stickyFiltersButton.textContent = deviationSummary || (hasFilterSettings ? "Filters ON" : "Filters");
@@ -262,7 +923,9 @@
             stickyThemeSelect.value = state.theme;
           }
           if (stickyTurnoverSelect) {
-            stickyTurnoverSelect.value = String(state.turnover);
+            stickyTurnoverSelect.value = String(effectiveTurnover);
+            stickyTurnoverSelect.disabled = state.timeframe !== "daily";
+            stickyTurnoverSelect.title = state.timeframe === "daily" ? "" : "週足/月足では売買代金フィルタを適用しません";
           }
           if (stickyStrategySelect) {
             stickyStrategySelect.value = state.selectedStrategies[0] || "";
@@ -274,12 +937,13 @@
             stickyDeviationTitle.textContent = activeKey ? getDeviationSortLabel(activeKey) : "Deviation";
           }
           setStickyDeviationControls(activeDraft);
+          updateMobileFiltersUi();
         }
       
         function updateStickyDateUi() {
           if (stickyDateButton) {
             const label = state.selectedDate ? state.selectedDate.replace(/-/g, ".") : "";
-            stickyDateButton.textContent = label ? `Date ${label} ▼` : "Date ▼";
+            stickyDateButton.textContent = label ? `${label} ▼` : "日付 ▼";
             stickyDateButton.setAttribute("aria-expanded", state.stickyDateOpen ? "true" : "false");
           }
           if (stickyDatePopover) {
@@ -293,6 +957,15 @@
               stickyDatePopover.style.maxHeight = "";
             }
           }
+        }
+
+        function setPicksMenuOpen(isOpen) {
+          if (!picksMenu || !picksMenuToggle) {
+            return;
+          }
+          picksMenu.hidden = !isOpen;
+          picksMenu.classList.toggle("is-open", isOpen);
+          picksMenuToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
         }
       
         function buildDeviationFilterFromBounds(minValue, maxValue) {
@@ -548,38 +1221,205 @@
         updateStickyFiltersUi();
         updateStickyBarVisibility();
         if (pickedLink) {
-          pickedLink.href = "./picked.html";
+          pickedLink.removeAttribute("href");
         }
         if (stickyPickedLink) {
-          stickyPickedLink.href = "./picked.html";
+          stickyPickedLink.removeAttribute("href");
         }
       
-        [...new Set([sortSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
-          .forEach((control) => {
-          control.addEventListener("change", async () => {
-            state.sort = stickySortSelect?.matches(":focus") ? stickySortSelect.value : sortSelect.value;
+        async function handleHeaderControlChange(control) {
+            const activeSortControl = stickySortSelect?.matches(":focus") ? stickySortSelect : sortSelect;
+            if (control === rankingSelect) {
+              if (isDailyOnlySort()) {
+                state.highPullbackDropPct = DEFAULT_HIGH_PULLBACK_DROP_PCT;
+              }
+              state.sort = readRankingControlValue(rankingSelect);
+            } else if (control === sortSelect || control === stickySortSelect) {
+              state.sort = readStrategyControlValue(activeSortControl);
+              state.highPullbackDropPct = highPullbackDropPct();
+            }
+            enforceDailyOnlySortTimeframe();
             state.tag = stickyTagSelect?.matches(":focus") ? stickyTagSelect.value : tagSelect.value;
             state.theme = stickyThemeSelect?.matches(":focus") ? stickyThemeSelect.value : themeSelect.value;
             state.turnover = Number(stickyTurnoverSelect?.matches(":focus") ? stickyTurnoverSelect.value : turnoverSelect.value);
-            state.limit = Number(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect.value : limitSelect.value);
-            if (sortSelect) sortSelect.value = state.sort;
-            if (stickySortSelect) stickySortSelect.value = state.sort;
+            state.limit = readLimitControlValue(stickyLimitSelect?.matches(":focus") ? stickyLimitSelect : limitSelect);
+            if (sortSelect) sortSelect.value = strategyControlValue();
+            renderRankingOptions(rankingSelect);
+            renderCustomDropdownOptions(customDropdowns()[1]);
+            if (rankingSelect) rankingSelect.value = rankingControlValue();
+            updateDailyOnlySortUi();
+            updateSortPriorityUi();
+            if (stickySortSelect) stickySortSelect.value = strategyControlValue();
             if (tagSelect) tagSelect.value = state.tag;
             if (stickyTagSelect) stickyTagSelect.value = state.tag;
             if (themeSelect) themeSelect.value = state.theme;
             if (stickyThemeSelect) stickyThemeSelect.value = state.theme;
-            if (turnoverSelect) turnoverSelect.value = String(state.turnover);
-            if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(state.turnover);
-            if (limitSelect) limitSelect.value = String(state.limit);
-            if (stickyLimitSelect) stickyLimitSelect.value = String(state.limit);
+            if (turnoverSelect) turnoverSelect.value = String(effectiveTurnoverFilter());
+            if (stickyTurnoverSelect) stickyTurnoverSelect.value = String(effectiveTurnoverFilter());
+            if (limitSelect) limitSelect.value = limitControlValue();
+            if (stickyLimitSelect) stickyLimitSelect.value = limitControlValue();
+            syncHeaderDropdownsUi();
             const activeDeviationKey = getActiveDeviationSortKey(state.sort);
             if (activeDeviationKey) {
               state.deviationDrafts[activeDeviationKey] = { ...state.deviationFilters[activeDeviationKey] };
             }
             updateDeviation200Controls();
             updateStickyFiltersUi();
+            if (isCustomCodeMode()) {
+              openCustomCodeModal();
+            }
             await render();
+        }
+
+        [...new Set([sortSelect, rankingSelect, tagSelect, themeSelect, turnoverSelect, limitSelect, stickySortSelect, stickyTagSelect, stickyThemeSelect, stickyTurnoverSelect, stickyLimitSelect].filter(Boolean))]
+          .forEach((control) => {
+          control.addEventListener("change", async () => {
+            await handleHeaderControlChange(control);
           });
+        });
+
+        customDropdowns().forEach((control) => {
+          control.button?.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!control.menu || !control.button) {
+              return;
+            }
+            const willOpen = control.menu.hidden;
+            closeAllHeaderDropdowns(control);
+            control.menu.hidden = !willOpen;
+            control.button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+            syncCustomDropdownUi(control);
+          });
+          control.menu?.addEventListener("click", async (event) => {
+            const option = event.target?.closest?.(`[${control.optionAttribute}]`);
+            if (!option || !control.select) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            control.select.value = option.getAttribute(control.optionAttribute) || "";
+            closeCustomDropdown(control);
+            await handleHeaderControlChange(control.select);
+          });
+        });
+
+        mobileFiltersButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (state.mobileRailGestureConsumed) {
+            state.mobileRailGestureConsumed = false;
+            return;
+          }
+          setMobileFiltersOpen(!state.mobileFiltersOpen);
+        });
+
+        mobileFiltersClose?.addEventListener("click", (event) => {
+          event.preventDefault();
+          setMobileFiltersOpen(false);
+        });
+
+        mobileSheetBackdrop?.addEventListener("click", () => {
+          setMobileFiltersOpen(false);
+        });
+
+        if (mobileControlRail) {
+          let mobileRailStartX = 0;
+          let mobileRailStartY = 0;
+          const finishMobileRailGesture = (clientX, clientY) => {
+            if (!mobileRailStartY) {
+              return;
+            }
+            const deltaX = Number(clientX || 0) - mobileRailStartX;
+            const deltaY = Number(clientY || 0) - mobileRailStartY;
+            mobileRailStartX = 0;
+            mobileRailStartY = 0;
+            if (Math.abs(deltaY) < 36 || Math.abs(deltaY) < Math.abs(deltaX) * 1.15) {
+              return;
+            }
+            state.mobileRailGestureConsumed = true;
+            setMobileRailCollapsed(deltaY < 0);
+          };
+          mobileControlRail.addEventListener("pointerdown", (event) => {
+            mobileRailStartX = event.clientX || 0;
+            mobileRailStartY = event.clientY || 0;
+            state.mobileRailGestureConsumed = false;
+          });
+          mobileControlRail.addEventListener("pointerup", (event) => {
+            finishMobileRailGesture(event.clientX, event.clientY);
+          });
+          mobileControlRail.addEventListener("pointercancel", () => {
+            mobileRailStartX = 0;
+            mobileRailStartY = 0;
+            state.mobileRailGestureConsumed = false;
+          });
+          mobileControlRail.addEventListener("touchstart", (event) => {
+            const touch = event.changedTouches?.[0];
+            if (!touch) {
+              return;
+            }
+            mobileRailStartX = touch.clientX || 0;
+            mobileRailStartY = touch.clientY || 0;
+            state.mobileRailGestureConsumed = false;
+          }, { passive: true });
+          mobileControlRail.addEventListener("touchend", (event) => {
+            const touch = event.changedTouches?.[0];
+            if (!touch) {
+              return;
+            }
+            finishMobileRailGesture(touch.clientX, touch.clientY);
+          }, { passive: true });
+          mobileControlRail.addEventListener("touchcancel", () => {
+            mobileRailStartX = 0;
+            mobileRailStartY = 0;
+            state.mobileRailGestureConsumed = false;
+          }, { passive: true });
+        }
+
+        window.addEventListener("scroll", () => {
+          if (!mobileControlRail || state.mobileFiltersOpen) {
+            return;
+          }
+          const currentY = Math.max(0, window.scrollY || document.documentElement.scrollTop || 0);
+          const deltaY = currentY - Number(state.mobileRailLastScrollY || 0);
+          state.mobileRailLastScrollY = currentY;
+          if (currentY > 80 && deltaY > 12) {
+            setMobileRailCollapsed(true);
+          } else if (currentY < 24 || deltaY < -24) {
+            setMobileRailCollapsed(false);
+          }
+        }, { passive: true });
+
+        if (stickyBar) {
+          let mobileSheetStartY = 0;
+          stickyBar.addEventListener("pointerdown", (event) => {
+            mobileSheetStartY = event.clientY || 0;
+          });
+          stickyBar.addEventListener("pointerup", (event) => {
+            if (!state.mobileFiltersOpen || !mobileSheetStartY) {
+              return;
+            }
+            const deltaY = (event.clientY || 0) - mobileSheetStartY;
+            mobileSheetStartY = 0;
+            if (deltaY > 72) {
+              setMobileFiltersOpen(false);
+            }
+          });
+          stickyBar.addEventListener("pointercancel", () => {
+            mobileSheetStartY = 0;
+          });
+        }
+
+        document.addEventListener("click", (event) => {
+          if (!customDropdowns().some((control) => control.root?.contains(event.target))) {
+            closeAllHeaderDropdowns();
+          }
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            closeAllHeaderDropdowns();
+          }
         });
       
         [stickyDevMinInput, stickyDevMaxInput].filter(Boolean).forEach((input) => {
@@ -639,7 +1479,7 @@
           updateStickyFiltersUi();
           await render();
         });
-      
+
         stickyFiltersButton?.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -665,8 +1505,40 @@
         stickyDatePopover?.addEventListener("click", (event) => {
           event.stopPropagation();
         });
+
+        picksMenuButton?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setPicksMenuOpen(Boolean(picksMenu?.hidden));
+          state.stickyDateOpen = false;
+          state.stickyFiltersOpen = false;
+          updateStickyDateUi();
+          updateStickyFiltersUi();
+        });
+
+        picksMenu?.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (event.target.closest("button, a")) {
+            setPicksMenuOpen(false);
+          }
+        });
+
+        pickedLink?.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setPicksMenuOpen(Boolean(picksMenu?.hidden));
+          state.stickyDateOpen = false;
+          state.stickyFiltersOpen = false;
+          updateStickyDateUi();
+          updateStickyFiltersUi();
+        });
       
         document.addEventListener("click", (event) => {
+          if (picksMenu && !picksMenu.hidden) {
+            if (!picksMenu.contains(event.target) && !picksMenuToggle?.contains(event.target)) {
+              setPicksMenuOpen(false);
+            }
+          }
           if (state.timeframePopoverOpen && timeframePopover && timeframeGroup) {
             if (!timeframePopover.contains(event.target) && !timeframeGroup.contains(event.target)) {
               state.timeframePopoverOpen = false;
@@ -706,6 +1578,13 @@
               state.stickyDateOpen = false;
               updateStickyDateUi();
             }
+            if (state.mobileFiltersOpen) {
+              setMobileFiltersOpen(false);
+            }
+            setPicksMenuOpen(false);
+            closeCustomCodeModal();
+            closeListSaveModal();
+            closeListSetsModal();
             closeAllStrategyPopovers();
           }
         });
@@ -762,11 +1641,15 @@
               event.stopPropagation();
               clearLongPressTimer();
               const nextTimeframe = String(btn.dataset.value || state.timeframe);
+              if (btn.disabled || (isDailyOnlySort() && nextTimeframe !== "daily")) {
+                return;
+              }
               if (longPressTriggered) {
                 longPressTriggered = false;
                 return;
               }
               if (state.timeframe === nextTimeframe && !state.timeframePopoverOpen) {
+                openTimeframePopover();
                 return;
               }
               state.timeframe = nextTimeframe;
@@ -784,8 +1667,7 @@
               try {
                 errorBox.hidden = true;
                 list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
-                state.overview = await loadOverview(state.selectedDate, state.timeframe);
-                renderTagOptions();
+                await loadDate(state.selectedDate);
               } catch (error) {
                 showError(errorBox, error.message);
                 return;
@@ -797,7 +1679,9 @@
       
         if (resetPicksButton) {
           resetPicksButton.addEventListener("click", async () => {
+            setPicksMenuOpen(false);
             resetScannerPicks(state);
+            exitListMode();
             await render();
           });
         }
@@ -809,6 +1693,7 @@
         }
         if (selectAllPicksButton) {
           selectAllPicksButton.addEventListener("click", async () => {
+            setPicksMenuOpen(false);
             selectAllScannerPicks(state.visibleRecords, state);
             await render();
           });
@@ -819,14 +1704,121 @@
             await render();
           });
         }
+
+        addCodesButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          openCustomCodeModal();
+        });
+        exportTradingViewButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          triggerExportDownloads([buildTradingViewExportEntry(currentListPicks(), buildFilterSnapshotFromState(state))]);
+        });
+        exportHyperButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          triggerExportDownloads(buildHyperExportEntries(currentListPicks(), buildFilterSnapshotFromState(state)));
+        });
+        saveListButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          openListSaveModal();
+        });
+        viewListButton?.addEventListener("click", async () => {
+          setPicksMenuOpen(false);
+          viewCurrentPickList();
+          await render();
+        });
+        openListButton?.addEventListener("click", () => {
+          setPicksMenuOpen(false);
+          openListSetsModal();
+        });
+        exitListButton?.addEventListener("click", async () => {
+          setPicksMenuOpen(false);
+          exitListMode();
+          await render();
+        });
+
+        customCodeInput?.addEventListener("input", updateCustomCodeMeta);
+        customCodeApplyButton?.addEventListener("click", async () => {
+          const nextCodes = normalizeCustomCodeInput(customCodeInput?.value || "");
+          addCodesToList(nextCodes);
+          if (customCodeInput) {
+            customCodeInput.value = state.customCodeText;
+          }
+          closeCustomCodeModal();
+          if (rankingSelect) rankingSelect.value = rankingControlValue();
+          if (sortSelect) sortSelect.value = strategyControlValue();
+          if (stickySortSelect) stickySortSelect.value = strategyControlValue();
+          syncHeaderDropdownsUi();
+          await render();
+        });
+        customCodeClearButton?.addEventListener("click", () => {
+          if (customCodeInput) {
+            customCodeInput.value = "";
+          }
+          updateCustomCodeMeta();
+        });
+        customCodeExitButton?.addEventListener("click", async () => {
+          exitListMode();
+          await render();
+        });
+        [customCodeCancelButton, customCodeCloseButton].filter(Boolean).forEach((button) => {
+          button.addEventListener("click", async () => {
+            closeCustomCodeModal();
+            if (isCustomCodeMode() && !state.customCodes.length) {
+              exitCustomCodeMode();
+              await render();
+            }
+          });
+        });
+        customCodeModal?.addEventListener("click", async (event) => {
+          if (event.target !== customCodeModal) {
+            return;
+          }
+          closeCustomCodeModal();
+          if (isCustomCodeMode() && !state.customCodes.length) {
+            exitCustomCodeMode();
+            await render();
+          }
+        });
+
+        listSaveOkButton?.addEventListener("click", () => {
+          try {
+            const saved = registerAllPicks(currentListPicks(), listSaveInput?.value || "", buildFilterSnapshotFromState(state));
+            state.activeListName = saved?.name || state.activeListName;
+            if (listSaveError) {
+              listSaveError.hidden = true;
+              listSaveError.textContent = "";
+            }
+            closeListSaveModal();
+          } catch (error) {
+            if (listSaveError) {
+              listSaveError.textContent = error?.message || "保存できませんでした。";
+              listSaveError.hidden = false;
+            }
+          }
+        });
+        listSaveCancelButton?.addEventListener("click", closeListSaveModal);
+        listSaveInput?.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            listSaveOkButton?.click();
+          }
+        });
+        listSetsCloseButton?.addEventListener("click", closeListSetsModal);
+        listSetsModal?.addEventListener("click", (event) => {
+          if (event.target === listSetsModal) {
+            closeListSetsModal();
+          }
+        });
+
         async function refreshIndexScanner(nextManifest = null) {
           state.isRefreshing = true;
           updateHeaderStatus();
           await runRefreshAction(refreshButton, errorBox, async () => {
             state.manifest = nextManifest || state.pendingManifest || await loadManifest();
-            state.updateHealth = await loadUpdateHealth();
+            state.overviewDateIndex = await loadOverviewDateIndex();
             state.pendingManifest = null;
             state.hasFreshUpdate = false;
+            resetChartCaches();
             await loadDate(state.selectedDate || state.manifest.latestDate);
             await render();
           });
@@ -838,25 +1830,16 @@
         refreshButton?.addEventListener("click", async () => {
           await refreshIndexScanner();
         });
-
-        async function loadUpdateHealth() {
-          try {
-            const response = await fetch("./data/update_health.json", { cache: "no-store" });
-            if (!response.ok) {
-              return null;
-            }
-            const payload = await response.json();
-            return payload && typeof payload === "object" ? payload : null;
-          } catch (_error) {
-            return null;
-          }
-        }
       
         try {
           state.manifest = await loadManifest();
-          state.updateHealth = await loadUpdateHealth();
+          state.overviewDateIndex = await loadOverviewDateIndex();
           state.themeOrder = await loadThemeOrder();
           await loadDate(params.get("date") || state.manifest.latestDate);
+          if (isDailyOnlySort()) {
+            updateDailyOnlySortUi();
+            syncCurrentIndexScannerUrl();
+          }
           await render();
           startManifestPolling();
         } catch (error) {
@@ -864,8 +1847,10 @@
         }
       
         async function loadDate(requestedDate) {
-          state.selectedDate = resolveAvailableDate(requestedDate, state.manifest.availableDates);
+          state.selectedDate = resolveOverviewDateForTimeframe(requestedDate, state.timeframe);
           state.overview = await loadOverview(state.selectedDate, state.timeframe);
+          state.updateHealth = await loadUpdateHealth();
+          state.ohlcvQualitySummary = await loadOhlcvQualitySummary();
           state.calendarMonth = startOfMonth(parseDate(state.selectedDate));
           renderTagOptions();
           renderDateControls();
@@ -873,7 +1858,7 @@
         }
       
         function renderTagOptions() {
-          const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
+          const turnoverRecords = filterByEffectiveTurnover(state.overview.records || []);
           const industries = [...new Set(
             turnoverRecords
               .map((record) => String(record.industry || "").trim())
@@ -884,7 +1869,7 @@
                   !MARKET_TAGS.has(industry.toLowerCase())
               )
           )].sort();
-          tagSelect.innerHTML = ['<option value="">All</option>']
+          tagSelect.innerHTML = ['<option value="">すべて</option>']
             .concat(industries.map((industry) => `<option value="${escapeHtml(industry)}">${escapeHtml(industry)}</option>`))
             .join("");
           if (stickyTagSelect) {
@@ -900,7 +1885,7 @@
         }
       
         function renderThemeOptions() {
-          const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
+          const turnoverRecords = filterByEffectiveTurnover(state.overview.records || []);
           const availableThemes = new Set();
           turnoverRecords.forEach((record) => {
             (record.themes || []).forEach((theme) => {
@@ -916,7 +1901,7 @@
           );
           const themeOptions = ["", ...orderedThemes, ...extraThemes];
           themeSelect.innerHTML = themeOptions
-            .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "All")}</option>`)
+            .map((theme) => `<option value="${escapeHtml(theme)}">${escapeHtml(theme || "すべて")}</option>`)
             .join("");
           if (stickyThemeSelect) {
             stickyThemeSelect.innerHTML = themeSelect.innerHTML;
@@ -935,9 +1920,16 @@
             return;
           }
           const pickCount = Object.keys(state.picks || {}).length;
-          pickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+          pickedLink.textContent = pickCount > 0 ? `List ${pickCount}` : "List";
           if (stickyPickedLink) {
-            stickyPickedLink.textContent = pickCount > 0 ? `Picks ${pickCount}` : "Picks";
+            stickyPickedLink.textContent = pickCount > 0 ? `List ${pickCount}` : "List";
+          }
+          const hasPicks = pickCount > 0;
+          [exportTradingViewButton, exportHyperButton, saveListButton, resetPicksButton].filter(Boolean).forEach((button) => {
+            button.disabled = !hasPicks;
+          });
+          if (exitListButton) {
+            exitListButton.disabled = !isListMode();
           }
         }
 
@@ -946,6 +1938,14 @@
             return;
           }
           card.classList.toggle("scanner-item-picked", picked);
+          card.classList.remove("scanner-item-pick-flash");
+          if (picked) {
+            void card.offsetWidth;
+            card.classList.add("scanner-item-pick-flash");
+            window.setTimeout(() => {
+              card.classList.remove("scanner-item-pick-flash");
+            }, 520);
+          }
         }
 
         function setPickControlState(checkbox, picked) {
@@ -965,13 +1965,90 @@
             label.textContent = picked ? "Pick済" : "Pick";
           }
         }
+
+        function renderSavedListSets() {
+          if (!listSetsBody) {
+            return;
+          }
+          const sets = loadRegisteredPicks();
+          if (!sets.length) {
+            listSetsBody.innerHTML = '<div class="empty-cell">保存されたListはありません。</div>';
+            return;
+          }
+          listSetsBody.innerHTML = sets
+            .map((entry) => {
+              const id = escapeHtml(String(entry?.id || ""));
+              return `
+                <div class="index-list-set-row">
+                  <div>
+                    <div class="picked-register-name">${escapeHtml(entry?.name || "Untitled")}</div>
+                    <div class="picked-register-meta">${escapeHtml(formatPickedDateTime(entry?.registeredAt))} / ${formatNumber(Number(entry?.count || 0), 0)}件</div>
+                  </div>
+                  <div class="picked-register-item-actions">
+                    <button type="button" class="row-button" data-open-index-list-set="${id}">開く</button>
+                    <button type="button" class="row-button picked-remove-button" data-delete-index-list-set="${id}">削除</button>
+                  </div>
+                </div>
+              `;
+            })
+            .join("");
+          listSetsBody.querySelectorAll("[data-open-index-list-set]").forEach((button) => {
+            button.addEventListener("click", async () => {
+              const entry = getRegisteredSetById(button.getAttribute("data-open-index-list-set"));
+              if (!entry) {
+                renderSavedListSets();
+                return;
+              }
+              setActiveListFromPicks(entry.items || [], entry.name || "保存List");
+              closeListSetsModal();
+              await render();
+            });
+          });
+          listSetsBody.querySelectorAll("[data-delete-index-list-set]").forEach((button) => {
+            button.addEventListener("click", () => {
+              removeRegisteredSetById(button.getAttribute("data-delete-index-list-set"));
+              renderSavedListSets();
+            });
+          });
+        }
       
         function updateHeaderStatus() {
           if (!updatedStatus) {
             return;
           }
           const currentSnapshot = state.manifest?.currentSnapshot || {};
-          const health = state.updateHealth && typeof state.updateHealth === "object" ? state.updateHealth : null;
+          const rawHealthPayload = state.updateHealth && typeof state.updateHealth === "object" ? state.updateHealth : null;
+          const healthCheckedAt = String(rawHealthPayload?.checkedAt || "").trim();
+          const healthCheckedAtMs = healthCheckedAt ? Date.parse(healthCheckedAt) : NaN;
+          const manifestGeneratedAtMs = Date.parse(String(state.manifest?.generatedAt || ""));
+          const healthAgeMs = Number.isFinite(healthCheckedAtMs) ? Math.max(0, Date.now() - healthCheckedAtMs) : Number.POSITIVE_INFINITY;
+          const isHealthOutdated =
+            !Number.isFinite(healthCheckedAtMs) ||
+            healthAgeMs > 6 * 60 * 60 * 1000 ||
+            (Number.isFinite(manifestGeneratedAtMs) && healthCheckedAtMs + 60_000 < manifestGeneratedAtMs);
+          const healthPayload = isHealthOutdated ? null : rawHealthPayload;
+          const healthManifest = healthPayload?.manifest || {};
+          const reasonCodes = Array.isArray(healthPayload?.reasonCodes) ? healthPayload.reasonCodes : [];
+          const launchAgentRegistered = healthPayload?.launchAgentRegistered === false
+            ? false
+            : Boolean(healthPayload?.launchAgent?.registered ?? true);
+          const healthLatestDate = String(healthManifest.latestDate || state.manifest?.latestDate || "").trim();
+          const healthGeneratedAt = String(
+            healthManifest.generatedAt || state.manifest?.generatedAt || currentSnapshot?.generatedAt || ""
+          ).trim();
+          const hasDelay = reasonCodes.some((code) =>
+            ["STALE_MANIFEST", "STALE_UPDATE_STATE", "LOG_NOT_UPDATED", "RECOVERY_FAILED"].includes(String(code || ""))
+          );
+          const healthAlerts = [];
+          if (hasDelay) {
+            healthAlerts.push("更新遅延");
+          }
+          if (!launchAgentRegistered) {
+            healthAlerts.push("自動更新未登録");
+          }
+          const healthUpdatedAt = healthCheckedAt || healthGeneratedAt;
+          const healthUpdatedAtParts = formatSnapshotGeneratedAtParts(healthUpdatedAt);
+          const healthUpdatedAtLabel = healthUpdatedAtParts.hm || healthUpdatedAtParts.full || healthUpdatedAt || "--";
           const statusState = resolveHeaderStatusState(currentSnapshot?.generatedAt, {
             snapshot: currentSnapshot,
             hasFreshUpdate: state.hasFreshUpdate,
@@ -979,65 +2056,62 @@
             flash: state.headerStatusFlashActive,
             isJapaneseHoliday,
           });
-          const timeParts = formatSnapshotGeneratedAtParts(currentSnapshot?.generatedAt);
-          const checkedAtMs = Date.parse(String(health?.checkedAt || ""));
-          const manifestGeneratedAtMs = Date.parse(String(state.manifest?.generatedAt || ""));
-          const healthStale =
-            !Number.isFinite(checkedAtMs) ||
-            (Number.isFinite(checkedAtMs) && Date.now() - checkedAtMs > 6 * 60 * 60 * 1000) ||
-            (Number.isFinite(checkedAtMs) &&
-              Number.isFinite(manifestGeneratedAtMs) &&
-              checkedAtMs + 60 * 1000 < manifestGeneratedAtMs);
-          const reasonCodes = Array.isArray(health?.reasonCodes) ? health.reasonCodes.map((item) => String(item || "")) : [];
-          const launchRegistered = health?.launchAgent?.registered === true;
-          const hasDelayedReason = ["STALE_MANIFEST", "STALE_UPDATE_STATE", "LOG_NOT_UPDATED", "RECOVERY_FAILED"].some((code) =>
-            reasonCodes.includes(code)
-          );
-          const healthLabel = !launchRegistered ? "自動更新未登録" : hasDelayedReason ? "更新遅延" : "自動更新: 正常";
-          const healthLatestDate = String(health?.manifest?.latestDate || state.manifest?.latestDate || "").trim();
-          const healthGenerated = formatSnapshotGeneratedAtParts(health?.manifest?.generatedAt || state.manifest?.generatedAt);
-          const useHealth = Boolean(health && !healthStale);
-          const labelText = useHealth ? healthLabel : statusState.label;
-          const dateText = useHealth ? `最新:${healthLatestDate || "--"}` : timeParts.date || "--/--";
-          const hmText = useHealth ? `生成:${healthGenerated.hm || "--:--"}` : timeParts.hm || "--:--";
-          const secondsText = useHealth ? "" : timeParts.seconds || "";
+          const headerLatestDate = String(healthLatestDate || currentSnapshot?.date || state.manifest?.latestDate || "").trim();
+          const headerLatestDateLabel = headerLatestDate ? headerLatestDate.replace(/-/g, ".") : "--";
+          const healthStatus = String(rawHealthPayload?.status || "").trim().toLowerCase();
+          const isUpdateFailed = healthStatus === "failed" || reasonCodes.some((code) => String(code || "").includes("FAILED"));
+          const isUpdating = Boolean(statusState.pending || statusState.refreshing || hasDelay);
+          const headerStateClass = isUpdateFailed
+            ? "failed"
+            : isUpdating
+              ? "updating"
+              : "latest";
+          const headerLabel = isUpdateFailed ? "更新失敗" : isUpdating ? (statusState.refreshing ? "更新中" : "更新待ち") : "最新";
+          const autoUpdateLabel = launchAgentRegistered && !isUpdateFailed && !isUpdating ? "自動更新 OK" : launchAgentRegistered ? "自動更新 要確認" : "自動更新 未登録";
           updatedStatus.className = [
             "index-header-status",
             `index-header-status--${statusState.tone}`,
+            `index-header-status--${headerStateClass}`,
             statusState.pending ? "index-header-status--pending" : "",
             statusState.refreshing ? "index-header-status--refreshing" : "",
             statusState.flash ? "index-header-status--flash" : "",
           ]
             .filter(Boolean)
             .join(" ");
-          updatedStatus.setAttribute(
-            "title",
-            [
-              labelText,
-              statusState.marketPhase,
-              useHealth ? `${healthLatestDate || "--"} / ${healthGenerated.full || "--"}` : timeParts.full || "--",
-              statusState.pending ? "new data ready" : "",
-              statusState.refreshing ? "refreshing" : "",
-            ]
-              .filter(Boolean)
-              .join(" / ")
-          );
+          const headerTooltip = [
+            `最新データ日 ${headerLatestDateLabel}`,
+            `最終更新 ${healthUpdatedAtLabel}`,
+            `${autoUpdateLabel}${healthAlerts.length ? ` / ${healthAlerts.join(",")}` : ""}`,
+            statusState.pending ? "new data ready" : "",
+            statusState.refreshing ? "refreshing" : "",
+          ]
+            .filter(Boolean)
+            .join(" / ");
+          updatedStatus.removeAttribute("title");
+          updatedStatus.setAttribute("data-status-tooltip", headerTooltip);
           updatedStatus.innerHTML = `
             <span class="index-header-status-dot" aria-hidden="true"></span>
             <span class="index-header-status-body">
               <span class="index-header-status-topline">
-                <span class="index-header-status-label">${escapeHtml(labelText)}</span>
-                <span class="index-header-status-market">${escapeHtml(statusState.marketPhase)}</span>
-              </span>
-              <span class="index-header-status-bottomline">
-                <span class="index-header-status-date">${escapeHtml(dateText)}</span>
-                <span class="index-header-status-time">
-                  <span class="index-header-status-hm">${escapeHtml(hmText)}</span>
-                  <span class="index-header-status-seconds">${escapeHtml(secondsText)}</span>
-                </span>
+                <span class="index-header-status-market">${escapeHtml(headerLabel)}</span>
               </span>
             </span>
           `;
+          if (mobileUpdatedStatus) {
+            mobileUpdatedStatus.hidden = false;
+            mobileUpdatedStatus.className = [
+              "index-mobile-header-status",
+              `index-mobile-header-status--${headerStateClass}`,
+              statusState.refreshing ? "index-mobile-header-status--refreshing" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            mobileUpdatedStatus.title = headerTooltip;
+            mobileUpdatedStatus.innerHTML = `
+              <span class="index-mobile-header-status-dot" aria-hidden="true"></span>
+              <span>${escapeHtml(headerLabel)}</span>
+            `;
+          }
         }
 
         function closeStrategyPopover(card) {
@@ -1068,6 +2142,13 @@
           }
         }
 
+        function resetChartCaches() {
+          state.chartRenderedCodes = new Set();
+          state.chartPayloadCache.clear();
+          state.chartRequestCache.clear();
+          state.chartBaselineShape = null;
+        }
+
         function renderChartLoadingState(code, title = "Chart standby", message = "表示領域に入ると読み込みます") {
           const element = document.getElementById(`scanChart-${code}`);
           if (!element) {
@@ -1076,13 +2157,215 @@
           element.innerHTML = `<div class="chart-inline-error chart-placeholder">${escapeHtml(title)}<br /><span>${escapeHtml(message)}</span></div>`;
         }
 
-        function getChartCacheKey(record) {
-          return `${state.timeframe}:${state.selectedDate}:${record.code}`;
+        function summarizeOverviewDataQuality(overview) {
+          const summary = overview?.dataQualitySummary;
+          if (summary && typeof summary === "object") {
+            return {
+              matchedCount: Number(summary.matchedCount || 0),
+              staleCount: Number(summary.staleCount || 0),
+              emptyCount: Number(summary.emptyCount || 0),
+            };
+          }
+          const records = Array.isArray(overview?.records) ? overview.records : [];
+          let matchedCount = 0;
+          let staleCount = 0;
+          let emptyCount = 0;
+          records.forEach((record) => {
+            const quality = summarizeScannerRecordQuality(record, state.selectedDate);
+            if (quality.reasonCodes.includes("NO_OHLCV")) {
+              emptyCount += 1;
+            } else if (quality.isStale) {
+              staleCount += 1;
+            } else {
+              matchedCount += 1;
+            }
+          });
+          return { matchedCount, staleCount, emptyCount };
         }
 
-        async function ensureScannerCardChart(record) {
-          const cacheKey = getChartCacheKey(record);
-          if (state.chartRenderedCodes.has(cacheKey)) {
+        function renderDataQualitySummary() {
+          if (!dataQualitySummaryBox) {
+            return;
+          }
+          if (isListMode()) {
+            dataQualitySummaryBox.hidden = false;
+            dataQualitySummaryBox.innerHTML = `
+              <span class="index-data-quality-chip">List表示 <strong>${escapeHtml(state.activeListName || "List")}</strong></span>
+              <span class="index-data-quality-chip">値上がり率順</span>
+              <span class="index-data-quality-chip">対象 <strong>${formatNumber(state.activeListCodes.length, 0)}</strong></span>
+              ${state.activeListMissing.length ? `<span class="index-data-quality-chip">未検出 <strong>${formatNumber(state.activeListMissing.length, 0)}</strong></span>` : ""}
+            `;
+            return;
+          }
+          if (isCustomCodeMode()) {
+            dataQualitySummaryBox.hidden = false;
+            dataQualitySummaryBox.innerHTML = `
+              <span class="index-data-quality-chip">コード指定中 <strong>${formatNumber(state.customCodes.length, 0)}</strong></span>
+              <span class="index-data-quality-chip">フィルター無効</span>
+              ${state.customCodeMissing.length ? `<span class="index-data-quality-chip">未検出 <strong>${formatNumber(state.customCodeMissing.length, 0)}</strong></span>` : ""}
+            `;
+            return;
+          }
+          const summary = summarizeOverviewDataQuality(state.overview);
+          const ohlcvQualityHtml = renderOhlcvQualitySummaryChip(state.ohlcvQualitySummary);
+          dataQualitySummaryBox.hidden = false;
+          dataQualitySummaryBox.innerHTML = `
+            <span class="index-data-quality-chip">最新一致 <strong>${formatNumber(summary.matchedCount, 0)}</strong></span>
+            <span class="index-data-quality-chip">遅延 <strong>${formatNumber(summary.staleCount, 0)}</strong></span>
+            <span class="index-data-quality-chip">空データ <strong>${formatNumber(summary.emptyCount, 0)}</strong></span>
+            ${ohlcvQualityHtml}
+          `;
+        }
+
+        function formatQualitySummaryGeneratedAt(value) {
+          const text = String(value || "").trim();
+          if (!text) {
+            return "";
+          }
+          const date = new Date(text);
+          if (Number.isNaN(date.getTime())) {
+            return text;
+          }
+          const pad = (number) => String(number).padStart(2, "0");
+          return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+
+        function qualityIssueLabel(item) {
+          const code = String(item?.code || "").trim();
+          const source = String(item?.source || "").trim();
+          const kind = String(item?.kind || "").trim();
+          const date = String(item?.date || "").trim();
+          return [code, source, kind, date].filter(Boolean).join(" ");
+        }
+
+        function renderOhlcvQualitySummaryChip(summary) {
+          if (!summary || typeof summary !== "object") {
+            return "";
+          }
+          const actionableCount = Number(summary.actionableCount || 0);
+          const criticalCount = Number(summary.criticalCount || 0);
+          const generatedAt = formatQualitySummaryGeneratedAt(summary.generatedAt);
+          const samples = Array.isArray(summary.samples) ? summary.samples : [];
+          const toneClass = actionableCount > 0 || criticalCount > 0 ? " index-data-quality-chip--warn" : " index-data-quality-chip--ok";
+          if (actionableCount <= 0 && criticalCount <= 0) {
+            const title = generatedAt ? `OHLCV重大異常 0件 / 品質チェック ${generatedAt}` : "OHLCV重大異常 0件";
+            return `<span class="index-data-quality-chip index-data-quality-chip--quiet${toneClass}" title="${escapeHtml(title)}">OHLCV <strong>0</strong></span>`;
+          }
+          const byKind = summary.byKind && typeof summary.byKind === "object" ? summary.byKind : {};
+          const kindSummary = Object.entries(byKind)
+            .map(([kind, count]) => `${kind}: ${formatNumber(count, 0)}`)
+            .join(" / ");
+          const title = [
+            `OHLCV品質チェック 要確認 ${formatNumber(actionableCount || criticalCount, 0)}件`,
+            generatedAt ? `生成 ${generatedAt}` : "",
+            kindSummary,
+          ].filter(Boolean).join(" / ");
+          const sampleItems = samples.slice(0, 12).map((item) => {
+            const label = qualityIssueLabel(item);
+            const message = String(item?.message || "").trim();
+            return `<li><span>${escapeHtml(label || "-")}</span>${message ? `<small>${escapeHtml(message)}</small>` : ""}</li>`;
+          }).join("");
+          return `
+            <details class="index-data-quality-details">
+              <summary class="index-data-quality-chip${toneClass}" title="${escapeHtml(title)}">OHLCV要確認 <strong>${formatNumber(actionableCount || criticalCount, 0)}</strong></summary>
+              <div class="index-data-quality-popover">
+                <div class="index-data-quality-popover-title">OHLCV品質チェック${generatedAt ? ` ${escapeHtml(generatedAt)}` : ""}</div>
+                <div class="index-data-quality-popover-meta">更新は停止していません。価格データは自動修復せず、確認対象だけ表示しています。</div>
+                <ul>${sampleItems || "<li><span>詳細なし</span></li>"}</ul>
+              </div>
+            </details>
+          `;
+        }
+
+        function normalizeCardChartTimeframe(value) {
+          const timeframe = String(value || "").trim();
+          return INDEX_SCANNER_TIMEFRAMES.includes(timeframe) ? timeframe : state.timeframe;
+        }
+
+        function getCardChartTimeframe(code) {
+          return normalizeCardChartTimeframe(state.cardChartTimeframes.get(String(code)) || state.timeframe);
+        }
+
+        function getCardChartRangeMonths(timeframe) {
+          return CARD_CHART_RANGE_MONTHS[normalizeCardChartTimeframe(timeframe)] || CARD_CHART_RANGE_MONTHS.daily;
+        }
+
+        function getChartCacheKey(record, timeframe = getCardChartTimeframe(record.code)) {
+          return `${isRecentDataMode() ? "recent" : "legacy"}:${timeframe}:${getCardChartRangeMonths(timeframe)}:${state.selectedDate}:${record.code}`;
+        }
+
+        function shouldUseFullChartRows(timeframe, rangeMonths) {
+          if (window.KabuAppUtils?.isPublicHostedSite?.()) {
+            return false;
+          }
+          return timeframe === "monthly" || (timeframe === "weekly" && Number(rangeMonths) > 12);
+        }
+
+        function updateCardChartTimeframeControls(code, timeframe) {
+          list?.querySelectorAll("[data-card-chart-code]").forEach((button) => {
+            if (button.getAttribute("data-card-chart-code") !== String(code)) {
+              return;
+            }
+            const isActive = button.getAttribute("data-card-chart-timeframe") === timeframe;
+            button.classList.toggle("is-active", isActive);
+            button.setAttribute("aria-pressed", isActive ? "true" : "false");
+          });
+        }
+
+        function parseOhlcvCsv(text) {
+          return String(text || "")
+            .trim()
+            .split(/\r?\n/)
+            .slice(1)
+            .map((line) => {
+              const [date, open, high, low, close, volume] = line.split(",");
+              return {
+                date,
+                open: Number(open),
+                high: Number(high),
+                low: Number(low),
+                close: Number(close),
+                volume: Number(volume),
+              };
+            })
+            .filter((row) => row.date && Number.isFinite(row.close));
+        }
+
+        async function loadFullChartRows(code) {
+          const cacheKey = String(code);
+          const cached = state.fullChartPayloadCache.get(cacheKey);
+          if (cached) {
+            return cached;
+          }
+          if (!state.fullChartRequestCache.has(cacheKey)) {
+            state.fullChartRequestCache.set(
+              cacheKey,
+              fetch(`./data/ohlcv/${code}.csv`, { cache: "no-store" })
+                .then(async (response) => {
+                  if (!response.ok) {
+                    throw new Error(`CSV 読み込み失敗: ${code} (${response.status})`);
+                  }
+                  const rows = parseOhlcvCsv(await response.text());
+                  if (!rows.length) {
+                    throw new Error(`CSVに価格データがありません: ${code}`);
+                  }
+                  state.fullChartPayloadCache.set(cacheKey, rows);
+                  return rows;
+                })
+                .finally(() => {
+                  state.fullChartRequestCache.delete(cacheKey);
+                })
+            );
+          }
+          return state.fullChartRequestCache.get(cacheKey);
+        }
+
+        async function ensureScannerCardChart(record, options = {}) {
+          const chartTimeframe = getCardChartTimeframe(record.code);
+          const chartRangeMonths = getCardChartRangeMonths(chartTimeframe);
+          const cacheKey = getChartCacheKey(record, chartTimeframe);
+          updateCardChartTimeframeControls(record.code, chartTimeframe);
+          if (!options.force && state.chartRenderedCodes.has(cacheKey)) {
             return;
           }
           const chartElementId = `scanChart-${record.code}`;
@@ -1097,7 +2380,7 @@
             if (!state.chartRequestCache.has(cacheKey)) {
               state.chartRequestCache.set(
                 cacheKey,
-                loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate })
+                loadTickerForChartWithFallback(record.code, { selectedDate: state.selectedDate })
                   .then((value) => {
                     state.chartPayloadCache.set(cacheKey, value);
                     return value;
@@ -1111,12 +2394,14 @@
               inspected = await state.chartRequestCache.get(cacheKey);
             } catch (error) {
               renderChartFailure(chartElementId, "データ取得失敗");
-              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${error?.message || error}`);
+              showError(errorBox, `一部のチャート読込に失敗: ${record.code} / FETCH_FAIL / ${error?.message || error}`);
               return;
             }
           }
 
-          const { payload, validation, shape, requestUrl, status, responseBody } = inspected;
+          const { payload, chartPayload, validation, shape, requestUrl, status, responseBody } = inspected;
+          const reasonCodes = Array.isArray(validation.reasonCodes) ? validation.reasonCodes : [];
+          const isNoOhlcv = reasonCodes.includes("NO_OHLCV");
           if (validation.issues.length) {
             console.debug("[ticker-chart:validation]", {
               code: record.code,
@@ -1126,10 +2411,19 @@
               parsedCandleCount: validation.parsedCandleCount,
               issues: validation.issues,
               warnings: validation.warnings,
+              reasonCodes,
               shapeDiff: diffShapeAgainstBaseline(state.chartBaselineShape, shape),
             });
             renderChartFailure(chartElementId, "データ取得失敗");
-            showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${validation.issues.join(", ")}`);
+            showError(errorBox, `一部のチャート読込に失敗: ${record.code} / PARSE_FAIL / ${validation.issues.join(", ")}`);
+            return;
+          }
+
+          if (isNoOhlcv) {
+            console.debug("[ticker-chart:no-ohlcv]", { code: record.code, requestUrl, reasonCode: "NO_OHLCV" });
+            renderChartStatus(chartElementId, "データなし", "NO_OHLCV", "chart-placeholder");
+            linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
+            state.chartRenderedCodes.add(cacheKey);
             return;
           }
 
@@ -1137,9 +2431,20 @@
             state.chartBaselineShape = shape;
           }
 
-          renderScannerCompactChart(chartElementId, record.code, payload.ohlcv, state.selectedDate, state.rangeMonths, {
-            timeframe: state.timeframe,
+          let chartRows = (chartPayload || payload).ohlcv;
+          if (shouldUseFullChartRows(chartTimeframe, chartRangeMonths)) {
+            try {
+              chartRows = await loadFullChartRows(record.code);
+            } catch (error) {
+              console.warn("[scanner-chart:full-range:fallback]", { code: record.code, reason: error?.message || String(error) });
+            }
+          }
+
+          renderScannerCompactChart(chartElementId, record.code, chartRows, state.selectedDate, chartRangeMonths, {
+            timeframe: chartTimeframe,
             useBarCount: false,
+            extendToLatest: true,
+            events: record.events || record.chartEvents || record.newsEvents || record.disclosureEvents || [],
           });
           linksElement.innerHTML = renderScannerItemLinks(payload, record, state);
           state.chartRenderedCodes.add(cacheKey);
@@ -1226,6 +2531,25 @@
             });
           });
         }
+
+        function bindCardChartTimeframeEvents(records) {
+          list?.querySelectorAll("[data-card-chart-timeframe]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const code = String(button.getAttribute("data-card-chart-code") || "");
+              const timeframe = normalizeCardChartTimeframe(button.getAttribute("data-card-chart-timeframe"));
+              const record = records.find((item) => String(item.code) === code);
+              if (!code || !record) {
+                return;
+              }
+              state.cardChartTimeframes.set(code, timeframe);
+              updateCardChartTimeframeControls(code, timeframe);
+              renderChartLoadingState(code, "Chart loading", "表示足を切り替えています");
+              void ensureScannerCardChart(record, { force: true });
+            });
+          });
+        }
       
         function triggerHeaderStatusFlash() {
           if (state.headerStatusFlashTimer) {
@@ -1243,7 +2567,6 @@
         async function checkForManifestUpdate() {
           try {
             const latestManifest = await loadManifest();
-            state.updateHealth = await loadUpdateHealth();
             if (isManifestNewer(latestManifest, state.manifest)) {
               state.pendingManifest = latestManifest;
               state.hasFreshUpdate = false;
@@ -1279,76 +2602,122 @@
       
         async function render() {
           errorBox.hidden = true;
+          const forcedDailyOnlyTimeframe = enforceDailyOnlySortTimeframe();
+          if (forcedDailyOnlyTimeframe && state.selectedDate) {
+            await loadDate(state.selectedDate);
+          }
+          if (isDailyOnlySort()) {
+            updateDailyOnlySortUi();
+            syncCurrentIndexScannerUrl();
+          }
           disconnectChartObserver();
           list.innerHTML = '<div class="empty-cell">読み込み中...</div>';
+          updateIndexResultCount({ loading: true });
           state.picks = loadScannerPicks();
           state.chartRenderedCodes = new Set();
           state.chartBaselineShape = null;
           updateIndexHeaderActions();
           renderTagOptions();
           renderThemeOptions();
-          const turnoverRecords = filterByTurnover(state.overview.records || [], state.turnover);
-          const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
-          const baseFiltered = priceFilteredRecords.filter(
-            (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
-          );
-          let scannerBase = state.selectedStrategies.length
-            ? baseFiltered.filter((record) => state.selectedStrategies.every((strategyId) => (record.strategyMatches || []).includes(strategyId)))
-            : baseFiltered;
-          if (state.sort === "lower_shadow") {
-            scannerBase = scannerBase.filter(isLowerShadowCandidate);
-          } else if (state.sort === "stop_high") {
-            scannerBase = scannerBase.filter((record) => getStopHighStatus(record) !== "none");
-          } else if (state.sort === "new_high_20d") {
-            scannerBase = scannerBase.filter((record) => record.newHigh20d === true);
-          } else if (isDeviationSort(state.sort)) {
-            const deviationFilter = getActiveDeviationFilter(state);
-            scannerBase = scannerBase.filter((record) => {
-              const deviationValue = getDeviationValueBySort(record, state.sort);
-              return deviationValue != null && matchesDeviationFilter(deviationValue, deviationFilter.mode, deviationFilter.min, deviationFilter.max);
-            });
-          } else if (state.sort === "trend_turn") {
-            scannerBase = scannerBase.filter((record) => record.trendTurnCandidate === true);
-          } else if (state.sort === "rebound_signal") {
-            scannerBase = scannerBase.filter((record) => String(record.signalCategory || "") !== "none");
-          } else if (state.sort === "strategy_minervini") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("minervini_trend_template"));
-          } else if (state.sort === "strategy_stage2") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("stan_weinstein_stage2"));
-          } else if (state.sort === "strategy_turtle") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("turtle_donchian_breakout"));
-          } else if (state.sort === "strategy_canslim") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("can_slim"));
-          } else if (state.sort === "strategy_rsi2") {
-            scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
+          let filtered = [];
+          let matchedCount = 0;
+          if (isListMode()) {
+            const recordsByCode = new Map((state.overview.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
+            state.activeListMissing = [];
+            const listRecords = state.activeListCodes
+              .map((code) => {
+                const record = recordsByCode.get(String(code).toUpperCase());
+                if (!record) {
+                  state.activeListMissing.push(code);
+                }
+                return record;
+              })
+              .filter(Boolean);
+            filtered = sortScannerRecords(listRecords, DEFAULT_INDEX_SORT);
+            matchedCount = filtered.length;
+          } else if (isCustomCodeMode()) {
+            const recordsByCode = new Map((state.overview.records || []).map((record) => [String(record.code || "").toUpperCase(), record]));
+            state.customCodeMissing = [];
+            filtered = state.customCodes
+              .map((code) => {
+                const record = recordsByCode.get(String(code).toUpperCase());
+                if (!record) {
+                  state.customCodeMissing.push(code);
+                }
+                return record;
+              })
+              .filter(Boolean);
+            matchedCount = filtered.length;
+          } else {
+            state.activeListMissing = [];
+            state.customCodeMissing = [];
+            const turnoverRecords = filterByEffectiveTurnover(state.overview.records || []);
+            const priceFilteredRecords = filterByMinimumClose(turnoverRecords, INDEX_SCANNER_MIN_CLOSE);
+            const baseFiltered = priceFilteredRecords.filter(
+              (record) => (!state.tag || record.industry === state.tag) && (!state.theme || (record.themes || []).includes(state.theme))
+            );
+            let scannerBase = state.selectedStrategies.length
+              ? baseFiltered.filter((record) => state.selectedStrategies.every((strategyId) => (record.strategyMatches || []).includes(strategyId)))
+              : baseFiltered;
+            if (state.sort === "lower_shadow") {
+              scannerBase = scannerBase.filter(isLowerShadowCandidate);
+            } else if (state.sort === "stop_high") {
+              scannerBase = scannerBase.filter((record) => getStopHighStatus(record) !== "none");
+            } else if (state.sort === "new_high_20d") {
+              scannerBase = scannerBase.filter((record) => record.newHigh20d === true);
+            } else if (state.sort === "bullish_close_breakout_20d") {
+              scannerBase = scannerBase.filter((record) => record.bullishCloseBreakout20d === true);
+            } else if (isDeviationSort(state.sort)) {
+              const deviationFilter = getActiveDeviationFilter(state);
+              scannerBase = scannerBase.filter((record) => {
+                const deviationValue = getDeviationValueBySort(record, state.sort);
+                return deviationValue != null && matchesDeviationFilter(deviationValue, deviationFilter.mode, deviationFilter.min, deviationFilter.max);
+              });
+            } else if (state.sort === "trend_turn") {
+              scannerBase = scannerBase.filter((record) => record.trendTurnCandidate === true);
+            } else if (state.sort === "rebound_signal") {
+              scannerBase = scannerBase.filter((record) => String(record.signalCategory || "") !== "none");
+            } else if (state.sort === "strategy_minervini") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("minervini_trend_template"));
+            } else if (state.sort === "strategy_stage2") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("stan_weinstein_stage2"));
+            } else if (state.sort === "strategy_turtle") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("turtle_donchian_breakout"));
+            } else if (state.sort === "strategy_canslim") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("can_slim"));
+            } else if (state.sort === "strategy_rsi2") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("rsi2_pullback"));
+            } else if (state.sort === "strategy_high_pullback_30") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("high_pullback_30"));
+            } else if (state.sort === "strategy_strong_trend_pullback_rebound") {
+              scannerBase = scannerBase.filter((record) => (record.strategyMatches || []).includes("strong_trend_pullback_rebound"));
+            }
+            matchedCount = scannerBase.length;
+            filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
           }
-          const filtered = sortScannerRecords(scannerBase, state.sort).slice(0, state.limit);
           state.visibleRecords = filtered;
-          syncIndexScannerUrl(
-            state.selectedDate,
-            state.sort,
-            state.tag,
-            state.theme,
-            state.turnover,
-            state.limit,
-            state.rangeMonths,
-            state.timeframe,
-            state.deviationFilters,
-            state.selectedStrategies
-          );
+          updateIndexResultCount({ matchedCount, displayedCount: filtered.length });
+          syncCurrentIndexScannerUrl();
           if (stickySortSelect) {
-            stickySortSelect.value = state.sort;
+            stickySortSelect.value = strategyControlValue();
+          }
+          if (sortSelect) {
+            sortSelect.value = strategyControlValue();
+          }
+          if (rankingSelect) {
+            rankingSelect.value = rankingControlValue();
           }
           if (stickyLimitSelect) {
-            stickyLimitSelect.value = String(state.limit);
+            stickyLimitSelect.value = limitControlValue();
           }
           if (stickyTurnoverSelect) {
-            stickyTurnoverSelect.value = String(state.turnover);
+            stickyTurnoverSelect.value = String(effectiveTurnoverFilter());
           }
-          updateStickyTimeframeUI();
-          updateRangeChip();
+          syncHeaderDropdownsUi();
+          updateDailyOnlySortUi();
           updateStickyFiltersUi();
           updateHeaderStatus();
+          renderDataQualitySummary();
       
           if (!filtered.length) {
             if (selectAllPicksButton) {
@@ -1357,7 +2726,15 @@
             if (stickySelectAllPicksButton) {
               stickySelectAllPicksButton.disabled = true;
             }
-            list.innerHTML = '<div class="empty-cell">該当する銘柄がありません。</div>';
+            list.innerHTML = isCustomCodeMode()
+              ? state.customCodes.length
+                ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div><div class="empty-cell">表示できる指定コードがありません。</div>`
+                : '<div class="empty-cell">指定コードを入力して「適用」を押してください。</div>'
+              : isListMode()
+                ? state.activeListCodes.length
+                  ? `${state.activeListMissing.length ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.activeListMissing.join(", "))}</div>` : ""}<div class="empty-cell">表示できるList銘柄がありません。</div>`
+                  : '<div class="empty-cell">Listが空です。</div>'
+              : '<div class="empty-cell">該当する銘柄がありません。</div>';
             return;
           }
           if (selectAllPicksButton) {
@@ -1367,24 +2744,56 @@
             stickySelectAllPicksButton.disabled = false;
           }
       
-          list.innerHTML = filtered
+          const missingNotice = isListMode() && state.activeListMissing.length
+            ? `<div class="index-custom-code-notice">List内で見つからないコード: ${escapeHtml(state.activeListMissing.join(", "))}</div>`
+            : isCustomCodeMode() && state.customCodeMissing.length
+              ? `<div class="index-custom-code-notice">見つからないコード: ${escapeHtml(state.customCodeMissing.join(", "))}</div>`
+              : "";
+          list.innerHTML = missingNotice + filtered
             .map((record, index) => renderScannerItem(record, index, state))
             .join("");
       
           filtered.forEach((record) => {
             const checkbox = list.querySelector(`input[data-pick-code="${record.code}"]`);
             const card = list.querySelector(`[data-scanner-card-code="${record.code}"]`);
+            const chartWrap = list.querySelector(`[data-pick-chart-code="${record.code}"]`);
             if (!checkbox) {
               return;
             }
-            checkbox.addEventListener("change", () => {
+            checkbox.addEventListener("change", async () => {
               toggleScannerPick(record, checkbox.checked, state);
               setPickControlState(checkbox, checkbox.checked);
               setCardPickedState(card, checkbox.checked);
+              if (isListMode() && !checkbox.checked) {
+                state.activeListCodes = state.activeListCodes.filter((code) => String(code) !== String(record.code));
+                if (!state.activeListCodes.length) {
+                  exitListMode();
+                }
+                await render();
+                return;
+              }
+              updateIndexHeaderActions();
+            });
+            chartWrap?.addEventListener("dblclick", async (event) => {
+              event.preventDefault();
+              const nextChecked = !Boolean(state.picks?.[record.code]);
+              checkbox.checked = nextChecked;
+              toggleScannerPick(record, nextChecked, state);
+              setPickControlState(checkbox, nextChecked);
+              setCardPickedState(card, nextChecked);
+              if (isListMode() && !nextChecked) {
+                state.activeListCodes = state.activeListCodes.filter((code) => String(code) !== String(record.code));
+                if (!state.activeListCodes.length) {
+                  exitListMode();
+                }
+                await render();
+                return;
+              }
               updateIndexHeaderActions();
             });
           });
           bindStrategyPopoverEvents();
+          bindCardChartTimeframeEvents(filtered);
           observeScannerCharts(filtered);
         }
 
@@ -1443,13 +2852,14 @@
         }
       
         function renderCalendar() {
-          const minMonth = startOfMonth(parseDate(state.manifest.availableDates[0]));
-          const maxMonth = startOfMonth(parseDate(state.manifest.availableDates.at(-1)));
+          const availableDates = getOverviewDatesForTimeframe(state.timeframe);
+          const minMonth = startOfMonth(parseDate(availableDates[0] || state.selectedDate));
+          const maxMonth = startOfMonth(parseDate(availableDates.at(-1) || state.selectedDate));
           renderMiniCalendar(
             stickyMiniCalendar || miniCalendar,
             state.calendarMonth || startOfMonth(parseDate(state.selectedDate)),
             state.selectedDate,
-            state.manifest.availableDates,
+            availableDates,
             async (nextDate) => {
               state.stickyDateOpen = false;
               updateStickyDateUi();
@@ -1470,6 +2880,17 @@
             }
           );
         }
+
+        window.addEventListener("pageshow", () => {
+          if (!isDailyOnlySort()) {
+            return;
+          }
+          enforceDailyOnlySortTimeframe();
+          updateDailyOnlySortUi();
+          renderDateControls();
+          renderCalendar();
+          syncCurrentIndexScannerUrl();
+        });
       }
       
   }

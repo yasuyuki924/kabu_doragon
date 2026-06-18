@@ -1,6 +1,9 @@
 (function () {
   const {
     MANIFEST_PATH,
+    UPDATE_HEALTH_PATH,
+    OHLCV_QUALITY_SUMMARY_PATH,
+    OVERVIEW_LITE_INDEX_PATH,
     THEME_MAP_PATH,
     WATCHLIST_PATH,
     WATCHLIST_STORAGE_KEY,
@@ -16,10 +19,14 @@
     TYPE_FILTERS,
     INDEX_SCANNER_LIMITS,
     INDEX_SCANNER_MONTHS,
+    INDEX_SCANNER_SORT_OPTIONS,
+    INDEX_SCANNER_RANKING_OPTIONS,
+    INDEX_SCANNER_RANKING_SORTS,
     INDEX_SCANNER_TIMEFRAMES,
     INDEX_SCANNER_TIMEFRAME_RANGES,
     INDEX_SCANNER_TURNOVER_OPTIONS,
     INDEX_SCANNER_MIN_CLOSE,
+    STALE_TOLERANCE_BUSINESS_DAYS,
     STOP_HIGH_EPSILON,
     JPX_PRICE_LIMIT_TABLE,
     TICKER_NAME_EXACT_ALIASES,
@@ -30,6 +37,7 @@
   const {
     addCalendarMonths,
     addMonths,
+    buildDesktopPortFallbackUrl,
     escapeHtml,
     fetchJson,
     formatDateKey,
@@ -40,14 +48,21 @@
     formatSignedPercent,
     parseDate,
     roundNumber,
+    shouldUseDesktopPortFallback,
     startOfMonth,
   } = window.KabuAppUtils;
   const {
     loadManifestData,
+    loadUpdateHealthData,
+    loadOhlcvQualitySummaryData,
+    loadOverviewDateIndexData,
     loadOverviewData,
     loadRankingData,
     loadThemeOrderData,
+    loadTickerDetailRecentData,
+    loadTickerMetaData,
     loadTickerPayloadData,
+    loadTickerSummaryData,
     loadYahooFinanceProfileData,
     readJsonStorage,
     writeJsonStorage,
@@ -60,9 +75,11 @@
       INDEX_SCANNER_LIMITS,
       INDEX_SCANNER_MIN_CLOSE,
       INDEX_SCANNER_MONTHS,
+      INDEX_SCANNER_SORT_OPTIONS,
       INDEX_SCANNER_TIMEFRAMES,
       INDEX_SCANNER_TIMEFRAME_RANGES,
       INDEX_SCANNER_TURNOVER_OPTIONS,
+      STALE_TOLERANCE_BUSINESS_DAYS,
       STRATEGY_CONFIG,
       MARKET_TAGS,
       TSE_MARKETS,
@@ -74,6 +91,7 @@
       buildFilterSnapshotFromState,
       buildHyperExportEntries,
       buildPickedRecordFromPayload,
+      buildPickedRecordFromSummary,
       buildRegisteredDisplayName,
       buildRegisteredItemFromPick,
       buildScannerPickPayload,
@@ -85,6 +103,7 @@
       findSelectedIndex,
       filterByMinimumClose,
       filterByTurnover,
+      formatDateKey,
       formatNumber,
       formatPercent,
       formatPickedDateTime,
@@ -95,6 +114,7 @@
       formatSignedPercentHtml,
       formatSnapshotBaseDate,
       formatSnapshotGeneratedAt,
+      roundNumber,
       getActiveDeviationDraft,
       getActiveDeviationFilter,
       getActiveDeviationSortKey,
@@ -109,14 +129,25 @@
       isDeviationSort,
       isLowerShadowCandidate,
       loadManifest,
+      loadOverviewDateIndex,
       loadOverview,
+      loadOhlcvQualitySummary,
+      loadUpdateHealth,
       loadRanking,
       loadRegisteredPicks,
       loadScannerPicks,
       loadThemeOrder,
       loadTickerNote,
+      loadTickerMeta,
+      loadTickerDetailRecent,
       loadTickerPayload,
+      loadTickerSummary,
       loadYahooFinanceProfile,
+      isLegacyDataMode,
+      isRecentDataMode,
+      getRecentTickerDataUrl,
+      loadRecentTickerForChart,
+      loadTickerForChartWithFallback,
       loadTickerPayloadWithDiagnostics,
       mapWithConcurrency,
       matchesDeviationFilter,
@@ -140,6 +171,7 @@
       renderRegisteredScannerItem,
       renderRegisteredSetRow,
       renderScannerCompactChart,
+      renderScannerExternalLinks,
       renderScannerItem,
       renderScannerItemLinks,
       renderStrategyBadges,
@@ -150,6 +182,7 @@
       renderTickerIdentity,
       resetScannerPicks,
       resolveAvailableDate,
+      resolveVisibleManifestGeneratedAt,
       resolvePickerDate,
       resolveRegisteredSelectedDate,
       runRefreshAction,
@@ -159,6 +192,7 @@
       selectAllScannerPicks,
       showError,
       sortScannerRecords,
+      summarizeScannerRecordQuality,
       sortedScannerPicks,
       startOfMonth,
       syncIndexScannerUrl,
@@ -705,7 +739,7 @@
           return {
             record,
             status: "fulfilled",
-            value: await loadTickerPayloadWithDiagnostics(record.code, { selectedDate: state.selectedDate }),
+            value: await loadTickerForChartWithFallback(record.code, { selectedDate: state.selectedDate }),
           };
         } catch (error) {
           return { record, status: "rejected", reason: error };
@@ -721,7 +755,7 @@
           showError(errorBox, `一部のチャート読込に失敗: ${record.code} / ${result.reason?.message}`);
           return;
         }
-        const { payload, validation, shape, requestUrl, status, responseBody } = result.value;
+        const { payload, chartPayload, validation, shape, requestUrl, status, responseBody } = result.value;
         if (validation.issues.length) {
           console.debug("[ticker-chart:validation]", {
             code: record.code,
@@ -740,7 +774,7 @@
         renderScannerCompactChart(
           `scanChart-${record.code}`,
           record.code,
-          payload.ohlcv,
+          (chartPayload || payload).ohlcv,
           state.selectedDate,
           state.months
         );
@@ -791,6 +825,26 @@
     return loadManifestData(fetchJson, MANIFEST_PATH);
   }
 
+  async function loadOverviewDateIndex() {
+    return loadOverviewDateIndexData(OVERVIEW_LITE_INDEX_PATH);
+  }
+
+  async function loadUpdateHealth() {
+    try {
+      return await loadUpdateHealthData(UPDATE_HEALTH_PATH);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function loadOhlcvQualitySummary() {
+    try {
+      return await loadOhlcvQualitySummaryData(OHLCV_QUALITY_SUMMARY_PATH);
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function manifestRevisionKey(manifest) {
     const currentSnapshot = manifest?.currentSnapshot || {};
     return JSON.stringify({
@@ -804,6 +858,26 @@
 
   function hasManifestRevisionChanged(nextManifest, currentManifest) {
     return manifestRevisionKey(nextManifest) !== manifestRevisionKey(currentManifest);
+  }
+
+  function resolveVisibleManifestGeneratedAt(manifest, selectedDate = "") {
+    const manifestGeneratedAt = String(manifest?.generatedAt || "").trim();
+    const snapshot = manifest?.currentSnapshot || {};
+    const snapshotGeneratedAt = String(snapshot?.generatedAt || "").trim();
+    const snapshotDate = String(snapshot?.date || "").trim();
+    const targetDate = String(selectedDate || "").trim();
+    if (!snapshotGeneratedAt) {
+      return manifestGeneratedAt;
+    }
+    if (targetDate && snapshotDate && snapshotDate !== targetDate) {
+      return manifestGeneratedAt || snapshotGeneratedAt;
+    }
+    const manifestTime = manifestGeneratedAt ? Date.parse(manifestGeneratedAt) : NaN;
+    const snapshotTime = snapshotGeneratedAt ? Date.parse(snapshotGeneratedAt) : NaN;
+    if (Number.isFinite(manifestTime) && Number.isFinite(snapshotTime)) {
+      return manifestTime > snapshotTime ? manifestGeneratedAt : snapshotGeneratedAt;
+    }
+    return manifestGeneratedAt || snapshotGeneratedAt;
   }
 
   function startAutoRefreshPolling({
@@ -976,6 +1050,18 @@
     return loadTickerPayloadData(fetchJson, code);
   }
 
+  async function loadTickerMeta(code) {
+    return loadTickerMetaData(fetchJson, code);
+  }
+
+  async function loadTickerDetailRecent(code, years = 1) {
+    return loadTickerDetailRecentData(fetchJson, code, years);
+  }
+
+  async function loadTickerSummary(date) {
+    return loadTickerSummaryData(fetchJson, date);
+  }
+
   async function loadYahooFinanceProfile(code) {
     return loadYahooFinanceProfileData(code);
   }
@@ -1124,6 +1210,9 @@
       limit: Number(state.limit || 0),
       bars: Number.isFinite(bars) ? bars : 63,
       timeframe: String(state.timeframe || "daily").trim() || "daily",
+      selectedStrategies: Array.isArray(state.selectedStrategies)
+        ? state.selectedStrategies.map((strategyId) => String(strategyId || "").trim()).filter(Boolean)
+        : [],
       sourcePage: String(document.body?.dataset?.page || "").trim(),
     };
   }
@@ -1189,11 +1278,16 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
-  function buildRegisteredDisplayName(userLabel, registeredAt) {
-    return `${formatYmd(registeredAt)} ${String(userLabel || "").trim()}`;
+  function buildRegisteredDisplayName(userLabel, registeredAt, conditionLabel = "") {
+    const trimmedLabel = String(userLabel || "").trim();
+    const trimmedConditionLabel = String(conditionLabel || "").trim();
+    if (trimmedConditionLabel) {
+      return [trimmedLabel, trimmedConditionLabel].filter(Boolean).join(" / ");
+    }
+    return `${formatYmd(registeredAt)} ${trimmedLabel}`;
   }
 
-  function registerAllPicks(picks, userLabel) {
+  function registerAllPicks(picks, userLabel, filterContext = null) {
     const normalized = dedupeScannerPicks(Array.isArray(picks) ? picks : []);
     if (!normalized.length) {
       throw new Error("登録対象の選別銘柄がありません。");
@@ -1209,7 +1303,7 @@
     }
     const entry = {
       id: `reg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: buildRegisteredDisplayName(trimmedLabel, registeredAt),
+      name: buildRegisteredDisplayName(trimmedLabel, registeredAt, buildSearchConditionDisplayName(filterContext)),
       registeredAt,
       count: items.length,
       items,
@@ -1335,25 +1429,99 @@
     };
   }
 
-  function buildTradingViewExportEntry(items) {
+  function lookupConfigLabel(config, key) {
+    const normalizedKey = String(key || "").trim();
+    return (config || []).find((item) => String(item?.key || "") === normalizedKey)?.label || "";
+  }
+
+  function selectedStrategyLabels(context) {
+    const explicitStrategies = Array.isArray(context?.selectedStrategies) ? context.selectedStrategies : [];
+    const labels = explicitStrategies
+      .map((strategyId) => lookupConfigLabel(STRATEGY_CONFIG, strategyId) || String(strategyId || "").trim())
+      .filter(Boolean);
+    const sort = String(context?.sort || "").trim();
+    if (lookupConfigLabel(INDEX_SCANNER_SORT_OPTIONS, sort)) {
+      labels.push(lookupConfigLabel(INDEX_SCANNER_SORT_OPTIONS, sort));
+    }
+    return [...new Set(labels)];
+  }
+
+  function rankingLabelFromContext(context) {
+    const sort = String(context?.sort || "").trim();
+    return lookupConfigLabel(INDEX_SCANNER_RANKING_OPTIONS, sort);
+  }
+
+  function turnoverConditionLabel(value) {
+    const turnover = Number(value || 0);
+    if (!(turnover > 0)) {
+      return "売買代金指定なし";
+    }
+    if (turnover >= 100000000) {
+      const oku = turnover / 100000000;
+      return Number.isInteger(oku) ? `${oku}億円以上` : `${formatNumber(oku, 1)}億円以上`;
+    }
+    if (turnover >= 10000) {
+      return `${formatNumber(turnover / 10000, 0)}万円以上`;
+    }
+    return `${formatNumber(turnover, 0)}円以上`;
+  }
+
+  function buildSearchConditionParts(context) {
+    if (!context || typeof context !== "object") {
+      return [];
+    }
+    const parts = [];
+    const date = String(context?.date || "").trim();
+    if (date) {
+      parts.push(date);
+    }
+    selectedStrategyLabels(context).forEach((label) => parts.push(label));
+    const rankingLabel = rankingLabelFromContext(context);
+    if (rankingLabel) {
+      parts.push(rankingLabel);
+    }
+    parts.push(turnoverConditionLabel(context?.turnover));
+    return parts.filter(Boolean);
+  }
+
+  function buildSearchConditionDisplayName(context) {
+    return buildSearchConditionParts(context).join(" / ");
+  }
+
+  function sanitizeDownloadFilePart(value) {
+    return String(value || "")
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\s+/g, "")
+      .replace(/_+/g, "_");
+  }
+
+  function buildSearchConditionFileBase(context, fallback = "kabu_list") {
+    const base = buildSearchConditionParts(context).map(sanitizeDownloadFilePart).filter(Boolean).join("_");
+    return base || fallback;
+  }
+
+  function buildTradingViewExportEntry(items, filterContext = null) {
     const blob = createDownloadBlob(toTradingViewText(items));
+    const fileBase = buildSearchConditionFileBase(filterContext, "");
     return {
       key: "tradingview",
       label: "TradingView",
-      fileName: "tradingview_watchlist.txt",
+      fileName: fileBase ? `${fileBase}_TradingView.txt` : "tradingview_watchlist.txt",
       count: items.length,
       href: blob.url,
       revoke: blob.revoke,
     };
   }
 
-  function buildHyperExportEntries(items) {
+  function buildHyperExportEntries(items, filterContext = null) {
     const blob = createDownloadBlob(toHyperSbi2Csv(items), "text/csv;charset=utf-8");
+    const fileBase = buildSearchConditionFileBase(filterContext, "");
     return [
       {
         key: "hyper",
         label: "HYPER SBI 2",
-        fileName: "hyper_sbi2_codes.csv",
+        fileName: fileBase ? `${fileBase}_HYPER_SBI2.csv` : "hyper_sbi2_codes.csv",
         count: items.length,
         href: blob.url,
         revoke: blob.revoke,
@@ -1614,6 +1782,53 @@
     return `./data/tickers/${code}.json`;
   }
 
+  function getDataModeParam() {
+    try {
+      return new URLSearchParams(window.location.search).get("dataMode") || "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function isLegacyDataMode() {
+    return getDataModeParam() === "legacy";
+  }
+
+  function isRecentDataMode() {
+    return !isLegacyDataMode();
+  }
+
+  function getRecentTickerDataUrl(code) {
+    return `./data/public_json/ticker_recent/1y/ohlcv_ma/${code}.json`;
+  }
+
+  function normalizeRecentTickerPayload(code, payload) {
+    const ohlcv = Array.isArray(payload) ? payload : Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
+    const enrichedOhlcv = ohlcv.map((row, index) => {
+      if (!row || typeof row !== "object") {
+        return row;
+      }
+      const close = Number(row.close);
+      const previousClose = index > 0 ? Number(ohlcv[index - 1]?.close) : NaN;
+      const change = Number.isFinite(Number(row.change)) ? Number(row.change) : Number.isFinite(close) && Number.isFinite(previousClose) ? close - previousClose : null;
+      const changePercent = Number.isFinite(Number(row.changePercent))
+        ? Number(row.changePercent)
+        : change != null && Number.isFinite(previousClose) && previousClose !== 0
+          ? (change / previousClose) * 100
+          : null;
+      return {
+        ...row,
+        change,
+        changePercent,
+      };
+    });
+    return {
+      code: String(code || payload?.code || ""),
+      snapshotType: "recent_1y_ohlcv_ma",
+      ohlcv: enrichedOhlcv,
+    };
+  }
+
   function summarizeTickerPayloadShape(payload) {
     const ohlcv = Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
     const sampleRow = ohlcv.find((row) => row && typeof row === "object") || null;
@@ -1641,24 +1856,29 @@
   function validateTickerPayloadForChart(payload, selectedDate) {
     const issues = [];
     const warnings = [];
+    const reasonCodes = [];
     const ohlcv = Array.isArray(payload?.ohlcv) ? payload.ohlcv : [];
     if (!ohlcv.length) {
-      issues.push("ohlcv missing or empty");
-      return { issues, warnings, parsedCandleCount: 0, invalidRowCount: 0, hasSelectedDate: false, selectedDateMissing: false };
+      warnings.push("ohlcv missing or empty");
+      reasonCodes.push("NO_OHLCV");
+      return { issues, warnings, reasonCodes, parsedCandleCount: 0, invalidRowCount: 0, hasSelectedDate: false, selectedDateMissing: false };
     }
     const invalidRows = ohlcv.filter(
       (row) => !row || row.date == null || row.open == null || row.high == null || row.low == null || row.close == null || row.volume == null
     );
     if (invalidRows.length) {
       issues.push(`ohlcv contains ${invalidRows.length} invalid rows`);
+      reasonCodes.push("PARSE_FAIL");
     }
     const hasSelectedDate = ohlcv.some((row) => row?.date === selectedDate);
     if (selectedDate && !hasSelectedDate) {
       warnings.push(`selected date ${selectedDate} missing`);
+      reasonCodes.push("STALE_ND");
     }
     return {
       issues,
       warnings,
+      reasonCodes,
       parsedCandleCount: ohlcv.length,
       invalidRowCount: invalidRows.length,
       hasSelectedDate,
@@ -1672,6 +1892,12 @@
     let responseBody = "";
     try {
       response = await fetch(requestUrl, { cache: "no-store" });
+      if (!response.ok && response.status === 404 && shouldUseDesktopPortFallback(requestUrl)) {
+        const fallbackUrl = buildDesktopPortFallbackUrl(requestUrl);
+        if (fallbackUrl && fallbackUrl !== requestUrl) {
+          response = await fetch(fallbackUrl, { cache: "no-store" });
+        }
+      }
       responseBody = await response.text();
       console.debug("[ticker-chart:response]", {
         code,
@@ -1702,6 +1928,7 @@
         responseBody,
         payload,
         validation,
+        chartPayload: payload,
         shape: summarizeTickerPayloadShape(payload),
       };
     } catch (error) {
@@ -1714,6 +1941,88 @@
         message: error.message,
       });
       throw error;
+    }
+  }
+
+  async function loadRecentTickerForChart(code, options = {}) {
+    const requestUrl = getRecentTickerDataUrl(code);
+    let responseBody = "";
+    try {
+      const rawPayload = await fetchJson(requestUrl);
+      responseBody = JSON.stringify(rawPayload);
+      const payload = normalizeRecentTickerPayload(code, rawPayload);
+      const validation = validateTickerPayloadForChart(payload, options.selectedDate);
+      if (!validation.parsedCandleCount) {
+        throw new Error("ohlcv missing or empty");
+      }
+      if (validation.issues.length) {
+        throw new Error(validation.issues.join(", "));
+      }
+      if (validation.selectedDateMissing && !options.allowStaleSelectedDate) {
+        throw new Error(`selected date ${options.selectedDate} missing`);
+      }
+      return {
+        code,
+        requestUrl,
+        status: 200,
+        responseBody,
+        payload,
+        validation,
+        chartPayload: payload,
+        shape: summarizeTickerPayloadShape(payload),
+      };
+    } catch (error) {
+      error.recentFallbackReason = error.message || String(error);
+      throw error;
+    }
+  }
+
+  async function loadTickerForChartWithFallback(code, options = {}) {
+    if (isLegacyDataMode()) {
+      try {
+        return await loadTickerPayloadWithDiagnostics(code, options);
+      } catch (legacyError) {
+        const reason = legacyError?.message || String(legacyError);
+        console.warn("[ticker-chart:legacy:missing]", { code, reason });
+        const recentInspected = await loadRecentTickerForChart(code, options);
+        return {
+          ...recentInspected,
+          chartSource: "recent-legacy-fallback",
+          fallbackReason: reason,
+        };
+      }
+    }
+    try {
+      const recentInspected = await loadRecentTickerForChart(code, options);
+      console.info("[ticker-chart:recent]", {
+        code,
+        requestUrl: recentInspected.requestUrl,
+        parsedCandleCount: recentInspected.validation.parsedCandleCount,
+      });
+      return {
+        ...recentInspected,
+        chartSource: "recent",
+      };
+    } catch (error) {
+      const reason = error?.recentFallbackReason || error?.message || String(error);
+      console.info("[ticker-chart:recent:fallback]", { code, reason });
+      try {
+        const recentInspected = await loadRecentTickerForChart(code, { ...options, selectedDate: "", allowStaleSelectedDate: true });
+        return {
+          ...recentInspected,
+          chartSource: "recent-stale-fallback",
+          fallbackReason: reason,
+        };
+      } catch (staleError) {
+        const staleReason = staleError?.recentFallbackReason || staleError?.message || String(staleError);
+        console.info("[ticker-chart:legacy:fallback]", { code, reason: staleReason });
+        const legacyInspected = await loadTickerPayloadWithDiagnostics(code, { ...options, allowStaleSelectedDate: true });
+        return {
+          ...legacyInspected,
+          chartSource: "legacy-recent-fallback",
+          fallbackReason: `${reason}; ${staleReason}`,
+        };
+      }
     }
   }
 
@@ -2279,8 +2588,22 @@
 
   function sortScannerRecords(records, sortKey) {
     const items = [...records];
-    if (sortKey === "gainers") {
-      return items.sort((a, b) => compareNullableNumbers(b.changePercent, a.changePercent));
+    const rankingSort = INDEX_SCANNER_RANKING_SORTS?.[sortKey];
+    if (rankingSort?.key) {
+      const direction = rankingSort.direction === "asc" ? "asc" : "desc";
+      return items.sort((a, b) => {
+        const leftValue = a[rankingSort.key];
+        const rightValue = b[rankingSort.key];
+        const leftMissing = leftValue == null;
+        const rightMissing = rightValue == null;
+        if (leftMissing || rightMissing) {
+          return leftMissing === rightMissing ? 0 : leftMissing ? 1 : -1;
+        }
+        const compared = direction === "asc"
+          ? compareNullableNumbers(leftValue, rightValue)
+          : compareNullableNumbers(rightValue, leftValue);
+        return compared || String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" });
+      });
     }
     if (sortKey === "stop_high") {
       return items.sort(
@@ -2292,9 +2615,6 @@
     }
     if (sortKey === "losers") {
       return items.sort((a, b) => compareNullableNumbers(a.changePercent, b.changePercent));
-    }
-    if (sortKey === "volume") {
-      return items.sort((a, b) => compareNullableNumbers(b.volumeRatio25, a.volumeRatio25));
     }
     if (sortKey === "new_high") {
       return items.sort(
@@ -2314,11 +2634,21 @@
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
     }
+    if (sortKey === "bullish_close_breakout_20d") {
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(b.bullishCloseBreakout20d ? 1 : 0, a.bullishCloseBreakout20d ? 1 : 0) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
     if (sortKey === "trend_turn") {
       return items.sort(
         (a, b) =>
-          compareNullableNumbers(b.trendTurnScore, a.trendTurnScore) ||
-          compareNullableNumbers(b.trendTurnAboveMa75Ratio, a.trendTurnAboveMa75Ratio) ||
+          compareNullableNumbers(a.trendTurnRangePct, b.trendTurnRangePct) ||
+          compareNullableNumbers(Math.abs(a.distanceToMa200 || 0), Math.abs(b.distanceToMa200 || 0)) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
           compareNullableNumbers(b.changePercent, a.changePercent) ||
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
@@ -2340,20 +2670,39 @@
           String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
       );
     }
-    if (sortKey === "deviation25") {
-      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa25, a.distanceToMa25));
-    }
-    if (sortKey === "deviation75") {
-      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa75, a.distanceToMa75));
-    }
-    if (sortKey === "deviation200") {
-      return items.sort((a, b) => compareNullableNumbers(b.distanceToMa200, a.distanceToMa200));
-    }
     if (sortKey === "lower_shadow") {
       return items.sort(compareLowerShadowRecords);
     }
     if (sortKey === "watch_candidates") {
       return items.sort((a, b) => compareNullableNumbers(b.watchCandidateScore, a.watchCandidateScore));
+    }
+    if (sortKey === "strategy_high_pullback_30") {
+      const highPullbackMetrics = (record) => record?.strategyMetrics?.high_pullback_30 || record?.highPullback30 || {};
+      const highPullbackDropRate = (record) => record?.highPullback30DropRate ?? highPullbackMetrics(record).dropRate;
+      const highPullbackDropDistance = (record) => {
+        const dropRate = Number(highPullbackDropRate(record));
+        return Number.isFinite(dropRate) ? Math.abs(dropRate - 30) : null;
+      };
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(highPullbackDropDistance(a), highPullbackDropDistance(b)) ||
+          compareNullableNumbers(highPullbackDropRate(b), highPullbackDropRate(a)) ||
+          compareNullableNumbers(a.changePercent, b.changePercent) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
+    }
+    if (sortKey === "strategy_strong_trend_pullback_rebound") {
+      const strategyId = "strong_trend_pullback_rebound";
+      return items.sort(
+        (a, b) =>
+          compareNullableNumbers(
+            Number((b.strategyScores || {})[strategyId] || b.strongTrendPullbackReboundScore || 0),
+            Number((a.strategyScores || {})[strategyId] || a.strongTrendPullbackReboundScore || 0)
+          ) ||
+          compareNullableNumbers(b.changePercent, a.changePercent) ||
+          compareNullableNumbers(b.volumeRatio25, a.volumeRatio25) ||
+          String(a.code).localeCompare(String(b.code), "ja", { numeric: true, sensitivity: "base" })
+      );
     }
     const strategySortMap = {
       strategy_minervini: "minervini_trend_template",
@@ -2415,6 +2764,56 @@
     return isLock ? "lock" : "peeled";
   }
 
+  function getStopLowStatus(record) {
+    const close = Number(record?.close);
+    const low = Number(record?.low);
+    const change = Number(record?.change);
+    if (!Number.isFinite(close) || !Number.isFinite(low) || !Number.isFinite(change)) {
+      return "none";
+    }
+    const prevClose = close - change;
+    if (!(prevClose > 0)) {
+      return "none";
+    }
+    const limitWidth = getPriceLimitWidth(prevClose);
+    if (limitWidth == null) {
+      return "none";
+    }
+    const limitDownPrice = prevClose - limitWidth;
+    const reachedLimit = Math.abs(low - limitDownPrice) <= STOP_HIGH_EPSILON;
+    if (!reachedLimit) {
+      return "none";
+    }
+    const isLock = Math.abs(close - limitDownPrice) <= STOP_HIGH_EPSILON;
+    return isLock ? "lock" : "peeled";
+  }
+
+  function getLimitMoveStatus(record) {
+    const stopHighStatus = getStopHighStatus(record);
+    if (stopHighStatus !== "none") {
+      return {
+        className: stopHighStatus === "peeled" ? "scanner-limit-marker--high-peeled" : "scanner-limit-marker--high-lock",
+        label: stopHighStatus === "peeled" ? "ストップ高剥がれ" : "ストップ高",
+      };
+    }
+    const stopLowStatus = getStopLowStatus(record);
+    if (stopLowStatus !== "none") {
+      return {
+        className: stopLowStatus === "peeled" ? "scanner-limit-marker--low-peeled" : "scanner-limit-marker--low-lock",
+        label: stopLowStatus === "peeled" ? "ストップ安剥がれ" : "ストップ安",
+      };
+    }
+    return null;
+  }
+
+  function renderLimitMoveMarker(record) {
+    const status = getLimitMoveStatus(record);
+    if (!status) {
+      return "";
+    }
+    return `<span class="scanner-limit-marker ${status.className}" title="${escapeHtml(status.label)}" aria-label="${escapeHtml(status.label)}">S</span>`;
+  }
+
   function scannerSortLabel(sortKey) {
     return {
       gainers: "Gainers",
@@ -2424,18 +2823,21 @@
       code: "Code",
       new_high: "New High",
       new_high_20d: "20D Close High",
-      trend_turn: "ベース・リカバリー",
+      bullish_close_breakout_20d: "陽線クローズブレイク20",
+      trend_turn: "200日線回復（ベース・リカバリー）",
       rebound_signal: "Rebound",
       deviation25: "MA25 Dev",
       deviation75: "MA75 Dev",
       deviation200: "MA200 Dev",
       lower_shadow: "Lower Shadow",
       watch_candidates: "Watchlist",
-      strategy_minervini: "Minervini",
-      strategy_stage2: "Stage 2",
-      strategy_turtle: "Turtle",
+      strategy_minervini: "成長ブレイク（Minervini）",
+      strategy_stage2: "中期上昇入り（Stage 2）",
+      strategy_turtle: "高値ブレイク（Turtle）",
       strategy_canslim: "CAN SLIM",
-      strategy_rsi2: "RSI(2)",
+      strategy_rsi2: "上昇中の押し目（RSI(2)）",
+      strategy_high_pullback_30: "高値調整（30% Pullback）",
+      strategy_strong_trend_pullback_rebound: "強トレンド押し目リバウンド",
     }[sortKey] || sortKey;
   }
 
@@ -2546,6 +2948,71 @@
     `;
   }
 
+  function normalizeTickerCodeForExternalLink(code) {
+    return String(code || "").trim().replace(/\.T$/i, "").toUpperCase();
+  }
+
+  function buildYahooFinanceUrl(code) {
+    const normalizedCode = normalizeTickerCodeForExternalLink(code);
+    return normalizedCode ? `https://finance.yahoo.co.jp/quote/${encodeURIComponent(normalizedCode)}.T` : "";
+  }
+
+  function buildXSearchUrl(record) {
+    const code = normalizeTickerCodeForExternalLink(record?.code);
+    if (!code) {
+      return "";
+    }
+    const name = String(record?.name || "").trim();
+    const query = [code, name, "株"].filter(Boolean).join(" ");
+    return `https://x.com/search?q=${encodeURIComponent(query)}&f=live`;
+  }
+
+  function buildIrSearchUrl(record) {
+    const code = normalizeTickerCodeForExternalLink(record?.code);
+    if (!code) {
+      return "";
+    }
+    return `https://kabutan.jp/stock/news?code=${encodeURIComponent(code)}&nmode=3`;
+  }
+
+  function buildNewsSearchUrl(record) {
+    const code = normalizeTickerCodeForExternalLink(record?.code);
+    if (!code) {
+      return "";
+    }
+    const name = String(record?.name || "").trim();
+    const query = [code, name, "ニュース"].filter(Boolean).join(" ");
+    return `https://news.google.com/search?q=${encodeURIComponent(query)}&hl=ja&gl=JP&ceid=JP:ja`;
+  }
+
+  function renderScannerExternalLinks(record) {
+    const links = record?.links || {};
+    const items = [
+      { label: "Y!", title: "Yahoo Financeで開く", href: links.quote || buildYahooFinanceUrl(record?.code), tone: "yahoo" },
+      { label: "X", title: "Xで検索", href: buildXSearchUrl(record), tone: "x" },
+      { label: "IR", title: "株探の会社開示情報で開く", href: buildIrSearchUrl(record), tone: "ir" },
+      { label: "News", title: "ニュースを検索", href: buildNewsSearchUrl(record), tone: "news" },
+    ];
+    return `
+      <div class="scanner-external-links" aria-label="外部情報リンク">
+        ${items
+          .filter((item) => item.href)
+          .map(
+            (item) => `
+              <a
+                class="scanner-external-link scanner-external-link--${escapeHtml(item.tone)}"
+                href="${escapeHtml(item.href)}"
+                target="_blank"
+                rel="noreferrer"
+                title="${escapeHtml(item.title)}"
+              >${escapeHtml(item.label)}</a>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
   function filterByTurnover(records, turnoverThreshold) {
     if (!turnoverThreshold) {
       return [...records];
@@ -2556,7 +3023,13 @@
   }
 
   function filterByMinimumClose(records, minimumClose) {
-    return records.filter((record) => Number(record.close) >= minimumClose);
+    return records.filter((record) => {
+      const reasons = Array.isArray(record?.dataQuality?.reasonCodes) ? record.dataQuality.reasonCodes : [];
+      if (reasons.includes("NO_OHLCV") || reasons.includes("FETCH_FAIL") || reasons.includes("PARSE_FAIL")) {
+        return true;
+      }
+      return Number(record.close) >= minimumClose;
+    });
   }
 
   function turnoverLabel(value) {
@@ -2614,7 +3087,7 @@
     const visibleRows = rows.filter((row, index) => parseDate(row.date) >= cutoff && index <= selectedIndex + 10);
     const chart = window.LightweightCharts.createChart(element, {
       height: 280,
-      layout: { background: { color: "#111827" }, textColor: "#8899ae" },
+      layout: { background: { color: "#111827" }, textColor: "#b8c7d9" },
       rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.3 }, borderColor: "rgba(30, 58, 95, 0.4)" },
       timeScale: { borderColor: "rgba(30, 58, 95, 0.4)" },
       grid: { vertLines: { color: "rgba(30, 58, 95, 0.2)" }, horzLines: { color: "rgba(30, 58, 95, 0.2)" } },
@@ -2680,7 +3153,8 @@
     if (!rows.length) {
       return null;
     }
-    const selectedIndex = findSelectedIndex(rows, selectedDate);
+    const exactIndex = findSelectedIndex(rows, selectedDate);
+    const selectedIndex = exactIndex >= 0 ? exactIndex : rows.length - 1;
     const row = rows[selectedIndex];
     if (!row) {
       return null;
@@ -2692,12 +3166,52 @@
       sector: String(payload.sector || ""),
       industry: String(payload.industry || ""),
       themes: Array.isArray(payload.themes) ? payload.themes : [],
+      tags: Array.isArray(payload.tags) ? payload.tags : [],
+      links: payload.links && typeof payload.links === "object" ? payload.links : {},
       close: row.close,
+      date: row.date,
       change: row.change,
       changePercent: row.changePercent,
       volume: row.volume,
       high: row.high,
       low: row.low,
+    };
+  }
+
+  function buildPickedRecordFromSummary(pick, summary) {
+    if (!summary || typeof summary !== "object") {
+      return {
+        code: String(pick.code || ""),
+        name: String(pick.name || ""),
+        market: String(pick.market || ""),
+        sector: "",
+        industry: "",
+        themes: [],
+        tags: [],
+        links: {},
+        close: null,
+        change: null,
+        changePercent: null,
+        volume: null,
+        high: null,
+        low: null,
+      };
+    }
+    return {
+      code: String(pick.code || summary.code || ""),
+      name: String(pick.name || summary.name || ""),
+      market: String(pick.market || summary.market || ""),
+      sector: String(summary.sector || ""),
+      industry: String(summary.industry || ""),
+      themes: Array.isArray(summary.themes) ? summary.themes : [],
+      tags: Array.isArray(summary.tags) ? summary.tags : [],
+      links: summary.links && typeof summary.links === "object" ? summary.links : {},
+      close: summary.close ?? null,
+      change: summary.change ?? null,
+      changePercent: summary.changePercent ?? null,
+      volume: summary.volume ?? null,
+      high: summary.high ?? null,
+      low: summary.low ?? null,
     };
   }
 
@@ -2730,58 +3244,122 @@
     `;
   }
 
+  function formatTurnoverOku(closeValue, volumeValue) {
+    const close = Number(closeValue);
+    const volume = Number(volumeValue);
+    if (!Number.isFinite(close) || !Number.isFinite(volume) || close <= 0 || volume < 0) {
+      return "-";
+    }
+    const oku = (close * volume) / 100000000;
+    if (oku >= 100) {
+      return `${formatNumber(Math.round(oku), 0)}億`;
+    }
+    if (oku >= 10) {
+      return `${oku.toFixed(1).replace(/\.0$/, "")}億`;
+    }
+    return `${oku.toFixed(1)}億`;
+  }
+
+  function renderScannerCompactHeader(record, rank, state, rankingKey = "") {
+    const qualityBadges = renderScannerQualityBadges(summarizeScannerRecordQuality(record, state.selectedDate));
+    const detailHref = buildTickerUrl(record.code, state.selectedDate, rankingKey);
+    return `
+      <div class="scanner-card-header">
+        <div class="scanner-card-header-left">
+          <span class="scanner-card-rank">#${formatNumber(rank, 0)}</span>
+          <a class="scanner-card-identity" href="${escapeHtml(detailHref)}">
+            <span class="scanner-card-code">${escapeHtml(String(record.code || ""))}</span>
+            <span class="scanner-card-name">${escapeHtml(String(record.name || ""))}</span>
+          </a>
+        </div>
+        <div class="scanner-card-header-right">
+          <span id="scanChange-${escapeHtml(record.code)}" class="num scanner-compact-change scanner-change-cell ${getChangeClass(record.changePercent)}">
+            ${formatSignedPercentHtml(record.changePercent)}${renderLimitMoveMarker(record)}
+          </span>
+          <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-card-price">${formatNumber(record.close)}円</span>
+          <span id="scanTurnover-${escapeHtml(record.code)}" class="scanner-card-turnover">${formatTurnoverOku(record.close, record.volume)}</span>
+          ${qualityBadges}
+          <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-selected-date" hidden></span>
+        </div>
+      </div>
+      ${renderScannerStrategyMeta(record, state)}
+    `;
+  }
+
+  function renderScannerStrategyMeta(record, state) {
+    return `${renderHighPullbackMeta(record, state)}${renderStrongTrendPullbackMeta(record, state)}`;
+  }
+
+  function renderHighPullbackMeta(record, state) {
+    if (state?.sort !== "strategy_high_pullback_30") {
+      return "";
+    }
+    const metrics = record?.strategyMetrics?.high_pullback_30 || {};
+    const highDate = record.highPullback30HighDate || metrics.highDate;
+    const lowDate = record.highPullback30LowDate || metrics.afterLowDate;
+    const high = record.highPullback30Highest200 || metrics.highest200;
+    const low = record.highPullback30AfterLow || metrics.afterLow;
+    const dropRate = record.highPullback30DropRate ?? metrics.dropRate;
+    if (!highDate || !lowDate || dropRate == null) {
+      return "";
+    }
+    const highLabel = high != null ? `${formatScannerTradeDate(highDate)} ${formatNumber(high)}` : formatScannerTradeDate(highDate);
+    const lowLabel = low != null ? `${formatScannerTradeDate(lowDate)} ${formatNumber(low)}` : formatScannerTradeDate(lowDate);
+    return `
+      <div class="scanner-high-pullback-meta">
+        <span>高値 ${escapeHtml(highLabel)}</span>
+        <span class="scanner-high-pullback-arrow">→</span>
+        <span>安値 ${escapeHtml(lowLabel)}</span>
+        <strong>-${formatNumber(dropRate, 1)}%</strong>
+      </div>
+    `;
+  }
+
+  function renderStrongTrendPullbackMeta(record, state) {
+    if (state?.sort !== "strategy_strong_trend_pullback_rebound") {
+      return "";
+    }
+    const metrics = record?.strategyMetrics?.strong_trend_pullback_rebound || {};
+    const pullbackType = record.strongTrendPullbackReboundType || metrics.pullbackType;
+    const typeLabel = pullbackType === "deep_reset_pullback" ? "深押しリセット" : "通常押し目";
+    const risePct = record.strongTrendPullbackReboundRisePct ?? metrics.risePct;
+    const dropPct = record.strongTrendPullbackReboundDropPct ?? metrics.dropPct;
+    const score = record.strongTrendPullbackReboundScore ?? metrics.score;
+    const volumeRatio = record.strongTrendPullbackReboundVolumeRatio20 ?? metrics.volumeRatio20;
+    if (risePct == null || dropPct == null || score == null) {
+      return "";
+    }
+    return `
+      <div class="scanner-high-pullback-meta">
+        <strong>${escapeHtml(typeLabel)}</strong>
+        <span>上昇 +${formatNumber(risePct, 1)}%</span>
+        <span>押し -${formatNumber(dropPct, 1)}%</span>
+        ${volumeRatio != null ? `<span>出来高 ${formatNumber(volumeRatio, 1)}倍</span>` : ""}
+        <strong>Score ${formatNumber(score, 0)}</strong>
+      </div>
+    `;
+  }
+
   function renderPickedScannerItem(record, index, state) {
     const rank = index + 1;
+    const cardChartTimeframe = String(state.cardChartTimeframes?.get?.(String(record.code)) || state.timeframe || "daily");
+    const stopHighStatus = getStopHighStatus(record);
+    const hasStopHighBadge = stopHighStatus !== "none";
+    const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
+    const externalLinks = renderScannerExternalLinks(record);
     return `
-      <article class="scanner-item picked-scanner-item">
-        <div class="scanner-rank-table">
-          <table>
-            <thead>
-              <tr>
-                <th class="num scanner-col-rank">Rank</th>
-                <th class="scanner-col-code">Code</th>
-                <th class="num scanner-col-close">Price</th>
-                <th class="num scanner-col-change">Change</th>
-                <th class="num scanner-col-volume">Volume</th>
-                <th class="num scanner-col-high">High</th>
-                <th class="num scanner-col-low">Low</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="num">${formatNumber(rank, 0)}</td>
-                <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner">
-                    ${renderTickerIdentity(record.code, record.name, {
-                      href: buildTickerUrl(record.code, state.selectedDate, ""),
-                      variant: "scanner",
-                    })}
-                  </div>
-                </td>
-                <td class="scanner-trade-cell">
-                  <div class="scanner-trade-split">
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
-                  </div>
-                </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num">
-                  ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
-                </td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <article class="scanner-item picked-scanner-item${stopHighClass}">
+        ${renderScannerCompactHeader(record, rank, state, "")}
         <div class="scanner-item-chart-wrap">
           <div id="pickedChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
         <div class="scanner-item-links scanner-item-links--picked">
           <div id="pickedLinks-${escapeHtml(record.code)}" class="scanner-item-links-main scanner-item-links-main--picked">
-            <a class="picked-link-pill" href="${buildTickerUrl(record.code, state.selectedDate, "")}">📈 Detail</a>
+            ${renderPickedItemLinks(record, record, state)}
           </div>
-          <button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(record.code)}">✕ Remove</button>
+          <div class="scanner-item-links-center">${externalLinks}</div>
+          ${renderScannerCardTimeframeButtons(record.code, cardChartTimeframe)}
+          <button type="button" class="row-button picked-remove-button picked-card-remove picked-link-pill picked-link-pill--danger" data-remove-pick="${escapeHtml(record.code)}">Remove</button>
         </div>
       </article>
     `;
@@ -2789,55 +3367,45 @@
 
   function renderRegisteredScannerItem(record, index, state) {
     const rank = index + 1;
+    const cardChartTimeframe = String(state.cardChartTimeframes?.get?.(String(record.code)) || state.timeframe || "daily");
+    const externalLinks = renderScannerExternalLinks(record);
     return `
       <article class="scanner-item">
-        <div class="scanner-rank-table">
-          <table>
-            <thead>
-              <tr>
-                <th class="num scanner-col-rank">順位</th>
-                <th class="scanner-col-code">コード</th>
-                <th class="num scanner-col-close">取引値</th>
-                <th class="num scanner-col-change">前日比</th>
-                <th class="num scanner-col-volume">出来高</th>
-                <th class="num scanner-col-high">高値</th>
-                <th class="num scanner-col-low">安値</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="num">${formatNumber(rank, 0)}</td>
-                <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner">
-                    ${renderTickerIdentity(record.code, record.name, {
-                      href: buildTickerUrl(record.code, state.selectedDate, ""),
-                      variant: "scanner",
-                    })}
-                  </div>
-                </td>
-                <td class="scanner-trade-cell">
-                  <div class="scanner-trade-split">
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
-                  </div>
-                </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num">${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}</td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        ${renderScannerCompactHeader(record, rank, state, "")}
         <div class="scanner-item-chart-wrap">
           <div id="registeredChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
         <div class="scanner-item-links">
           <div id="registeredLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
-            <a href="${buildTickerUrl(record.code, state.selectedDate, "")}">個別ページ</a>
+            ${renderScannerItemLinks(record, record, { selectedDate: state.selectedDate, sort: "code" })}
           </div>
+          <div class="scanner-item-links-center">${externalLinks}</div>
+          ${renderScannerCardTimeframeButtons(record.code, cardChartTimeframe)}
         </div>
       </article>
+    `;
+  }
+
+  function renderScannerCardTimeframeButtons(code, activeTimeframe) {
+    const normalizedActive = ["daily", "weekly", "monthly"].includes(activeTimeframe) ? activeTimeframe : "daily";
+    return `
+      <div class="scanner-card-timeframe" aria-label="チャート表示足">
+        ${["daily", "weekly", "monthly"]
+          .map((timeframe) => {
+            const label = { daily: "日", weekly: "週", monthly: "月" }[timeframe];
+            const isActive = normalizedActive === timeframe;
+            return `
+              <button
+                type="button"
+                class="scanner-card-timeframe-btn${isActive ? " is-active" : ""}"
+                data-card-chart-code="${escapeHtml(code)}"
+                data-card-chart-timeframe="${timeframe}"
+                aria-pressed="${isActive ? "true" : "false"}"
+              >${label}</button>
+            `;
+          })
+          .join("")}
+      </div>
     `;
   }
 
@@ -2845,65 +3413,24 @@
     const rank = index + 1;
     const rankingKey = state.sort === "code" ? "" : mapScannerSortToRanking(state.sort);
     const picked = Boolean(state.picks[record.code]);
+    const cardChartTimeframe = String(state.cardChartTimeframes?.get?.(String(record.code)) || state.timeframe || "daily");
     const stopHighStatus = getStopHighStatus(record);
     const hasStopHighBadge = stopHighStatus !== "none";
     const stopHighClass = hasStopHighBadge ? " scanner-item-stop-high" : "";
-    const stopHighBadgeClass = stopHighStatus === "peeled" ? " scanner-stop-high-badge--peeled" : "";
-    const stopHighBadge = hasStopHighBadge
-      ? ` <span class="scanner-stop-high-badge${stopHighBadgeClass}">S高</span>`
-      : "";
-    const strategyBar = renderScannerStrategyBar(record);
+    const pickedClass = picked ? " scanner-item-picked" : "";
+    const externalLinks = renderScannerExternalLinks(record);
     return `
-      <article class="scanner-item${stopHighClass}">
-        <div class="scanner-rank-table">
-          <table>
-            <thead>
-              <tr>
-                <th class="num scanner-col-rank">順位</th>
-                <th class="scanner-col-code">コード</th>
-                <th class="num scanner-col-close">取引値</th>
-                <th class="num scanner-col-change">前日比</th>
-                <th class="num scanner-col-volume">出来高</th>
-                <th class="num scanner-col-high">高値</th>
-                <th class="num scanner-col-low">安値</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="num">${formatNumber(rank, 0)}</td>
-                <td class="scanner-name-cell">
-                  <div class="scanner-name-cell-inner">
-                    ${renderTickerIdentity(record.code, record.name, {
-                      href: buildTickerUrl(record.code, state.selectedDate, rankingKey),
-                      variant: "scanner",
-                    })}
-                    ${stopHighBadge}
-                  </div>
-                </td>
-                <td class="scanner-trade-cell">
-                  <div class="scanner-trade-split">
-                    <span id="scanTradeDate-${escapeHtml(record.code)}" class="scanner-trade-date">${formatScannerTradeDate(state.selectedDate)}</span>
-                    <span id="scanTradePrice-${escapeHtml(record.code)}" class="scanner-trade-price">${formatNumber(record.close)}</span>
-                  </div>
-                </td>
-                <td id="scanChange-${escapeHtml(record.code)}" class="num">
-                  ${escapeHtml(formatSignedNumber(record.change))} ${formatSignedPercentHtml(record.changePercent)}
-                </td>
-                <td id="scanVolume-${escapeHtml(record.code)}" class="num">${formatNumber(record.volume, 0)}</td>
-                <td id="scanHigh-${escapeHtml(record.code)}" class="num">${formatNumber(record.high)}</td>
-                <td id="scanLow-${escapeHtml(record.code)}" class="num">${formatNumber(record.low)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="scanner-item-chart-wrap">
+      <article class="scanner-item${stopHighClass}${pickedClass}" data-scanner-card-code="${escapeHtml(record.code)}">
+        ${renderScannerCompactHeader(record, rank, state, rankingKey)}
+        <div class="scanner-item-chart-wrap" data-pick-chart-code="${escapeHtml(record.code)}">
           <div id="scanChart-${escapeHtml(record.code)}" class="scanner-chart"></div>
         </div>
         <div class="scanner-item-links">
           <div id="scanLinks-${escapeHtml(record.code)}" class="scanner-item-links-main">
-            <a href="${buildTickerUrl(record.code, state.selectedDate, rankingKey)}">Detail</a>
+            ${renderScannerItemLinks(record, record, state)}
           </div>
-          ${strategyBar ? `<div class="scanner-item-links-center">${strategyBar}</div>` : '<div class="scanner-item-links-center"></div>'}
+          <div class="scanner-item-links-center">${externalLinks}</div>
+          ${renderScannerCardTimeframeButtons(record.code, cardChartTimeframe)}
           <label class="scanner-pick-toggle${picked ? " is-picked" : ""}" title="${picked ? "Listから外す" : "Listに追加"}">
             <input
               type="checkbox"
@@ -2928,19 +3455,6 @@
         local: true,
       },
     ];
-    const links = payload.links || {};
-    if (links.quote) {
-      items.push({ label: "Yahoo", href: links.quote });
-    }
-    if (links.ir) {
-      items.push({ label: "IR", href: links.ir });
-    }
-    if (links.official) {
-      items.push({ label: "公式サイト", href: links.official });
-    }
-    if (links.wikipedia) {
-      items.push({ label: "Wikipedia", href: links.wikipedia });
-    }
     return items
       .filter((item) => item.href)
       .map((item) =>
@@ -2951,26 +3465,55 @@
       .join('<span class="scanner-link-separator">|</span>');
   }
 
+  function summarizeScannerRecordQuality(record, selectedDate) {
+    const quality = record && typeof record.dataQuality === "object" ? record.dataQuality : {};
+    const reasonCodes = Array.isArray(quality.reasonCodes) ? [...new Set(quality.reasonCodes.map((item) => String(item || "").trim()).filter(Boolean))] : [];
+    const staleBusinessDays = Number.isFinite(Number(quality.staleBusinessDays)) ? Number(quality.staleBusinessDays) : 0;
+    const fallbackLastDataDate = String(record?.date || "").trim();
+    const lastDataDate = String(quality.lastDataDate || fallbackLastDataDate || "").trim();
+    const isStale = reasonCodes.includes("STALE_ND") && staleBusinessDays > Number(STALE_TOLERANCE_BUSINESS_DAYS || 1);
+    return {
+      lastDataDate,
+      reasonCodes,
+      staleBusinessDays,
+      isStale,
+      selectedDate: String(selectedDate || "").trim(),
+    };
+  }
+
+  function renderScannerQualityBadges(quality) {
+    const badges = [];
+    if (quality.isStale) {
+      badges.push(`<span class="scanner-quality-badge scanner-quality-badge--stale">遅延</span>`);
+    }
+    quality.reasonCodes.forEach((reasonCode) => {
+      if (reasonCode === "STALE_ND") {
+        return;
+      }
+      badges.push(`<span class="scanner-quality-badge scanner-quality-badge--reason">${escapeHtml(reasonCode)}</span>`);
+    });
+    if (!badges.length) {
+      return "";
+    }
+    return `<span class="scanner-quality-badges">${badges.join("")}</span>`;
+  }
+
   function renderPickedItemLinks(payload, record, state) {
     const items = [
       {
-        label: "📈 Detail",
+        label: "Detail",
         href: buildTickerUrl(record.code, state.selectedDate, ""),
         local: true,
       },
     ];
-    const links = payload.links || {};
-    if (links.quote) {
-      items.push({ label: "↗ Yahoo", href: links.quote });
-    }
     return items
       .filter((item) => item.href)
       .map((item) =>
         item.local
-          ? `<a class="picked-link-pill" href="${item.href}">${escapeHtml(item.label)}</a>`
-          : `<a class="picked-link-pill" href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
+          ? `<a href="${item.href}">${escapeHtml(item.label)}</a>`
+          : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
       )
-      .join("");
+      .join('<span class="scanner-link-separator">|</span>');
   }
 
   function abbreviateTickerName(name) {
@@ -3047,25 +3590,30 @@
     return rows.find((row) => row.date === timeValue) || null;
   }
 
-  function setScannerTableValues(code, row) {
+  function setScannerTableValues(code, row, options = {}) {
     if (!row) {
       return;
     }
     const tradeDate = document.getElementById(`scanTradeDate-${code}`);
     const tradePrice = document.getElementById(`scanTradePrice-${code}`);
     const change = document.getElementById(`scanChange-${code}`);
+    const turnover = document.getElementById(`scanTurnover-${code}`);
     const volume = document.getElementById(`scanVolume-${code}`);
     const high = document.getElementById(`scanHigh-${code}`);
     const low = document.getElementById(`scanLow-${code}`);
-    if (tradeDate) {
-      tradeDate.textContent = formatScannerTradeDate(row.date);
-    }
     if (tradePrice) {
       tradePrice.textContent = formatNumber(row.close);
     }
+    if (tradeDate) {
+      tradeDate.textContent = formatScannerTradeDate(row.date);
+      tradeDate.hidden = !options.showDate;
+    }
     if (change) {
-      change.innerHTML = `${escapeHtml(formatSignedNumber(row.change))} ${formatSignedPercentHtml(row.changePercent)}`;
-      change.className = "num";
+      change.innerHTML = `${formatSignedPercentHtml(row.changePercent)}${renderLimitMoveMarker(row)}`;
+      change.className = `num scanner-compact-change scanner-change-cell ${getChangeClass(row.changePercent)}`.trim();
+    }
+    if (turnover) {
+      turnover.textContent = formatTurnoverOku(row.close, row.volume);
     }
     if (volume) {
       volume.textContent = formatNumber(row.volume, 0);
@@ -3094,6 +3642,122 @@
     return `${date.getMonth() + 1}/${date.getDate()}`;
   }
 
+  function appendWhitespaceAnchorRow(rows, anchorDate) {
+    const normalizedDate = String(anchorDate || "").trim();
+    if (!normalizedDate || !rows.length) {
+      return rows;
+    }
+    const lastRow = rows[rows.length - 1];
+    if (!lastRow || String(lastRow.date || "") >= normalizedDate) {
+      return rows;
+    }
+    return [
+      ...rows,
+      {
+        time: normalizedDate,
+      },
+    ];
+  }
+
+  function normalizeChartEventType(value) {
+    const type = String(value || "").trim().toLowerCase();
+    if (["ir", "tdnet", "disclosure"].includes(type)) return "ir";
+    if (["news", "n"].includes(type)) return "news";
+    if (["x", "sns", "social"].includes(type)) return "sns";
+    if (["earnings", "kessan", "決算"].includes(type)) return "earnings";
+    return "default";
+  }
+
+  function chartEventLabel(type) {
+    return {
+      ir: "IR",
+      news: "N",
+      sns: "X",
+      earnings: "決",
+      default: "•",
+    }[type] || "•";
+  }
+
+  function normalizeScannerChartEvents(events) {
+    return (Array.isArray(events) ? events : [])
+      .map((event) => {
+        const date = String(event?.date || event?.time || "").trim();
+        if (!date) {
+          return null;
+        }
+        const type = normalizeChartEventType(event?.type || event?.source || event?.category);
+        return {
+          date,
+          type,
+          label: String(event?.label || chartEventLabel(type)).trim(),
+          title: String(event?.title || event?.headline || event?.summary || chartEventLabel(type)).trim(),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function renderCompactChartEventMarkers(element, chart, visibleRows, events) {
+    const normalizedEvents = normalizeScannerChartEvents(events);
+    if (!element || !chart || !normalizedEvents.length) {
+      return;
+    }
+    const visibleDates = new Set(visibleRows.map((row) => String(row.date || "")));
+    const eventLayer = document.createElement("div");
+    eventLayer.className = "scanner-chart-event-layer";
+    element.appendChild(eventLayer);
+
+    const draw = () => {
+      eventLayer.innerHTML = "";
+      normalizedEvents
+        .filter((event) => visibleDates.has(event.date))
+        .forEach((event) => {
+          const x = chart.timeScale().timeToCoordinate(event.date);
+          if (!Number.isFinite(x)) {
+            return;
+          }
+          const marker = document.createElement("span");
+          marker.className = `scanner-chart-event-marker scanner-chart-event-marker--${event.type}`;
+          marker.textContent = event.label;
+          marker.title = event.title;
+          marker.style.left = `${Math.round(x)}px`;
+          eventLayer.appendChild(marker);
+        });
+    };
+
+    requestAnimationFrame(draw);
+  }
+
+  function renderScannerChartDateTooltip(element, chart, visibleRows) {
+    if (!element || !chart || !visibleRows.length) {
+      return;
+    }
+    const tooltip = document.createElement("div");
+    tooltip.className = "scanner-chart-date-tooltip";
+    tooltip.hidden = true;
+    element.appendChild(tooltip);
+
+    const hideTooltip = () => {
+      tooltip.hidden = true;
+    };
+    chart.subscribeCrosshairMove((param) => {
+      if (!param?.time || !param.point || param.point.x < 0 || param.point.y < 0) {
+        hideTooltip();
+        return;
+      }
+      const row = resolveRowByTime(visibleRows, param.time);
+      if (!row) {
+        hideTooltip();
+        return;
+      }
+      tooltip.textContent = formatScannerTradeDate(row.date);
+      tooltip.hidden = false;
+      const width = tooltip.offsetWidth || 64;
+      const x = Math.max(8, Math.min(element.clientWidth - width - 8, Math.round(param.point.x - width / 2)));
+      tooltip.style.left = `${x}px`;
+    });
+    element.addEventListener("mouseleave", hideTooltip);
+  }
+
   function renderCompactStyleChart(element, rows, selectedDate, rangeValue, options = {}) {
     if (!element || !window.LightweightCharts) {
       return;
@@ -3119,12 +3783,22 @@
       }
       return;
     }
-    const visibleRows = useBarCount
+    const isMobileScannerCard =
+      document.body?.dataset?.page === "index-scanner" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 640px)").matches;
+    let visibleRows = useBarCount
       ? selectRowsByBarWindow(chartRows, selectedIndex, rangeValue)
       : selectRowsByMonths(chartRows, selectedDate, rangeValue, {
           selectedIndex,
           extendToLatest: Boolean(options.extendToLatest),
         });
+    if (isMobileScannerCard && timeframe === "daily" && visibleRows.length) {
+      const firstVisibleIndex = chartRows.findIndex((row) => row.date === visibleRows[0].date);
+      if (firstVisibleIndex > 0) {
+        visibleRows = chartRows.slice(Math.max(0, firstVisibleIndex - 2), firstVisibleIndex).concat(visibleRows);
+      }
+    }
     if (!visibleRows.length) {
       if (elementId) {
         renderChartFailure(elementId, "表示期間に利用できる価格データがありません");
@@ -3151,13 +3825,13 @@
     }
     const chart = window.LightweightCharts.createChart(element, {
       height: options.height || 173,
-      layout: { background: { color: "#111827" }, textColor: "#8899ae", fontSize: 8 },
+      layout: { background: { color: "#111827" }, textColor: "#d2def0", fontSize: 9 },
       rightPriceScale: {
-        borderColor: "rgba(30, 58, 95, 0.4)",
+        borderColor: "rgba(96, 132, 182, 0.64)",
         scaleMargins: { top: 0.05, bottom: 0.22 },
       },
       timeScale: {
-        borderColor: "rgba(30, 58, 95, 0.4)",
+        borderColor: "rgba(96, 132, 182, 0.64)",
         rightOffset: 0,
         barSpacing: 7,
         minBarSpacing: 5,
@@ -3175,6 +3849,7 @@
           labelVisible: false,
           width: 1,
           color: "rgba(203, 213, 225, 0.5)",
+          style: window.LightweightCharts?.LineStyle?.Dotted ?? 1,
         },
         horzLine: { visible: false, labelVisible: false },
       },
@@ -3190,6 +3865,9 @@
       wickUpColor: "#ef4444",
       wickDownColor: "#3b82f6",
       crosshairMarkerVisible: false,
+      lastValueVisible: true,
+      priceLineVisible: true,
+      priceLineColor: "rgba(252, 165, 165, 0.9)",
     });
     candleSeries.setData(
       visibleRows.map((row) => ({
@@ -3258,7 +3936,10 @@
         return;
       }
       const clickedRow = resolveRowByTime(chartRows, param.time);
-      if (clickedRow && typeof options.onRowSelect === "function") {
+      if (!clickedRow) {
+        return;
+      }
+      if (typeof options.onRowSelect === "function") {
         options.onRowSelect(clickedRow);
       }
     });
@@ -3266,8 +3947,10 @@
     const visibleCount = visibleRows.length;
     timeScale.setVisibleLogicalRange({
       from: -0.5,
-      to: visibleCount - 1 + 3,
+      to: visibleCount - 1 + (isMobileScannerCard ? 1 : 3),
     });
+    renderCompactChartEventMarkers(element, chart, visibleRows, options.events);
+    renderScannerChartDateTooltip(element, chart, visibleRows);
     // インスタンスを登録して次回の再描画時に正しく破棄できるようにする
     if (element.id) {
       _chartInstances.set(element.id, chart);
@@ -3279,23 +3962,30 @@
     if (!element) {
       return;
     }
+    const initialRowOverride =
+      options.initialRowOverride && typeof options.initialRowOverride === "object"
+        ? {
+            ...options.initialRowOverride,
+            date: String(options.initialRowOverride.date || selectedDate || "").trim(),
+          }
+        : null;
     renderCompactStyleChart(element, rows, selectedDate, rangeValue, {
       ...options,
       code,
-      height: 208,
-      onInitialRow: (row) => setScannerTableValues(code, row),
+      height: options.height || element.clientHeight || 208,
+      onInitialRow: (row) => setScannerTableValues(code, initialRowOverride || row),
       onRowSelect: (row) => setScannerTableValues(code, row),
     });
   }
 
-  function renderTickerChart(element, rows, selectedIndex, modeKey, chartMeta, onRowSelect) {
+  function renderTickerChart(element, rows, selectedIndex, modeKey, chartMeta, onRowSelect, options = {}) {
     const selectedRow = rows[selectedIndex];
-    if (!selectedRow) {
+    if (!element || !selectedRow) {
       return;
     }
     const mode = getTickerChartMode(modeKey);
     renderCompactStyleChart(element, rows, selectedRow.date, mode.rangeValue, {
-      height: 346,
+      height: options.height || 224,
       code: chartMeta?.dataset?.code || null,
       metaTarget: chartMeta,
       extendToLatest: true,
@@ -3512,7 +4202,7 @@
     history.replaceState({}, "", `./index.html?${params.toString()}`);
   }
 
-  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, rangeMonths, timeframe, deviationFilters = {}, selectedStrategies = []) {
+  function syncIndexScannerUrl(date, sort, tag, theme, turnover, limit, rangeMonths, timeframe, deviationFilters = {}, selectedStrategies = [], pullbackDropPct = "") {
     const params = new URLSearchParams(window.location.search);
     params.set("date", date);
     params.set("sort", sort);
@@ -3537,6 +4227,11 @@
       params.delete("strategy");
     }
     params.set("turnover", String(turnover));
+    if (sort === "strategy_high_pullback_30" && pullbackDropPct) {
+      params.set("pullback", String(pullbackDropPct));
+    } else {
+      params.delete("pullback");
+    }
     DEVIATION_SORT_KEYS.forEach((key) => {
       const shortKey = DEVIATION_URL_KEY_MAP[key];
       const filter = deviationFilters[key] || { mode: "", min: "", max: "" };
@@ -3821,6 +4516,7 @@
       volume: "volume_spike",
       new_high: "new_high",
       new_high_20d: "",
+      bullish_close_breakout_20d: "",
       trend_turn: "trend_turn",
       rebound_signal: "rebound_signal",
       deviation25: "deviation25",
@@ -3833,6 +4529,7 @@
       strategy_turtle: "strategy_turtle",
       strategy_canslim: "strategy_canslim",
       strategy_rsi2: "strategy_rsi2",
+      strategy_strong_trend_pullback_rebound: "",
       code: "",
     }[sortKey] || "";
   }

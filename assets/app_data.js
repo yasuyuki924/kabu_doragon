@@ -1,14 +1,84 @@
 (function () {
+  async function requestWithDesktopFallback(path) {
+    const requestPath = String(path || "");
+    let response = await fetch(requestPath, { cache: "no-store" });
+    const shouldFallback = window.KabuAppUtils?.shouldUseDesktopPortFallback?.(requestPath);
+    if (!response.ok && response.status === 404 && shouldFallback) {
+      const fallbackUrl = window.KabuAppUtils?.buildDesktopPortFallbackUrl?.(requestPath);
+      if (fallbackUrl && fallbackUrl !== requestPath) {
+        response = await fetch(fallbackUrl, { cache: "no-store" });
+      }
+    }
+    return response;
+  }
+
   async function loadManifestData(fetchJson, manifestPath) {
-    const payload = await fetchJson(manifestPath);
+    let payload;
+    try {
+      payload = await fetchJson(manifestPath);
+    } catch (error) {
+      const indexPath = window.KabuAppConfig?.OVERVIEW_LITE_INDEX_PATH;
+      if (!indexPath) {
+        throw error;
+      }
+      const indexPayload = await loadOverviewDateIndexData(indexPath);
+      const availableDates = Array.isArray(indexPayload?.daily) ? indexPayload.daily : [];
+      payload = {
+        generatedAt: indexPayload?.generatedAt || "",
+        latestDate: availableDates.at(-1) || "",
+        availableDates,
+        currentSnapshot: null,
+      };
+    }
     if (!Array.isArray(payload.availableDates) || !payload.latestDate) {
       throw new Error("manifest.json の形式が不正です。");
     }
     return payload;
   }
 
+  async function loadUpdateHealthData(updateHealthPath) {
+    const response = await requestWithDesktopFallback(updateHealthPath);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`JSON 読み込み失敗: ${updateHealthPath} (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload && typeof payload === "object" ? payload : null;
+  }
+
+  async function loadOhlcvQualitySummaryData(summaryPath) {
+    const response = await requestWithDesktopFallback(summaryPath);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`JSON 読み込み失敗: ${summaryPath} (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload && typeof payload === "object" ? payload : null;
+  }
+
+  async function loadOverviewDateIndexData(indexPath) {
+    const response = await requestWithDesktopFallback(indexPath);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`JSON 読み込み失敗: ${indexPath} (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload && typeof payload === "object" ? payload : null;
+  }
+
   async function loadThemeOrderData(fetchJson, themeMapPath) {
-    const payload = await fetchJson(themeMapPath);
+    let payload;
+    try {
+      payload = await fetchJson(themeMapPath);
+    } catch (_error) {
+      return [];
+    }
     const items = Array.isArray(payload?.themes) ? payload.themes : [];
     return items
       .map((item) => String(item?.name || item?.label || "").trim())
@@ -17,12 +87,51 @@
 
   async function loadOverviewData(fetchJson, date, timeframe = "daily") {
     const suffix = timeframe === "weekly" ? "_weekly" : timeframe === "monthly" ? "_monthly" : "";
-    return fetchJson(`./data/overview/${date}/market_pulse${suffix}.json`);
+    const litePath = `./data/public_json/overview_lite/${date}/market_pulse${suffix}.json`;
+    const dailyLitePath = `./data/public_json/overview_lite/${date}/market_pulse.json`;
+    const publicPath = `./data/public_json/overview_recent/${date}/market_pulse${suffix}.json`;
+    const legacyPath = `./data/overview/${date}/market_pulse${suffix}.json`;
+    const dataMode = new URLSearchParams(window.location.search).get("dataMode") || "";
+    if (dataMode === "legacy") {
+      try {
+        return await fetchJson(legacyPath);
+      } catch (legacyError) {
+        console.warn("[overview:legacy:missing]", { date, timeframe, reason: legacyError.message || String(legacyError) });
+        try {
+          return await fetchJson(litePath);
+        } catch (liteError) {
+          if (timeframe !== "daily") {
+            console.warn("[overview:timeframe:fallback]", { date, timeframe, reason: liteError.message || String(liteError) });
+            return fetchJson(dailyLitePath);
+          }
+          throw liteError;
+        }
+      }
+    }
+    try {
+      return await fetchJson(litePath);
+    } catch (liteError) {
+      console.info("[overview:lite:fallback]", { date, timeframe, reason: liteError.message || String(liteError) });
+      try {
+        return await fetchJson(publicPath);
+      } catch (publicError) {
+        console.info("[overview:public_json:fallback]", { date, timeframe, reason: publicError.message || String(publicError) });
+        try {
+          return await fetchJson(legacyPath);
+        } catch (legacyError) {
+          if (timeframe !== "daily") {
+            console.warn("[overview:timeframe:fallback]", { date, timeframe, reason: legacyError.message || String(legacyError) });
+            return fetchJson(dailyLitePath);
+          }
+          throw legacyError;
+        }
+      }
+    }
   }
 
   async function loadRankingData(date, key, rankingLabel) {
     const path = `./data/rankings/${date}/${key}.json`;
-    const response = await fetch(path);
+    const response = await requestWithDesktopFallback(path);
     if (!response.ok) {
       if (key === "lower_shadow" && response.status === 404) {
         return { date, ranking: rankingLabel(key), count: 0, items: [] };
@@ -37,6 +146,23 @@
 
   async function loadTickerPayloadData(fetchJson, code) {
     return fetchJson(`./data/tickers/${code}.json`);
+  }
+
+  async function loadTickerMetaData(fetchJson, code) {
+    return fetchJson(`./data/public_json/ticker_meta/${code}.json`);
+  }
+
+  async function loadTickerDetailRecentData(fetchJson, code, years = 1) {
+    try {
+      return await fetchJson(`./data/public_json/ticker_detail_recent/${years}y/${code}.json`);
+    } catch (error) {
+      console.info("[ticker-detail-recent:missing]", { code, years, reason: error.message || String(error) });
+      return null;
+    }
+  }
+
+  async function loadTickerSummaryData(fetchJson, date) {
+    return fetchJson(`./data/cache/ticker_summary/${date}.json`);
   }
 
   function normalizeYahooMetric(value) {
@@ -114,10 +240,16 @@
 
   window.KabuAppData = Object.freeze({
     loadManifestData,
+    loadUpdateHealthData,
+    loadOhlcvQualitySummaryData,
+    loadOverviewDateIndexData,
     loadOverviewData,
     loadRankingData,
     loadThemeOrderData,
     loadTickerPayloadData,
+    loadTickerMetaData,
+    loadTickerDetailRecentData,
+    loadTickerSummaryData,
     loadYahooFinanceProfileData,
     readJsonStorage,
     writeJsonStorage,

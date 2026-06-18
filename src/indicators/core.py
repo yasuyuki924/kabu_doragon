@@ -31,11 +31,21 @@ MA_WINDOWS = (5, 25, 50, 75, 140, 150, 160, 200)
 VOLUME_MA_WINDOWS = (5, 20, 25)
 RCI_WINDOWS = (12, 24, 48)
 TREND_TURN_THRESHOLDS = SimpleNamespace(
-    ref_days_below_ma75=10,
-    below_ma75_window=30,
-    below_ma75_min_count=15,
-    above_ma75_window=5,
-    above_ma75_min_count=3,
+    ma200_lookback_days=120,
+    max_above_ma200_count=10,
+)
+HIGH_PULLBACK_THRESHOLDS = SimpleNamespace(
+    lookback_bars=200,
+    lookahead_bars=10,
+    recent_achievement_bars=5,
+    min_drop_pct=30.0,
+)
+STRONG_TREND_PULLBACK_THRESHOLDS = SimpleNamespace(
+    lookback_bars=60,
+    min_rise_pct=30.0,
+    min_drop_pct=15.0,
+    deep_drop_pct=30.0,
+    max_drop_pct=45.0,
 )
 
 
@@ -135,6 +145,318 @@ def build_wtd_mtd_bars(
     return wtd_rows, mtd_rows
 
 
+def apply_period_change_from_open(
+    rows: list[dict[str, float | int | str | bool | None]],
+) -> list[dict[str, float | int | str | bool | None]]:
+    adjusted: list[dict[str, float | int | str | bool | None]] = []
+    for row in rows:
+        open_price = float(row.get("open") or 0)
+        close = float(row.get("close") or 0)
+        change = close - open_price if open_price else None
+        adjusted.append(
+            {
+                **row,
+                "change": round(change, 4) if change is not None else None,
+                "changePercent": round((change / open_price) * 100, 4) if change is not None and open_price else None,
+            }
+        )
+    return adjusted
+
+
+def apply_period_overview_metrics(
+    period_rows: list[dict[str, float | int | str | bool | None]],
+    daily_rows: list[dict[str, float | int | str | bool | None]],
+    timeframe: str,
+) -> list[dict[str, float | int | str | bool | None]]:
+    adjusted: list[dict[str, float | int | str | bool | None]] = []
+    current_period = None
+    period_start_index = 0
+    for index, row in enumerate(period_rows):
+        current_date = datetime.strptime(str(row["date"]), "%Y-%m-%d").date()
+        period_key = (
+            current_date.isocalendar()[:2]
+            if timeframe == "weekly"
+            else (current_date.year, current_date.month)
+        )
+        if current_period != period_key:
+            current_period = period_key
+            period_start_index = index
+        daily_row = daily_rows[index] if index < len(daily_rows) else {}
+        period_days = index - period_start_index + 1
+        open_price = float(row.get("open") or 0)
+        close = float(row.get("close") or 0)
+        change = close - open_price if open_price else None
+        daily_volume_ma25 = float(daily_row.get("volumeMa25") or 0)
+        volume_base = daily_volume_ma25 * period_days
+        volume = float(row.get("volume") or 0)
+        adjusted.append(
+            {
+                **row,
+                "change": round(change, 4) if change is not None else None,
+                "changePercent": round((change / open_price) * 100, 4) if change is not None and open_price else None,
+                "volumeRatio25": round(volume / volume_base, 4) if volume_base else None,
+            }
+        )
+    return adjusted
+
+
+def detect_high_pullback_30(
+    rows: list[dict[str, float | int | str]],
+    index: int,
+) -> dict[str, float | int | str | bool | None]:
+    lookback = HIGH_PULLBACK_THRESHOLDS.lookback_bars
+    lookahead = HIGH_PULLBACK_THRESHOLDS.lookahead_bars
+    if index + 1 < lookback:
+        return {"detected": False}
+    window_start = index - lookback + 1
+    high_index = -1
+    highest = 0.0
+    for pos in range(window_start, index + 1):
+        high = float(rows[pos]["high"])
+        if high >= highest:
+            highest = high
+            high_index = pos
+    if high_index < 0 or highest <= 0:
+        return {"detected": False}
+    low_start = high_index + 1
+    low_end = min(index, high_index + lookahead)
+    if low_start > low_end:
+        return {"detected": False}
+    low_index = -1
+    after_low = float("inf")
+    for pos in range(low_start, low_end + 1):
+        low = float(rows[pos]["low"])
+        if low < after_low:
+            after_low = low
+            low_index = pos
+    if low_index < 0:
+        return {"detected": False}
+    drop_rate = ((highest - after_low) / highest) * 100
+    if drop_rate < HIGH_PULLBACK_THRESHOLDS.min_drop_pct:
+        return {"detected": False}
+    bars_since_low = index - low_index
+    if bars_since_low >= HIGH_PULLBACK_THRESHOLDS.recent_achievement_bars:
+        return {"detected": False}
+    close = float(rows[index]["close"])
+    return {
+        "detected": True,
+        "highest200": round(highest, 4),
+        "highDate": str(rows[high_index]["date"]),
+        "afterLow": round(after_low, 4),
+        "afterLowDate": str(rows[low_index]["date"]),
+        "barsToLow": low_index - high_index,
+        "barsSinceLow": bars_since_low,
+        "dropRate": round(drop_rate, 4),
+        "currentClose": round(close, 4),
+        "currentDrawdownPct": round(((highest - close) / highest) * 100, 4),
+    }
+
+
+def average_field(rows: list[dict[str, object]], field: str) -> float | None:
+    values = []
+    for row in rows:
+        value = row.get(field)
+        try:
+            numeric = float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        values.append(numeric)
+    return sum(values) / len(values) if values else None
+
+
+def lower_wick_ratio(row: dict[str, object]) -> float | None:
+    try:
+        open_price = float(row["open"])  # type: ignore[arg-type]
+        high_price = float(row["high"])  # type: ignore[arg-type]
+        low_price = float(row["low"])  # type: ignore[arg-type]
+        close = float(row["close"])  # type: ignore[arg-type]
+    except (KeyError, TypeError, ValueError):
+        return None
+    if high_price <= low_price:
+        return None
+    return (min(open_price, close) - low_price) / (high_price - low_price)
+
+
+def detect_strong_trend_pullback_rebound(
+    rows: list[dict[str, object]],
+    current_row: dict[str, object] | None = None,
+) -> dict[str, float | int | str | bool | None]:
+    lookback = STRONG_TREND_PULLBACK_THRESHOLDS.lookback_bars
+    row_count = len(rows) + (1 if current_row is not None else 0)
+    if row_count < lookback + 10:
+        return {"detected": False}
+
+    current = current_row or rows[-1]
+    current_close = current.get("close")
+    current_ma5 = current.get("ma5")
+    current_ma25 = current.get("ma25")
+    current_ma75 = current.get("ma75")
+    if current_close is None or current_ma5 is None or current_ma75 is None:
+        return {"detected": False}
+    current_close = float(current_close)
+    current_ma5 = float(current_ma5)
+    current_ma75 = float(current_ma75)
+    current_ma25_value = float(current_ma25) if current_ma25 is not None else None
+    if current_close < current_ma5:
+        return {"detected": False}
+
+    trend_window = (rows[-(lookback - 1) :] + [current]) if current_row is not None else rows[-lookback:]
+    low_index = -1
+    low = float("inf")
+    high_index = -1
+    high = float("-inf")
+    rise_pct = float("-inf")
+    for index, row in enumerate(trend_window):
+        row_low = row.get("low")
+        if row_low is not None and float(row_low) < low:
+            low = float(row_low)
+            low_index = index
+        row_high = row.get("high")
+        if row_high is not None and low_index >= 0 and index >= low_index:
+            row_high_value = float(row_high)
+            candidate_rise_pct = ((row_high_value - low) / low) * 100
+            if candidate_rise_pct > rise_pct:
+                rise_pct = candidate_rise_pct
+                high = row_high_value
+                high_index = index
+    if not (low > 0) or not (high > 0) or high_index <= low_index or rise_pct < STRONG_TREND_PULLBACK_THRESHOLDS.min_rise_pct:
+        return {"detected": False}
+
+    pullback_rows = trend_window[high_index + 1 :]
+    if not pullback_rows:
+        return {"detected": False}
+    current_drawdown_pct = ((high - current_close) / high) * 100
+    if (
+        current_drawdown_pct < STRONG_TREND_PULLBACK_THRESHOLDS.min_drop_pct
+        or current_drawdown_pct > STRONG_TREND_PULLBACK_THRESHOLDS.max_drop_pct
+    ):
+        return {"detected": False}
+
+    old_ma75_index = max(0, row_count - 21)
+    old_ma75 = (current if old_ma75_index >= len(rows) else rows[old_ma75_index]).get("ma75")
+    ma75_slope_pct = ((current_ma75 - float(old_ma75)) / float(old_ma75)) * 100 if old_ma75 not in {None, 0} else None
+    if ma75_slope_pct is not None and ma75_slope_pct < -3:
+        return {"detected": False}
+    distance_to_ma75 = distance_from_baseline(current_close, current_ma75)
+    if distance_to_ma75 is not None and distance_to_ma75 < -8:
+        return {"detected": False}
+
+    def touches_ma(row: dict[str, object], ma_key: str, threshold: float) -> bool:
+        ma_value = row.get(ma_key)
+        if ma_value in {None, 0}:
+            return False
+        low_distance = distance_from_baseline(float(row["low"]), float(ma_value))
+        close_distance = distance_from_baseline(float(row["close"]), float(ma_value))
+        distances = [abs(value) for value in [low_distance, close_distance] if value is not None]
+        return bool(distances) and min(distances) <= threshold
+
+    pullback_touches_ma25 = any(touches_ma(row, "ma25", 3.0) for row in pullback_rows)
+    pullback_touches_ma75 = any(touches_ma(row, "ma75", 5.0) for row in pullback_rows)
+    if not pullback_touches_ma25 and not pullback_touches_ma75:
+        return {"detected": False}
+
+    previous = rows[-1] if current_row is not None and rows else rows[-2] if len(rows) >= 2 else {}
+    ma5_slope_up = previous.get("ma5") is not None and current_ma5 >= float(previous["ma5"])  # type: ignore[arg-type]
+    recent5_rows = rows[-5:] if current_row is not None else rows[-6:-1]
+    recent10_rows = rows[-10:] if current_row is not None else rows[-11:-1]
+    recent5_high = max((float(row.get("high") or float("-inf")) for row in recent5_rows), default=float("-inf"))
+    recent10_high = max((float(row.get("high") or float("-inf")) for row in recent10_rows), default=float("-inf"))
+    close_breaks5_high = recent5_high != float("-inf") and current_close > recent5_high
+    close_breaks10_high = recent10_high != float("-inf") and current_close > recent10_high
+    volume20_rows = rows[-20:] if current_row is not None else rows[-21:-1]
+    volume20 = average_field(volume20_rows, "volume")
+    current_volume = current.get("volume")
+    volume_ratio20 = float(current_volume) / volume20 if volume20 and current_volume is not None else None
+    rise_segment = trend_window[low_index : high_index + 1]
+    rise_above_ma25_ratio = (
+        sum(1 for row in rise_segment if row.get("ma25") is not None and float(row["close"]) > float(row["ma25"])) / len(rise_segment)
+        if rise_segment
+        else 0.0
+    )
+    pullback_volume = average_field(pullback_rows[-10:], "volume")
+    rise_volume = average_field(rise_segment[-10:], "volume")
+    volume_cooled = pullback_volume is not None and rise_volume is not None and pullback_volume <= rise_volume * 0.9
+    max_lower_wick = max((lower_wick_ratio(row) or 0.0 for row in pullback_rows[-10:]), default=0.0)
+    has_lower_wick = max_lower_wick >= 0.35
+
+    pullback_type = (
+        "deep_reset_pullback"
+        if current_drawdown_pct >= STRONG_TREND_PULLBACK_THRESHOLDS.deep_drop_pct
+        else "normal_pullback"
+    )
+    rebound_label = (
+        "deep_reset_rebound"
+        if pullback_type == "deep_reset_pullback"
+        else "ma25_rebound"
+        if pullback_touches_ma25 and current_ma25_value is not None and current_close >= current_ma25_value
+        else "ma75_rebound"
+    )
+
+    score = min(15, max(0, ((rise_pct - 30) / 50) * 15 + 6))
+    if current_drawdown_pct < 18:
+        score += 14
+    elif current_drawdown_pct < 25:
+        score += 20
+    elif current_drawdown_pct < 30:
+        score += 16
+    elif current_drawdown_pct < 35:
+        score += 12
+    else:
+        score += 8
+    if pullback_touches_ma25:
+        score += 10
+    if pullback_touches_ma75:
+        score += 10
+    if current_close >= current_ma5:
+        score += 5
+    if current_ma25_value is not None and current_close >= current_ma25_value:
+        score += 6
+    if current_close >= current_ma75:
+        score += 4
+    if ma5_slope_up:
+        score += 4
+    if close_breaks5_high:
+        score += 5
+    if close_breaks10_high:
+        score += 4
+    if volume_ratio20 is not None and volume_ratio20 >= 1.2:
+        score += 8
+    elif volume_ratio20 is not None and volume_ratio20 >= 1:
+        score += 5
+    if volume_cooled:
+        score += 4
+    if has_lower_wick:
+        score += 4
+    score += min(10, rise_above_ma25_ratio * 10)
+    score += 5 if ma75_slope_pct is None or ma75_slope_pct >= 0 else 2
+    if pullback_type == "deep_reset_pullback":
+        score = min(score, 82)
+    if score < (48 if pullback_type == "deep_reset_pullback" else 55):
+        return {"detected": False}
+
+    return {
+        "detected": True,
+        "score": round(min(100, score), 4),
+        "pullbackType": pullback_type,
+        "reboundLabel": rebound_label,
+        "risePct": round(rise_pct, 4),
+        "dropPct": round(current_drawdown_pct, 4),
+        "lowDate": str(trend_window[low_index].get("date") or ""),
+        "highDate": str(trend_window[high_index].get("date") or ""),
+        "high": round(high, 4),
+        "low": round(low, 4),
+        "distanceToMa25": round(distance_from_baseline(current_close, current_ma25_value), 4) if current_ma25_value else None,
+        "distanceToMa75": round(distance_to_ma75, 4) if distance_to_ma75 is not None else None,
+        "ma75SlopePct": round(ma75_slope_pct, 4) if ma75_slope_pct is not None else None,
+        "volumeRatio20": round(volume_ratio20, 4) if volume_ratio20 is not None else None,
+        "riseAboveMa25Ratio": round(rise_above_ma25_ratio, 4),
+        "touchedMa25": pullback_touches_ma25,
+        "touchedMa75": pullback_touches_ma75,
+        "closeBreaks5High": close_breaks5_high,
+        "closeBreaks10High": close_breaks10_high,
+    }
+
+
 def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[str, float | int | str | bool | None]]:
     if not rows:
         return []
@@ -179,6 +501,17 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         today_bullish = close >= open_price
         highest_20d_bullish_close = max(bullish_closes_20d) if bullish_closes_20d else None
         new_high_20d = bool(today_bullish and highest_20d_bullish_close is not None and close >= highest_20d_bullish_close)
+        past_bullish_closes_20d = [
+            float(rows[pos]["close"])
+            for pos in range(max(0, index - 20), index)
+            if float(rows[pos]["close"]) >= float(rows[pos]["open"])
+        ]
+        highest_past_20d_bullish_close = max(past_bullish_closes_20d) if past_bullish_closes_20d else None
+        bullish_close_breakout_20d = bool(
+            today_bullish
+            and highest_past_20d_bullish_close is not None
+            and close > highest_past_20d_bullish_close
+        )
 
         ma5 = ma_map[5][index]
         ma25 = ma_map[25][index]
@@ -253,45 +586,43 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
         trend_turn_above_ma75_ratio = None
         trend_turn_score = 0
         trend_turn_reason = ""
+        high_pullback_30 = detect_high_pullback_30(rows, index)
 
-        ref_index = index - TREND_TURN_THRESHOLDS.ref_days_below_ma75
-        if ref_index >= 0 and ma75 is not None and ma_map[75][ref_index] is not None and float(rows[ref_index]["close"]) < float(ma_map[75][ref_index]):
-            below_window_start = index - TREND_TURN_THRESHOLDS.below_ma75_window + 1
-            above_window_start = index - TREND_TURN_THRESHOLDS.above_ma75_window + 1
-            if below_window_start >= 0 and above_window_start >= 0:
-                below_count = 0
-                above_count = 0
-                below_window_valid = True
-                above_window_valid = True
+        prev_index = index - 1
+        lookback_start = index - TREND_TURN_THRESHOLDS.ma200_lookback_days
+        if (
+            prev_index >= 0
+            and lookback_start >= 0
+            and ma200 is not None
+            and ma_map[200][prev_index] is not None
+            and close > float(ma200)
+            and float(rows[prev_index]["close"]) <= float(ma_map[200][prev_index])
+        ):
+            above_count = 0
+            lookback_valid = True
+            for pos in range(lookback_start, index):
+                pos_ma200 = ma_map[200][pos]
+                if pos_ma200 is None:
+                    lookback_valid = False
+                    break
+                if float(rows[pos]["close"]) > float(pos_ma200):
+                    above_count += 1
 
-                for pos in range(below_window_start, index + 1):
-                    pos_ma75 = ma_map[75][pos]
-                    if pos_ma75 is None:
-                        below_window_valid = False
-                        break
-                    if float(rows[pos]["close"]) < float(pos_ma75):
-                        below_count += 1
-
-                for pos in range(above_window_start, index + 1):
-                    pos_ma75 = ma_map[75][pos]
-                    if pos_ma75 is None:
-                        above_window_valid = False
-                        break
-                    if float(rows[pos]["close"]) > float(pos_ma75):
-                        above_count += 1
-
-                if below_window_valid and above_window_valid and below_count >= TREND_TURN_THRESHOLDS.below_ma75_min_count and above_count >= TREND_TURN_THRESHOLDS.above_ma75_min_count:
-                    trend_turn_candidate = True
-                    trend_turn_range_pct = float(below_count)
-                    trend_turn_above_ma75_ratio = round(above_count / TREND_TURN_THRESHOLDS.above_ma75_window, 4)
-                    trend_turn_score = int(below_count + above_count)
-                    trend_turn_reason = "|".join(
-                        [
-                            "10日目前MA75下",
-                            f"30日中{below_count}日MA75下",
-                            f"5日中{above_count}日MA75上",
-                        ]
-                    )
+            if lookback_valid and above_count <= TREND_TURN_THRESHOLDS.max_above_ma200_count:
+                ma200_distance = distance_from_baseline(close, ma200)
+                trend_turn_candidate = True
+                trend_turn_breakout_date = str(row["date"])
+                trend_turn_days_after_breakout = 0
+                trend_turn_range_pct = float(above_count)
+                trend_turn_above_ma75_ratio = round(above_count / TREND_TURN_THRESHOLDS.ma200_lookback_days, 4)
+                trend_turn_score = int(TREND_TURN_THRESHOLDS.ma200_lookback_days - above_count)
+                trend_turn_reason = "|".join(
+                    [
+                        "今日MA200上抜け",
+                        f"120日中{above_count}日MA200上",
+                        f"MA200乖離{ma200_distance:.1f}%" if ma200_distance is not None else "MA200乖離-",
+                    ]
+                )
 
         base_row = {
             "date": row["date"],
@@ -340,6 +671,7 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
             "recoveryFrom52wLowPct": recovery_from_52w_low_pct,
             "newHigh52w": bool(new_high_52w),
             "newHigh20d": bool(new_high_20d),
+            "bullishCloseBreakout20d": bool(bullish_close_breakout_20d),
             "donchian20High": donchian20_high,
             "donchian55High": donchian55_high,
             "distanceToDonchian20Pct": distance_to_donchian20_pct,
@@ -366,7 +698,27 @@ def build_enriched_rows(rows: list[dict[str, float | int | str]]) -> list[dict[s
             "trendTurnAboveMa75Ratio": trend_turn_above_ma75_ratio,
             "trendTurnScore": int(trend_turn_score),
             "trendTurnReason": trend_turn_reason,
+            "highPullback30": high_pullback_30,
+            "highPullback30Candidate": bool(high_pullback_30.get("detected")),
+            "highPullback30DropRate": high_pullback_30.get("dropRate"),
+            "highPullback30HighDate": high_pullback_30.get("highDate"),
+            "highPullback30LowDate": high_pullback_30.get("afterLowDate"),
+            "highPullback30BarsToLow": high_pullback_30.get("barsToLow"),
         }
+        strong_trend_pullback_rebound = detect_strong_trend_pullback_rebound(enriched, base_row)
+        base_row.update(
+            {
+                "strongTrendPullbackRebound": strong_trend_pullback_rebound,
+                "strongTrendPullbackReboundCandidate": bool(strong_trend_pullback_rebound.get("detected")),
+                "strongTrendPullbackReboundScore": strong_trend_pullback_rebound.get("score"),
+                "strongTrendPullbackReboundType": strong_trend_pullback_rebound.get("pullbackType"),
+                "strongTrendPullbackReboundLabel": strong_trend_pullback_rebound.get("reboundLabel"),
+                "strongTrendPullbackReboundRisePct": strong_trend_pullback_rebound.get("risePct"),
+                "strongTrendPullbackReboundDropPct": strong_trend_pullback_rebound.get("dropPct"),
+                "strongTrendPullbackReboundVolumeRatio20": strong_trend_pullback_rebound.get("volumeRatio20"),
+            }
+        )
+
         strategy_results = evaluate_strategies(base_row)
         strategy_matches = [strategy_id for strategy_id, result in strategy_results.items() if result.matched]
         strategy_scores = {strategy_id: result.score for strategy_id, result in strategy_results.items()}

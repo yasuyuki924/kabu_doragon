@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from numbers import Real
 
 from common import (
     MANIFEST_JSON,
@@ -14,7 +15,82 @@ from common import (
     summarize_theme_counts,
     write_json,
 )
-from src.app.shared_view_data import load_records_by_date, resolve_explicit_dates, resolve_selected_dates
+from src.app.shared_view_data import load_inactive_summary, load_records_by_date, resolve_explicit_dates, resolve_selected_dates
+from src.app.shared_view_data import STALE_TOLERANCE_BUSINESS_DAYS
+
+
+def build_data_quality_summary(records: list[dict[str, object]], stale_tolerance_business_days: int) -> dict[str, int]:
+    matched_count = 0
+    stale_count = 0
+    empty_count = 0
+    stale_1d_count = 0
+    stale_2p_count = 0
+    for record in records:
+        quality = record.get("dataQuality") if isinstance(record, dict) else None
+        quality = quality if isinstance(quality, dict) else {}
+        reasons = quality.get("reasonCodes")
+        reason_codes = {str(item) for item in reasons} if isinstance(reasons, list) else set()
+        stale_days = quality.get("staleBusinessDays")
+        stale_days = int(stale_days) if isinstance(stale_days, Real) and stale_days >= 0 else 0
+        if "NO_OHLCV" in reason_codes:
+            empty_count += 1
+            continue
+        if "STALE_ND" in reason_codes and stale_days > stale_tolerance_business_days:
+            stale_count += 1
+            if stale_days == 1:
+                stale_1d_count += 1
+            elif stale_days >= 2:
+                stale_2p_count += 1
+            continue
+        matched_count += 1
+    return {
+        "matchedCount": matched_count,
+        "staleCount": stale_count,
+        "emptyCount": empty_count,
+        "stale1dCount": stale_1d_count,
+        "stale2pCount": stale_2p_count,
+    }
+
+
+def with_default_data_quality(records: list[dict[str, object]], selected_date: str) -> list[dict[str, object]]:
+    normalized: list[dict[str, object]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        if isinstance(record.get("dataQuality"), dict):
+            normalized.append(record)
+            continue
+        row_date = str(record.get("date") or "").strip()
+        reason_codes: list[str] = []
+        stale_days = 0
+        if row_date and selected_date and row_date < selected_date:
+            reason_codes.append("STALE_ND")
+            stale_days = 1
+        normalized.append(
+            {
+                **record,
+                "dataQuality": {
+                    "lastDataDate": row_date or None,
+                    "reasonCodes": reason_codes,
+                    "staleBusinessDays": stale_days,
+                },
+            }
+        )
+    return normalized
+
+
+def is_fresh_record(record: dict[str, object], selected_date: str) -> bool:
+    row_date = str(record.get("date") or "").strip()
+    if not row_date or row_date != selected_date:
+        return False
+    quality = record.get("dataQuality")
+    if not isinstance(quality, dict):
+        return True
+    reasons = quality.get("reasonCodes")
+    reason_codes = {str(item).strip() for item in reasons} if isinstance(reasons, list) else set()
+    if "NO_OHLCV" in reason_codes or "STALE_ND" in reason_codes:
+        return False
+    return True
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,48 +101,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--codes", help="Comma separated ticker codes")
     parser.add_argument("--dates", help="Comma separated trading dates to build")
     return parser.parse_args()
-
-
-def _reason_codes(record: dict[str, object]) -> set[str]:
-    data_quality = record.get("dataQuality")
-    if not isinstance(data_quality, dict):
-        return set()
-    raw_codes = data_quality.get("reasonCodes")
-    if not isinstance(raw_codes, list):
-        return set()
-    return {str(item).strip() for item in raw_codes if str(item).strip()}
-
-
-def is_fresh_record(record: dict[str, object], selected_date: str) -> bool:
-    if str(record.get("date") or "").strip() != selected_date:
-        return False
-    reason_codes = _reason_codes(record)
-    return "NO_OHLCV" not in reason_codes and "STALE_ND" not in reason_codes
-
-
-def summarize_data_quality(records: list[dict[str, object]], selected_date: str) -> dict[str, object]:
-    total = len(records)
-    matched = 0
-    stale = 0
-    no_ohlcv = 0
-    for record in records:
-        reason_codes = _reason_codes(record)
-        if "NO_OHLCV" in reason_codes:
-            no_ohlcv += 1
-            continue
-        if is_fresh_record(record, selected_date):
-            matched += 1
-            continue
-        stale += 1
-    ratio = (matched / total) if total > 0 else 0.0
-    return {
-        "targetDate": selected_date,
-        "totalCount": total,
-        "matchedCount": matched,
-        "staleCount": stale,
-        "noOhlcvCount": no_ohlcv,
-        "matchedRatio": round(ratio, 6),
-    }
 
 
 def main() -> int:
@@ -89,13 +123,15 @@ def main() -> int:
             if cached is None:
                 continue
 
-            raw_records = list(per_date.get(date_value) or [])
-            quality_summary = summarize_data_quality(raw_records, date_value) if suffix == "" else None
             if suffix == "":
+                raw_records = sorted(per_date.get(date_value, []), key=lambda item: str(item.get("code") or ""))
                 records = [record for record in raw_records if is_fresh_record(record, date_value)]
+                data_quality_summary = build_data_quality_summary(raw_records, STALE_TOLERANCE_BUSINESS_DAYS)
+                inactive_summary = load_inactive_summary(date_value)
             else:
-                records = list(cached)
-            records = sorted(records, key=lambda item: str(item.get("code") or ""))
+                records = sorted(with_default_data_quality(cached, date_value), key=lambda item: str(item.get("code") or ""))
+                data_quality_summary = build_data_quality_summary(records, STALE_TOLERANCE_BUSINESS_DAYS)
+                inactive_summary = {"count": 0, "confirmedCount": 0, "candidateCount": 0, "codes": [], "sample": []}
             rise_count = sum(1 for item in records if float(item.get("changePercent") or 0) > 0)
             fall_count = sum(1 for item in records if float(item.get("changePercent") or 0) < 0)
             flat_count = len(records) - rise_count - fall_count
@@ -108,6 +144,7 @@ def main() -> int:
             )
             payload = {
                 "date": date_value,
+                "staleToleranceBusinessDays": STALE_TOLERANCE_BUSINESS_DAYS,
                 "recordCount": len(records),
                 "riseCount": rise_count,
                 "fallCount": fall_count,
@@ -120,8 +157,11 @@ def main() -> int:
                 "sectorBreadth": summarize_sector_strength(records)[:12],
                 "themeBreadth": summarize_theme_counts(records)[:12],
                 "tagBreadth": summarize_tag_counts(records)[:12],
+                "dataQualitySummary": data_quality_summary,
+                "inactiveSummary": inactive_summary,
+                "inactiveCount": int(inactive_summary.get("count") or 0),
+                "activeUniverseCount": len(raw_records) if suffix == "" else len(records),
                 "totalUniverseCount": len(raw_records) if suffix == "" else len(records),
-                "dataQualitySummary": quality_summary,
                 "records": records,
             }
             write_json(OVERVIEW_DIR / date_value / f"market_pulse{suffix}.json", payload)

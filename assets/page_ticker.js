@@ -16,9 +16,14 @@
       formatSignedPercentHtml,
       formatSnapshotBaseDate,
       getSignedValueClass,
+      isLegacyDataMode,
       loadManifest,
       loadScannerPicks,
       loadTickerNote,
+      loadRecentTickerForChart,
+      loadTickerForChartWithFallback,
+      loadTickerDetailRecent,
+      loadTickerMeta,
       loadTickerPayload,
       loadYahooFinanceProfile,
       loadRanking,
@@ -26,6 +31,7 @@
       rankingLabel,
       renderStrategyBadges,
       renderStrategyReasons,
+      renderScannerExternalLinks,
       renderTickerChart,
       renderTickerIdentity,
       resolveAvailableDate,
@@ -50,7 +56,12 @@
     const periodButtons = document.getElementById("periodButtons");
     const tickerDatePicker = document.getElementById("tickerDatePicker");
     const tickerRankMeta = document.getElementById("tickerRankMeta");
-    const chartEl = document.getElementById("chart");
+    const dailyChartEl = document.getElementById("dailyChart");
+    const weeklyChartEl = document.getElementById("weeklyChart");
+    const monthlyChartEl = document.getElementById("monthlyChart");
+    const dailyChartMeta = document.getElementById("dailyChartMeta");
+    const weeklyChartMeta = document.getElementById("weeklyChartMeta");
+    const monthlyChartMeta = document.getElementById("monthlyChartMeta");
     const noteArea = document.getElementById("tickerNote");
     const noteStatus = document.getElementById("noteStatus");
     const saveNoteButton = document.getElementById("saveNoteButton");
@@ -73,7 +84,6 @@
     const techVolumeRatio = document.getElementById("techVolumeRatio");
     const techRciSummary = document.getElementById("techRciSummary");
     const techRangePosition = document.getElementById("techRangePosition");
-    const tickerCardRank = document.getElementById("tickerCardRank");
     const tickerCardCode = document.getElementById("tickerCardCode");
     const tickerCardTradeDate = document.getElementById("tickerCardTradeDate");
     const tickerCardTradePrice = document.getElementById("tickerCardTradePrice");
@@ -81,6 +91,11 @@
     const tickerCardVolume = document.getElementById("tickerCardVolume");
     const tickerCardHigh = document.getElementById("tickerCardHigh");
     const tickerCardLow = document.getElementById("tickerCardLow");
+    const tickerCardMarketCap = document.getElementById("tickerCardMarketCap");
+    const tickerCardValuation = document.getElementById("tickerCardValuation");
+    const tickerCardProfitability = document.getElementById("tickerCardProfitability");
+    const tickerCardShares = document.getElementById("tickerCardShares");
+    const tickerCardShareholders = document.getElementById("tickerCardShareholders");
     const tickerCardLinks = document.getElementById("tickerCardLinks");
     const strategyBadges = document.getElementById("strategyBadges");
     const strategyReasons = document.getElementById("strategyReasons");
@@ -107,6 +122,8 @@
     const state = {
       manifest: null,
       payload: null,
+      chartPayload: null,
+      chartSource: "",
       rankingKey,
       rankingItem: null,
       picks: loadScannerPicks(),
@@ -116,19 +133,11 @@
     };
 
     let stopAutoRefreshPolling = null;
+    let yahooProfileRequestId = 0;
 
-    periodButtons.innerHTML = TICKER_CHART_MODES.map(
-      (mode) =>
-        `<button class="period-button${mode.key === state.selectedChartMode ? " active" : ""}" data-chart-mode="${mode.key}">${mode.label}</button>`
-    ).join("");
-
-    Array.from(periodButtons.querySelectorAll(".period-button")).forEach((button) => {
-      button.addEventListener("click", () => {
-        state.selectedChartMode = normalizeTickerChartMode(button.dataset.chartMode);
-        updatePeriodButtonState(periodButtons, state.selectedChartMode);
-        renderTicker();
-      });
-    });
+    if (periodButtons) {
+      periodButtons.hidden = true;
+    }
 
     noteArea.value = loadTickerNote(code);
     noteStatus.textContent = noteArea.value ? "保存済み" : "未保存";
@@ -162,22 +171,26 @@
         state.payload.ohlcv.map((row) => row.date),
         state.selectedDate
       );
-      await refreshRankContext();
+      await refreshChartPayload();
       renderTicker();
+      refreshRankContext().then(renderTicker);
     });
 
     async function refreshTickerPage(nextManifest = null) {
       await runRefreshAction(refreshButton, errorBox, async () => {
-        const [manifest, payload] = await Promise.all([nextManifest || loadManifest(), loadTickerPayload(code)]);
+        const manifest = nextManifest || await loadManifest();
+        const payload = await loadTickerPagePayload(manifest, state.selectedDate || manifest.latestDate);
         state.manifest = manifest;
         state.payload = payload;
-        state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
+        state.yahooProfile = null;
         const availableDates = state.payload.ohlcv.map((row) => row.date);
         state.selectedDate = resolveAvailableDate(state.selectedDate || state.manifest.latestDate, availableDates);
         tickerDatePicker.min = availableDates[0];
         tickerDatePicker.max = availableDates.at(-1);
-        await refreshRankContext();
+        await refreshChartPayload();
         renderTicker();
+        loadYahooProfileDeferred();
+        refreshRankContext().then(renderTicker);
       });
     }
 
@@ -186,16 +199,19 @@
     });
 
     try {
-      const [manifest, payload] = await Promise.all([loadManifest(), loadTickerPayload(code)]);
+      const manifest = await loadManifest();
+      const payload = await loadTickerPagePayload(manifest, params.get("date") || manifest.latestDate);
       state.manifest = manifest;
       state.payload = payload;
-      state.yahooProfile = await loadYahooFinanceProfile(code).catch(() => null);
+      state.yahooProfile = null;
       const availableDates = state.payload.ohlcv.map((row) => row.date);
       state.selectedDate = resolveAvailableDate(params.get("date") || state.manifest.latestDate, availableDates);
       tickerDatePicker.min = availableDates[0];
       tickerDatePicker.max = availableDates.at(-1);
-      await refreshRankContext();
+      await refreshChartPayload();
       renderTicker();
+      loadYahooProfileDeferred();
+      refreshRankContext().then(renderTicker);
       stopAutoRefreshPolling = startAutoRefreshPolling({
         getCurrentManifest: () => state.manifest,
         onRefresh: async (latestManifest) => {
@@ -219,6 +235,110 @@
       }
     }
 
+    function loadYahooProfileDeferred() {
+      const requestId = ++yahooProfileRequestId;
+      loadYahooFinanceProfile(code)
+        .then((profile) => {
+          if (requestId !== yahooProfileRequestId) {
+            return;
+          }
+          state.yahooProfile = profile;
+          setYahooFundamentals(profile);
+        })
+        .catch(() => {
+          if (requestId !== yahooProfileRequestId) {
+            return;
+          }
+          state.yahooProfile = null;
+          setYahooFundamentals(null);
+        });
+    }
+
+    async function loadTickerPagePayload(manifest, preferredDate = "") {
+      async function loadPublicJsonPayload(chartInspected = null) {
+        const chartPromise = chartInspected
+          ? Promise.resolve(chartInspected)
+          : loadRecentTickerForChart(code, { selectedDate: preferredDate || manifest?.latestDate || "" })
+              .catch(() => loadRecentTickerForChart(code, {}));
+        const [resolvedChart, meta, detail] = await Promise.all([
+          chartPromise,
+          loadTickerMeta(code),
+          loadTickerDetailRecent(code, 1),
+        ]);
+        chartInspected = resolvedChart;
+        const chartRows = chartInspected.chartPayload?.ohlcv || [];
+        const detailRows = Array.isArray(detail?.rows) ? detail.rows : [];
+        const detailByDate = new Map(detailRows.map((row) => [row?.date, row]));
+        const mergedRows = chartRows.map((row) => ({ ...row, ...(detailByDate.get(row.date) || {}) }));
+        const payload = {
+          ...meta,
+          code: String(meta?.code || code),
+          snapshotDate: meta?.snapshotDate || detail?.endDate || chartRows.at(-1)?.date || null,
+          snapshotType: meta?.snapshotType || "public_json_detail_recent",
+          ohlcv: mergedRows,
+        };
+        state.chartPayload = chartInspected.chartPayload;
+        state.chartSource = "public_json";
+        console.info("[ticker-detail:public_json]", {
+          code,
+          chartRows: chartRows.length,
+          detailRows: detailRows.length,
+        });
+        return payload;
+      }
+
+      if (isLegacyDataMode()) {
+        try {
+          const payload = await loadTickerPayload(code);
+          state.chartPayload = payload;
+          state.chartSource = "legacy";
+          return payload;
+        } catch (legacyError) {
+          console.warn("[ticker-detail:legacy:missing]", { code, reason: legacyError.message || String(legacyError) });
+          return loadPublicJsonPayload();
+        }
+      }
+      try {
+        const chartInspected = await loadTickerForChartWithFallback(code, { selectedDate: preferredDate || manifest?.latestDate || "" });
+        if (chartInspected.chartSource !== "recent") {
+          state.chartPayload = chartInspected.chartPayload || chartInspected.payload || null;
+          state.chartSource = chartInspected.chartSource || "legacy-fallback";
+          return chartInspected.payload || chartInspected.chartPayload;
+        }
+        return loadPublicJsonPayload(chartInspected);
+      } catch (error) {
+        console.info("[ticker-detail:public_json:fallback]", { code, reason: error.message || String(error) });
+        try {
+          const retryChart = await loadRecentTickerForChart(code, {});
+          return loadPublicJsonPayload(retryChart);
+        } catch (retryError) {
+          throw retryError;
+        }
+      }
+    }
+
+    async function refreshChartPayload() {
+      if (state.chartSource === "public_json") {
+        return;
+      }
+      try {
+        const inspected = await loadTickerForChartWithFallback(code, { selectedDate: state.selectedDate });
+        state.chartPayload = inspected.chartPayload || inspected.payload || null;
+        state.chartSource = inspected.chartSource || "legacy";
+      } catch (_error) {
+        state.chartPayload = state.payload;
+        state.chartSource = "legacy-error";
+      }
+    }
+
+    function resolveDetailRowForChartRow(chartRow) {
+      if (!chartRow || !state.payload?.ohlcv?.length) {
+        return chartRow;
+      }
+      const detailRow = state.payload.ohlcv.find((row) => row?.date === chartRow.date);
+      return detailRow ? { ...detailRow, ...chartRow } : chartRow;
+    }
+
     function setTickerCardValues(row) {
       if (tickerCardTradeDate) {
         tickerCardTradeDate.textContent = formatScannerTradeDate(row.date);
@@ -237,6 +357,77 @@
       }
       if (tickerCardLow) {
         tickerCardLow.textContent = formatNumber(row.low);
+      }
+    }
+
+    function metricText(value) {
+      const text = String(value || "").trim();
+      return text || "-";
+    }
+
+    function firstMetricValue(...values) {
+      return values.map((value) => String(value || "").trim()).find(Boolean) || "";
+    }
+
+    function formatShareholderSummary(value) {
+      if (!value) {
+        return "-";
+      }
+      if (Array.isArray(value)) {
+        return value
+          .slice(0, 3)
+          .map((item) => {
+            if (typeof item === "string") {
+              return item.trim();
+            }
+            const name = item?.name || item?.holder || item?.shareholder || "";
+            const ratio = item?.ratio || item?.ownershipRatio || item?.percent || item?.holdingRatio || "";
+            return [name, ratio].filter(Boolean).join(" ");
+          })
+          .filter(Boolean)
+          .join(" / ") || "-";
+      }
+      if (typeof value === "object") {
+        const entries = Object.entries(value)
+          .slice(0, 4)
+          .map(([label, ratio]) => [label, ratio].filter(Boolean).join(" "));
+        return entries.filter(Boolean).join(" / ") || "-";
+      }
+      return String(value).trim() || "-";
+    }
+
+    function setTickerFundamentalStrip(profile) {
+      const metrics = profile || {};
+      const per = metricText(metrics.per);
+      const pbr = metricText(metrics.pbr);
+      const roe = metricText(metrics.roe);
+      const bps = metricText(metrics.bps);
+      const freeFloat = firstMetricValue(
+        metrics.freeFloat,
+        metrics.freeFloatShares,
+        metrics.floatingShares,
+        metrics.floatShares,
+        metrics.freeFloatRatio,
+        metrics.floatingShareRatio,
+        metrics.floatRatio
+      );
+      const shareholders = firstMetricValue(metrics.shareholderSummary, metrics.shareholdersSummary)
+        || formatShareholderSummary(metrics.shareholders || metrics.majorShareholders || metrics.shareholderComposition);
+
+      if (tickerCardMarketCap) {
+        tickerCardMarketCap.textContent = metricText(metrics.marketCap);
+      }
+      if (tickerCardValuation) {
+        tickerCardValuation.textContent = metrics.per || metrics.pbr ? `PER ${per} / PBR ${pbr}` : "-";
+      }
+      if (tickerCardProfitability) {
+        tickerCardProfitability.textContent = metrics.roe || metrics.bps ? `ROE ${roe} / BPS ${bps}` : "-";
+      }
+      if (tickerCardShares) {
+        tickerCardShares.textContent = `${metricText(metrics.sharesOutstanding)} / ${metricText(freeFloat)}`;
+      }
+      if (tickerCardShareholders) {
+        tickerCardShareholders.textContent = shareholders || "-";
       }
     }
 
@@ -322,6 +513,7 @@
       if (yahooEarningsSummary) {
         yahooEarningsSummary.textContent = metrics.earningsSummary || "Yahoo Finance JP から取得した参考指標を表示します。";
       }
+      setTickerFundamentalStrip(profile);
     }
 
     function buildTickerPickState() {
@@ -378,11 +570,13 @@
 
     function renderTicker() {
       const rows = state.payload.ohlcv || [];
+      const chartRows = state.chartPayload?.ohlcv?.length ? state.chartPayload.ohlcv : rows;
       const selectedIndex = findSelectedIndex(rows, state.selectedDate);
       if (selectedIndex < 0) {
         showError(errorBox, `${code} の ${state.selectedDate} 時点データがありません。`);
         return;
       }
+      const chartSelectedIndex = findSelectedIndex(chartRows, state.selectedDate);
       const row = rows[selectedIndex];
       const latestRow = rows.at(-1) || row;
       state.selectedDate = row.date;
@@ -408,9 +602,6 @@
       syncSnapshotStatusUi(snapshotBadge, refreshMeta, state.selectedDate, resolveTickerSnapshot(state));
 
       summaryRank.textContent = state.rankingItem ? `${state.rankingItem.rank}位` : "-";
-      if (tickerCardRank) {
-        tickerCardRank.textContent = state.rankingItem ? `${state.rankingItem.rank}` : "-";
-      }
       if (tickerCardCode) {
         tickerCardCode.innerHTML = renderTickerIdentity(code, state.payload.name || code, {
           href: buildTickerUrl(code, state.selectedDate, state.rankingKey),
@@ -438,37 +629,35 @@
         strategyReasons.innerHTML = renderStrategyReasons(row, { limit: 6, empty: "一致理由なし" }) || "一致理由なし";
       }
 
-      externalLinks.innerHTML = Object.entries(state.payload.links || {})
-        .filter(([, href]) => href)
-        .map(
-          ([label, href]) =>
-            `<a class="link-pill" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`
-        )
-        .join("");
+      if (externalLinks) {
+        externalLinks.innerHTML = "";
+      }
       if (tickerCardLinks) {
-        const detailItems = [
-          { label: "銘柄一覧", href: `./index.html?date=${encodeURIComponent(state.selectedDate)}`, local: true },
-          { label: "Yahoo", href: state.payload.links?.quote || "" },
-        ];
-        tickerCardLinks.innerHTML = detailItems
-          .filter((item) => item.href)
-          .map((item) =>
-            item.local
-              ? `<a href="${item.href}">${escapeHtml(item.label)}</a>`
-              : `<a href="${escapeHtml(item.href)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}</a>`
-          )
-          .join('<span class="scanner-link-separator">|</span>');
-        tickerCardLinks.insertAdjacentHTML(
-          "beforeend",
-          '<button class="ticker-pick-button" type="button" data-ticker-pick-button aria-pressed="false"></button>'
-        );
+        const listHref = `./index.html?date=${encodeURIComponent(state.selectedDate)}`;
+        const linkRecord = {
+          ...state.payload,
+          code,
+          name: state.payload.name || code,
+          links: state.payload.links || {},
+        };
+        tickerCardLinks.innerHTML = `
+          <a class="ticker-back-link ticker-back-link--compact" href="${listHref}" title="銘柄一覧へ戻る">
+            <span class="ticker-back-link-icon" aria-hidden="true">←</span>
+            <span class="ticker-back-link-text">銘柄一覧</span>
+          </a>
+          ${renderScannerExternalLinks(linkRecord)}
+          <button class="ticker-pick-button" type="button" data-ticker-pick-button aria-pressed="false"></button>
+        `;
         syncTickerPickButton();
       }
 
-      renderTickerChart(chartEl, rows, selectedIndex, state.selectedChartMode, chartMeta, (chartRow) => {
-        setTickerSummaryValues(chartRow);
-        setTickerCardValues(chartRow);
+      renderTickerChart(dailyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "3m", dailyChartMeta, (chartRow) => {
+        const displayRow = resolveDetailRowForChartRow(chartRow);
+        setTickerSummaryValues(displayRow);
+        setTickerCardValues(displayRow);
       });
+      renderTickerChart(weeklyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "weekly", weeklyChartMeta);
+      renderTickerChart(monthlyChartEl, chartRows, chartSelectedIndex >= 0 ? chartSelectedIndex : selectedIndex, "monthly", monthlyChartMeta);
     }
 
     function resolveTickerSnapshot(currentState) {

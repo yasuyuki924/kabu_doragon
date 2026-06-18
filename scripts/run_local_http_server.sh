@@ -2,8 +2,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_DIR="/Users/okamoto/My Project/kabu_doragon"
 PORT="8010"
 HOST="127.0.0.1"
 
