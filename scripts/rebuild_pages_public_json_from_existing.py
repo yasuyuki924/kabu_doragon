@@ -248,6 +248,11 @@ def main() -> int:
             check=True,
             cwd=ROOT,
         )
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "backfill_period_overview_lite_strategies.py")],
+            check=True,
+            cwd=ROOT,
+        )
         write_manifest(target_date, dates)
         index_metrics = write_overview_index(dates)
         write_health(
