@@ -37,6 +37,14 @@
     return params.get("publicSite") === "1" || host.endsWith(".github.io");
   }
 
+  function isLocalHostedSite() {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const host = String(window.location?.hostname || "");
+    return host === "127.0.0.1" || host === "localhost" || host === "::1";
+  }
+
   function insertBeforeQuery(path, suffix) {
     const value = String(path || "");
     const queryIndex = value.search(/[?#]/);
@@ -58,11 +66,12 @@
     if (params.get("compressedData") === "0") {
       return false;
     }
+    const isOverviewLite = requestPath.includes("/data/public_json/overview_lite/") && !requestPath.endsWith("/index.json");
     const compressedTarget =
-      requestPath.includes("/data/public_json/overview_lite/") && !requestPath.endsWith("/index.json") ||
+      isOverviewLite ||
       requestPath.includes("/data/public_json/ticker_recent/") ||
       requestPath.includes("/data/public_json/ticker_detail_recent/");
-    return compressedTarget && (params.get("compressedData") === "1" || isPublicHostedSite());
+    return compressedTarget && (params.get("compressedData") === "1" || isPublicHostedSite() || (isOverviewLite && isLocalHostedSite()));
   }
 
   async function fetchWithDesktopFallback(path) {
