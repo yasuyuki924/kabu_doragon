@@ -224,6 +224,11 @@ def main() -> int:
             check=True,
             cwd=ROOT,
         )
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "backfill_period_overview_lite_strategies.py")],
+            check=True,
+            cwd=ROOT,
+        )
         write_manifest(target_date, recent_dates)
         write_health(
             "success",
