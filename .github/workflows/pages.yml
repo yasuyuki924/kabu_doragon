@@ -9,10 +9,12 @@ on:
         default: false
         type: boolean
   schedule:
-    - cron: "45 7 * * 1-5"
-    - cron: "30 8 * * 1-5"
-    - cron: "30 9 * * 1-5"
-    - cron: "30 12 * * 1-5"
+    - cron: "53 6 * * 1-5"
+    - cron: "23 7 * * 1-5"
+    - cron: "53 7 * * 1-5"
+    - cron: "23 8 * * 1-5"
+    - cron: "13 9 * * 1-5"
+    - cron: "13 10 * * 1-5"
   push:
     branches:
       - main
