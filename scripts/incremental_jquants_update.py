@@ -403,13 +403,23 @@ def build_period_overview_row(
     }
 
 
-def rebuild_public_json_from_ohlcv(codes: list[str], target_date: str, logger: Logger) -> dict[str, Any]:
+def rebuild_public_json_from_ohlcv(
+    codes: list[str],
+    target_date: str,
+    logger: Logger,
+    *,
+    overview_dates: list[str] | None = None,
+) -> dict[str, Any]:
     paths = default_paths()
     started = time.perf_counter()
     record_count = 0
-    overview_records: list[dict[str, Any]] = []
-    overview_weekly_records: list[dict[str, Any]] = []
-    overview_monthly_records: list[dict[str, Any]] = []
+    overview_target_dates = sorted(set(overview_dates or [target_date]))
+    if target_date not in overview_target_dates:
+        overview_target_dates.append(target_date)
+        overview_target_dates = sorted(set(overview_target_dates))
+    overview_records_by_date: dict[str, list[dict[str, Any]]] = {date: [] for date in overview_target_dates}
+    overview_weekly_records_by_date: dict[str, list[dict[str, Any]]] = {date: [] for date in overview_target_dates}
+    overview_monthly_records_by_date: dict[str, list[dict[str, Any]]] = {date: [] for date in overview_target_dates}
     updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
 
     for index, code in enumerate(codes, start=1):
@@ -447,66 +457,80 @@ def rebuild_public_json_from_ohlcv(codes: list[str], target_date: str, logger: L
                 "rows": detail_rows,
             },
         )
-        latest_row = next((row for row in reversed(enriched) if str(row.get("date")) == target_date), None)
         meta = ticker_meta(code)
-        if latest_row and meta:
-            overview_records.append(build_daily_record(meta, latest_row))
-            latest_weekly_row = build_period_overview_row(latest_row, rows, target_date=target_date, timeframe="weekly")
-            latest_monthly_row = build_period_overview_row(latest_row, rows, target_date=target_date, timeframe="monthly")
-        else:
-            latest_weekly_row = None
-            latest_monthly_row = None
-        if latest_weekly_row and meta:
-            overview_weekly_records.append(build_daily_record(meta, latest_weekly_row))
-        if latest_monthly_row and meta:
-            overview_monthly_records.append(build_daily_record(meta, latest_monthly_row))
+        if meta:
+            rows_by_date = {str(row.get("date")): row for row in enriched if row.get("date")}
+            for overview_date in overview_target_dates:
+                latest_row = rows_by_date.get(overview_date)
+                if not latest_row:
+                    continue
+                overview_records_by_date[overview_date].append(build_daily_record(meta, latest_row))
+                latest_weekly_row = build_period_overview_row(latest_row, rows, target_date=overview_date, timeframe="weekly")
+                latest_monthly_row = build_period_overview_row(latest_row, rows, target_date=overview_date, timeframe="monthly")
+                if latest_weekly_row:
+                    overview_weekly_records_by_date[overview_date].append(build_daily_record(meta, latest_weekly_row))
+                if latest_monthly_row:
+                    overview_monthly_records_by_date[overview_date].append(build_daily_record(meta, latest_monthly_row))
         record_count += len(ohlcv_rows)
         if index % 500 == 0:
             logger.log(f"build_public_json progress={index}/{len(codes)}")
 
-    write_compact_json(
-        OVERVIEW_LITE_DIR / target_date / "market_pulse.json",
-        build_overview_payload(
-            overview_records,
-            target_date=target_date,
-            updated_at=updated_at,
-            source="incremental_jquants_update",
-            timeframe="daily",
-        ),
-    )
-    write_compact_json(
-        OVERVIEW_LITE_DIR / target_date / "market_pulse_weekly.json",
-        build_overview_payload(
-            overview_weekly_records,
-            target_date=target_date,
-            updated_at=updated_at,
-            source="incremental_jquants_update",
-            timeframe="weekly",
-        ),
-    )
-    write_compact_json(
-        OVERVIEW_LITE_DIR / target_date / "market_pulse_monthly.json",
-        build_overview_payload(
-            overview_monthly_records,
-            target_date=target_date,
-            updated_at=updated_at,
-            source="incremental_jquants_update",
-            timeframe="monthly",
-        ),
-    )
+    overview_counts: dict[str, dict[str, int]] = {}
+    for overview_date in overview_target_dates:
+        overview_records = overview_records_by_date[overview_date]
+        overview_weekly_records = overview_weekly_records_by_date[overview_date]
+        overview_monthly_records = overview_monthly_records_by_date[overview_date]
+        write_compact_json(
+            OVERVIEW_LITE_DIR / overview_date / "market_pulse.json",
+            build_overview_payload(
+                overview_records,
+                target_date=overview_date,
+                updated_at=updated_at,
+                source="incremental_jquants_update",
+                timeframe="daily",
+            ),
+        )
+        write_compact_json(
+            OVERVIEW_LITE_DIR / overview_date / "market_pulse_weekly.json",
+            build_overview_payload(
+                overview_weekly_records,
+                target_date=overview_date,
+                updated_at=updated_at,
+                source="incremental_jquants_update",
+                timeframe="weekly",
+            ),
+        )
+        write_compact_json(
+            OVERVIEW_LITE_DIR / overview_date / "market_pulse_monthly.json",
+            build_overview_payload(
+                overview_monthly_records,
+                target_date=overview_date,
+                updated_at=updated_at,
+                source="incremental_jquants_update",
+                timeframe="monthly",
+            ),
+        )
+        overview_counts[overview_date] = {
+            "daily": len(overview_records),
+            "weekly": len(overview_weekly_records),
+            "monthly": len(overview_monthly_records),
+        }
     return {
         "codeCount": len(codes),
         "tickerRecentRecordCount": record_count,
-        "overviewRecordCount": len(overview_records),
-        "overviewWeeklyRecordCount": len(overview_weekly_records),
-        "overviewMonthlyRecordCount": len(overview_monthly_records),
+        "overviewDates": overview_target_dates,
+        "overviewRecordCount": overview_counts.get(target_date, {}).get("daily", 0),
+        "overviewWeeklyRecordCount": overview_counts.get(target_date, {}).get("weekly", 0),
+        "overviewMonthlyRecordCount": overview_counts.get(target_date, {}).get("monthly", 0),
+        "overviewRecordsByDate": overview_counts,
         "seconds": round(time.perf_counter() - started, 3),
     }
 
 
-def update_manifest(target_date: str) -> None:
+def update_manifest(target_date: str, available_dates_to_add: list[str] | None = None) -> None:
     manifest = read_json(MANIFEST_JSON, {})
     available_dates = load_manifest_available_dates(manifest)
+    available_dates.extend(available_dates_to_add or [target_date])
     if target_date not in available_dates:
         available_dates.append(target_date)
     available_dates = sorted(set(available_dates))
@@ -519,25 +543,36 @@ def update_manifest(target_date: str) -> None:
     write_json(MANIFEST_JSON, payload)
 
 
-def update_overview_lite_index(target_date: str, logger: Logger) -> dict[str, Any]:
+def update_overview_lite_index(target_dates: list[str] | str, logger: Logger) -> dict[str, Any]:
+    if isinstance(target_dates, str):
+        target_dates = [target_dates]
+    target_dates = sorted(set(str(date) for date in target_dates if str(date).strip()))
     index_path = OVERVIEW_LITE_DIR / "index.json"
     payload = read_json(index_path, {})
-    updated: dict[str, bool] = {}
+    updated: dict[str, list[str]] = {}
+    missing: dict[str, list[str]] = {}
     for key, filename in (
         ("daily", "market_pulse.json"),
         ("weekly", "market_pulse_weekly.json"),
         ("monthly", "market_pulse_monthly.json"),
     ):
         dates = [str(item) for item in payload.get(key) or [] if str(item).strip()]
-        file_exists = (OVERVIEW_LITE_DIR / target_date / filename).exists()
-        if file_exists and target_date not in dates:
-            dates.append(target_date)
+        updated[key] = []
+        missing[key] = []
+        for target_date in target_dates:
+            file_exists = (OVERVIEW_LITE_DIR / target_date / filename).exists()
+            if file_exists:
+                if target_date not in dates:
+                    dates.append(target_date)
+                updated[key].append(target_date)
+            else:
+                missing[key].append(target_date)
         payload[key] = sorted(set(dates))
-        updated[key] = file_exists and payload[key][-1:] == [target_date]
     payload["generatedAt"] = datetime.now().astimezone().isoformat(timespec="seconds")
     write_compact_json(index_path, payload)
-    logger.log(f"overview_lite_index=OK {json.dumps(updated, ensure_ascii=False)}")
-    return updated
+    result = {"updated": updated, "missing": missing}
+    logger.log(f"overview_lite_index=OK {json.dumps(result, ensure_ascii=False)}")
+    return result
 
 
 def write_summary_and_health(status: str, *, target_date: str, manifest_latest: str, details: dict[str, Any]) -> None:
@@ -738,10 +773,19 @@ def main() -> int:
             last_successful_date=target_date,
         )
 
-        build_metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger)
+        overview_dates = sorted(
+            date
+            for date in set(str(item) for item in updated_dates if str(item).strip())
+            if manifest_latest < date <= target_date
+        )
+        if target_date not in overview_dates:
+            overview_dates.append(target_date)
+            overview_dates = sorted(set(overview_dates))
+
+        build_metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger, overview_dates=overview_dates)
         logger.log(f"build_public_json=OK {json.dumps(build_metrics, ensure_ascii=False)}")
-        index_metrics = update_overview_lite_index(target_date, logger)
-        update_manifest(target_date)
+        index_metrics = update_overview_lite_index(overview_dates, logger)
+        update_manifest(target_date, overview_dates)
         write_summary_and_health(
             "success",
             target_date=target_date,

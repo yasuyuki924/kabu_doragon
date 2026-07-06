@@ -9,15 +9,12 @@ on:
         default: false
         type: boolean
   schedule:
-    - cron: "53 6 * * 1-5"
-    - cron: "23 7 * * 1-5"
-    - cron: "53 7 * * 1-5"
-    - cron: "23 8 * * 1-5"
-    - cron: "13 9 * * 1-5"
-    - cron: "13 10 * * 1-5"
+    - cron: "30 8 * * 1-5"
   push:
     branches:
       - main
+      - master
+      - feature/lightweight-ticker-detail
     paths:
       - ".github/workflows/pages.yml"
       - "assets/**"
@@ -47,24 +44,10 @@ jobs:
     env:
       JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
       JQUANTS_PLAN: light
-      REFRESH_PUBLIC_DATA: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_data == true) }}
+      REFRESH_PUBLIC_DATA: ${{ github.event_name == 'schedule' || inputs.refresh_data == true }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            .github
-            assets
-            scripts
-            src
-            index.html
-            ticker.html
-            picked.html
-            registered.html
-            requirements.txt
-            AGENTS.md
-            CLAUDE.md
-          sparse-checkout-cone-mode: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -173,3 +156,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Verify deployed public data
+        run: python scripts/check_public_pages_data.py --base-url "${{ steps.deployment.outputs.page_url }}" --retries 12 --sleep 10
