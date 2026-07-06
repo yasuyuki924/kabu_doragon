@@ -575,6 +575,49 @@ def update_overview_lite_index(target_dates: list[str] | str, logger: Logger) ->
     return result
 
 
+def find_missing_recent_overview_dates(codes: list[str], target_date: str, *, lookback: int = 10) -> list[str]:
+    index = read_json(OVERVIEW_LITE_INDEX_JSON, {})
+    daily_dates = {str(item) for item in index.get("daily") or [] if str(item).strip()}
+    weekly_dates = {str(item) for item in index.get("weekly") or [] if str(item).strip()}
+    monthly_dates = {str(item) for item in index.get("monthly") or [] if str(item).strip()}
+    candidate_dates: list[str] = []
+    for code in ["7203", "6327", "7162", "9983", *codes[:20]]:
+        rows = read_ohlcv_csv(default_paths().ohlcv_dir / f"{code}.csv")
+        dates = [str(row.get("date")) for row in rows if row.get("date") and str(row.get("date")) <= target_date]
+        if dates:
+            candidate_dates = dates[-lookback:]
+            break
+    missing: list[str] = []
+    for date_value in candidate_dates:
+        checks = (
+            (daily_dates, "market_pulse.json"),
+            (weekly_dates, "market_pulse_weekly.json"),
+            (monthly_dates, "market_pulse_monthly.json"),
+        )
+        for indexed_dates, filename in checks:
+            if date_value not in indexed_dates or not (OVERVIEW_LITE_DIR / date_value / filename).exists():
+                missing.append(date_value)
+                break
+    return sorted(set(missing))
+
+
+def repair_missing_overview_lite(codes: list[str], target_date: str, logger: Logger) -> dict[str, Any] | None:
+    repair_dates = find_missing_recent_overview_dates(codes, target_date)
+    if not repair_dates:
+        logger.log("overview_lite_repair=SKIP no missing recent overview dates")
+        return None
+    logger.log(f"overview_lite_repair=RUN dates={','.join(repair_dates)}")
+    build_metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger, overview_dates=repair_dates)
+    index_metrics = update_overview_lite_index(repair_dates, logger)
+    update_manifest(target_date, repair_dates)
+    return {
+        "mode": "overview_lite_repair",
+        "updatedDates": repair_dates,
+        "build": build_metrics,
+        "overviewLiteIndex": index_metrics,
+    }
+
+
 def write_summary_and_health(status: str, *, target_date: str, manifest_latest: str, details: dict[str, Any]) -> None:
     now = datetime.now().astimezone().isoformat(timespec="seconds")
     write_json(
@@ -734,6 +777,25 @@ def main() -> int:
                     target_date = str(latest_date)
                 else:
                     logger.log(f"[SKIP] target data is not available yet fetchedLatestDate={latest_date} targetDate={target_date}")
+                    repair_metrics = repair_missing_overview_lite(codes, manifest_latest, logger)
+                    if repair_metrics:
+                        write_summary_and_health(
+                            "success",
+                            target_date=manifest_latest,
+                            manifest_latest=manifest_latest,
+                            details={
+                                **repair_metrics,
+                                "reason": "repaired_missing_overview_lite_without_new_jquants_date",
+                                "requestedTargetDate": target_date,
+                                "fetchedLatestDate": latest_date,
+                                "dateRange": f"{format_yyyymmdd(start_date)}..{format_yyyymmdd(end_date)}",
+                                "fetchSeconds": fetch_seconds,
+                                "log": str(log_path),
+                            },
+                        )
+                        logger.log(f"manifest.latestDate={manifest_latest}")
+                        logger.log("[OK] overview_lite repair completed without new J-Quants date")
+                        return 0
                     write_summary_and_health(
                         "skipped",
                         target_date=target_date,

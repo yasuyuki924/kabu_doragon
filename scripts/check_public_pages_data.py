@@ -60,8 +60,8 @@ def check_once(base_url: str) -> list[str]:
         issues.append("manifest.latestDate is empty")
 
     health_status = str(health.get("status") or "").strip()
-    if health_status != "success":
-        issues.append(f"update_health.status is not success: {health_status or '-'}")
+    if health_status not in {"success", "skipped"}:
+        issues.append(f"update_health.status is not success/skipped: {health_status or '-'}")
 
     health_manifest = health.get("manifest") if isinstance(health.get("manifest"), dict) else {}
     health_latest = str(health_manifest.get("latestDate") or "").strip()
@@ -70,6 +70,29 @@ def check_once(base_url: str) -> list[str]:
 
     details = health.get("details") if isinstance(health.get("details"), dict) else {}
     updated_dates = sorted(set(str(item) for item in details.get("updatedDates") or [] if str(item).strip()))
+    if not updated_dates:
+        available_dates = [str(item) for item in manifest.get("availableDates") or [] if str(item).strip()]
+        updated_dates = [date for date in available_dates if latest_date and date <= latest_date][-10:]
+        try:
+            indexed_daily_dates = sorted(str(item) for item in overview_index.get("daily") or [] if str(item).strip())
+            reference_payload = fetch_json(base_url, "data/public_json/ticker_recent/1y/ohlcv_ma/7203.json.gz")
+            reference_rows = reference_payload.get("ohlcv") if isinstance(reference_payload, dict) else []
+            reference_dates = [
+                str(row.get("date"))
+                for row in reference_rows
+                if isinstance(row, dict) and row.get("date") and latest_date and str(row.get("date")) <= latest_date
+            ]
+            previous_indexed_date = ""
+            for date in indexed_daily_dates:
+                if latest_date and date < latest_date and date in reference_dates:
+                    previous_indexed_date = date
+            if previous_indexed_date:
+                reference_dates = [date for date in reference_dates if previous_indexed_date < date <= latest_date]
+            else:
+                reference_dates = reference_dates[-10:]
+            updated_dates = sorted(set(reference_dates or updated_dates))
+        except Exception as exc:
+            issues.append(f"failed to load reference public_json/7203 dates: {type(exc).__name__}: {exc}")
     if latest_date and latest_date not in updated_dates:
         updated_dates.append(latest_date)
         updated_dates = sorted(set(updated_dates))
