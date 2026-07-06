@@ -181,7 +181,7 @@ def _check_public_json(code: str, manifest_latest: str) -> dict:
     return result
 
 
-def _check_overview_lite_index(manifest_latest: str) -> dict:
+def _check_overview_lite_index(manifest_latest: str, update_health: dict) -> dict:
     result: dict = {"ok": True, "issues": []}
     index = _load_json(OVERVIEW_LITE_DIR / "index.json")
     if not index:
@@ -190,6 +190,11 @@ def _check_overview_lite_index(manifest_latest: str) -> dict:
         return result
 
     result["generatedAt"] = index.get("generatedAt", "")
+    details = update_health.get("details") if isinstance(update_health.get("details"), dict) else {}
+    updated_dates = sorted(
+        set(str(item) for item in details.get("updatedDates") or [] if str(item).strip())
+    )
+    result["updatedDates"] = updated_dates
     for key, filename in (
         ("daily", "market_pulse.json"),
         ("weekly", "market_pulse_weekly.json"),
@@ -203,6 +208,13 @@ def _check_overview_lite_index(manifest_latest: str) -> dict:
         if manifest_latest and not (OVERVIEW_LITE_DIR / manifest_latest / filename).exists():
             result["ok"] = False
             result["issues"].append(f"{filename} missing for manifest.latestDate={manifest_latest}")
+        for updated_date in updated_dates:
+            if updated_date not in dates:
+                result["ok"] = False
+                result["issues"].append(f"{key} index missing updatedDate={updated_date}")
+            if not (OVERVIEW_LITE_DIR / updated_date / filename).exists():
+                result["ok"] = False
+                result["issues"].append(f"{filename} missing for updatedDate={updated_date}")
     return result
 
 
@@ -273,13 +285,14 @@ def main() -> int:
             log.log(f"             ISSUE: {issue}")
             ng_items.append(f"public_json/{code}: {issue}")
 
-    overview_index = _check_overview_lite_index(manifest_latest)
+    overview_index = _check_overview_lite_index(manifest_latest, update_health)
     tag = "OK" if overview_index["ok"] else "NG"
     log.log(
         f"  overview_lite_index[{tag}] generatedAt={overview_index.get('generatedAt','?')} "
         f"daily={overview_index.get('daily_last','?')} "
         f"weekly={overview_index.get('weekly_last','?')} "
-        f"monthly={overview_index.get('monthly_last','?')}"
+        f"monthly={overview_index.get('monthly_last','?')} "
+        f"updatedDates={len(overview_index.get('updatedDates') or [])}"
     )
     for issue in overview_index.get("issues", []):
         log.log(f"             ISSUE: {issue}")
