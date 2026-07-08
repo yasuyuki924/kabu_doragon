@@ -630,6 +630,31 @@ def write_summary_and_health(status: str, *, target_date: str, manifest_latest: 
             **details,
         },
     )
+    if status == "skipped":
+        existing_health = read_json(UPDATE_HEALTH_JSON, {})
+        existing_manifest = existing_health.get("manifest") if isinstance(existing_health.get("manifest"), dict) else {}
+        existing_latest = str(existing_manifest.get("latestDate") or "").strip()
+        if existing_health.get("status") == "success" and existing_latest == manifest_latest:
+            preserved = dict(existing_health)
+            preserved.update(
+                {
+                    "checkedAt": now,
+                    "context": "incremental_jquants_update",
+                    "status": "success",
+                    "manifest": {"latestDate": manifest_latest},
+                    "jquants": {"targetDate": target_date},
+                    "lastCheck": {
+                        "checkedAt": now,
+                        "status": "skipped",
+                        "targetDate": target_date,
+                        "details": details,
+                    },
+                    "lastCheckStatus": "skipped",
+                    "lastCheckReason": details.get("reason"),
+                }
+            )
+            write_json(UPDATE_HEALTH_JSON, preserved)
+            return
     write_json(
         UPDATE_HEALTH_JSON,
         {
