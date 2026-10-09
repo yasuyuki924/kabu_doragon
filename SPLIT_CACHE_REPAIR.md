@@ -9,11 +9,33 @@ UPDATED SCOPE: the user selected ONLY the 53 September 29 split names in
 not repair targets. The earlier whole-universe migration proposal below is
 superseded wherever it conflicts with this explicit scope.
 
-Implementation, bounded rehearsal, and approved scoped public-source verification
-have run. The feature branch was pushed, but has NOT been merged or deployed.
-The original local data and live public site are unchanged. The required daily
-postcheck FAILS on the public cache's 363-row retention versus its 1,200-row
-threshold. Do not describe the production repair as complete or release-ready.
+CURRENT STATUS, 2026-10-09 JST: the September split repair was merged in PR #16
+and deployed successfully in run 37911063068. All 53 scoped hosted charts plus
+four validation-only charts match immutable public raw data + verified actions;
+prices, volume and rolling MAs pass. Desktop/mobile rendering passed. The public
+latest date is 2026-10-08; local is 2026-10-09. Today's public acquisition was not
+included in this scoped repair. Local default 1,200-row postcheck and raw/adjusted
+integrity pass. Public retention uses the explicitly approved public profile.
+
+Local repair changed only six overview records. Hosted verification confirmed
+27 overview snapshots and 97,716 unrelated records retained their contents/order.
+37 focused safety tests pass. Temporary upper bounds were 33,159,952 bytes local
+and 72,286,117 bytes on the public runner, without whole-data rollback copies.
+The old task-owned copies below (19.75 GiB) were removed after scoped verification;
+small evidence now lives at
+`/Users/okamoto/My Project/kabu_doragon/reports/kabudragon_split_repair_20261009`.
+
+SEPARATE UNRESOLVED FINDING: all 53 local histories differ from the immutable
+public source on 2026-04-13 only within their common retained range. A read-only
+official J-Quants query confirmed that public 1718 matches final daily OHLCV,
+while local 1718 does not. A partial-day row is suspected; root cause and official
+values for the other 52 were not verified. No raw prices were changed. Do not
+describe the entire historical local dataset as fully repaired. Any correction
+of this April row needs separate scope/approval and historical indicator review.
+
+Historical preparation and blockers below are retained for provenance only.
+Their NOT-MERGED / retention-blocked / old temporary-path statements are superseded
+by this current status and the compact final evidence. Do not rerun old migrations.
 
 The public workflow previously cached raw/adjusted prices and public JSON but
 not the corporate-action metadata needed to rebuild adjusted prices. A fresh
