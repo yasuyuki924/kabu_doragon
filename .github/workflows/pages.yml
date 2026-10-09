@@ -86,6 +86,8 @@ jobs:
           path: |
             data/ohlcv
             data/ohlcv_raw
+            data/corporate_actions
+            data/split_adjustment_state.json
             data/public_json
             data/manifest.json
             data/update_health.json
@@ -95,10 +97,29 @@ jobs:
             data/tse_listed_components.csv
             data/watchlist.json
             data/inactive_codes.json
-          key: kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: kabu-pages-split-v1-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            kabu-pages-split-v1-${{ runner.os }}-${{ github.ref_name }}-
+
+      - name: Restore legacy data for explicit migration only
+        if: ${{ steps.generated-data-cache.outputs.cache-matched-key == '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/ohlcv
+            data/ohlcv_raw
+            data/public_json
+            data/manifest.json
+            data/update_health.json
+            data/update_summary.json
+            data/update_state.json
+            data/jquants_sync_state.json
+            data/tse_listed_components.csv
+            data/watchlist.json
+            data/inactive_codes.json
+          key: kabu-pages-legacy-readonly-${{ github.run_id }}
           restore-keys: |
             kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-
-            kabu-pages-data-${{ runner.os }}-
 
       - name: Inspect generated public data cache
         id: public-data-state
@@ -133,6 +154,12 @@ jobs:
           fi
           echo "needs_rebuild=$needs_rebuild" >> "$GITHUB_OUTPUT"
 
+      - name: Validate restored split metadata before any data writes
+        if: ${{ steps.public-data-state.outputs.available == 'true' }}
+        run: |
+          python scripts/check_split_adjustment.py --require-state --public
+          python scripts/check_ohlcv_integrity.py --check-raw
+
       - name: Incremental public JSON from J-Quants
         if: ${{ env.REFRESH_PUBLIC_DATA == 'true' && steps.public-data-state.outputs.available == 'true' }}
         run: python scripts/incremental_jquants_update.py
@@ -145,6 +172,16 @@ jobs:
         if: ${{ env.REFRESH_PUBLIC_DATA != 'true' && steps.public-data-state.outputs.available == 'true' && steps.rebuild-scope.outputs.needs_rebuild == 'true' }}
         run: python scripts/rebuild_pages_public_json_from_existing.py --recent-days 430
 
+      - name: Validate and seal candidate before cache save or publication
+        shell: bash
+        run: |
+          python scripts/check_ohlcv_integrity.py --check-raw
+          if [[ "${{ steps.public-data-state.outputs.available }}" == "true" ]]; then
+            python scripts/check_split_adjustment.py --public --seal
+          else
+            python scripts/check_split_adjustment.py --public --seal --bootstrap-inventory .tmp/split-bootstrap/action_inventory.json
+          fi
+
       - name: Save generated public data cache
         if: ${{ success() && (env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' || steps.rebuild-scope.outputs.needs_rebuild == 'true') }}
         uses: actions/cache/save@v4
@@ -152,6 +189,8 @@ jobs:
           path: |
             data/ohlcv
             data/ohlcv_raw
+            data/corporate_actions
+            data/split_adjustment_state.json
             data/public_json
             data/manifest.json
             data/update_health.json
@@ -161,7 +200,7 @@ jobs:
             data/tse_listed_components.csv
             data/watchlist.json
             data/inactive_codes.json
-          key: kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: kabu-pages-split-v1-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Build Pages artifact
         run: python scripts/build_pages_site.py --recent-days 430
@@ -179,4 +218,4 @@ jobs:
         uses: actions/deploy-pages@v4
 
       - name: Verify deployed public data
-        run: python scripts/check_public_pages_data.py --base-url "${{ steps.deployment.outputs.page_url }}" --retries 12 --sleep 10
+        run: python scripts/check_public_pages_data.py --base-url "${{ steps.deployment.outputs.page_url }}" --expected-data-dir data --retries 12 --sleep 10

@@ -19,6 +19,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.data_source.local_data import build_daily_record  # noqa: E402
+from scripts.check_split_adjustment import check_dataset  # noqa: E402
+from scripts.repair_split_overviews import repair_overviews  # noqa: E402
 from src.indicators.core import build_enriched_rows  # noqa: E402
 from src.jquants_provider import (  # noqa: E402
     build_inactive_candidate_entries,
@@ -411,6 +413,9 @@ def rebuild_public_json_from_ohlcv(
     overview_dates: list[str] | None = None,
 ) -> dict[str, Any]:
     paths = default_paths()
+    bootstrap = ROOT / ".tmp/split-bootstrap/action_inventory.json"
+    inventory = read_json(bootstrap, {}) if bootstrap.exists() and not (paths.data_dir / "split_adjustment_state.json").exists() else None
+    check_dataset(paths.data_dir, codes, official_inventory=inventory)
     started = time.perf_counter()
     record_count = 0
     overview_target_dates = sorted(set(overview_dates or [target_date]))
@@ -871,6 +876,8 @@ def main() -> int:
 
         build_metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger, overview_dates=overview_dates)
         logger.log(f"build_public_json=OK {json.dumps(build_metrics, ensure_ascii=False)}")
+        split_overview_metrics = repair_overviews(paths.data_dir, sorted(adjusted_codes))
+        logger.log(f"split_overviews=OK {json.dumps(split_overview_metrics)}")
         index_metrics = update_overview_lite_index(overview_dates, logger)
         update_manifest(target_date, overview_dates)
         write_summary_and_health(
@@ -883,6 +890,7 @@ def main() -> int:
                 "updatedDates": sorted(updated_dates),
                 "updatedCodeCount": len(updated_codes),
                 "adjustedCodeCount": len(adjusted_codes),
+                "splitOverviewRepair": split_overview_metrics,
                 "fetchSeconds": fetch_seconds,
                 "build": build_metrics,
                 "overviewLiteIndex": index_metrics,

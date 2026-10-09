@@ -1185,6 +1185,14 @@ def sync_prices(
                 continue
             if "Code" in frame.columns:
                 frame = frame[frame["Code"].map(normalize_repo_code).isin(code_set)]
+            if "AdjFactor" not in frame.columns or any(
+                coerce_float(record.get("C")) is not None and (
+                    coerce_float(record.get("AdjFactor")) is None or
+                    not math.isfinite(float(record["AdjFactor"])) or float(record["AdjFactor"]) <= 0
+                )
+                for record in frame.to_dict("records")
+            ):
+                raise ValueError(f"missing/invalid J-Quants adjustment factors for {trading_date}")
             rows_by_code = frame_to_ohlcv_rows(frame, api_version)
             events_by_code = frame_to_corporate_action_events(frame, api_version)
             if not rows_by_code:
