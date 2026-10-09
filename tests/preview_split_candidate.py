@@ -14,6 +14,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 CANDIDATE = ROOT / ".tmp/split-september-candidate"
+OUTPUT = None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -44,6 +45,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    output = OUTPUT or CANDIDATE
+    output.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     results = []
@@ -58,7 +61,7 @@ def main():
                     page.goto(f"http://127.0.0.1:{server.server_port}/ticker.html?code={code}&publicSite=1", wait_until="networkidle")
                     page.wait_for_function("document.querySelectorAll('canvas').length >= 2")
                     page.wait_for_function("document.querySelector('#tickerTitle')?.textContent.includes('銘柄詳細') === false")
-                    page.screenshot(path=str(CANDIDATE / f"preview-{code}-{viewport['width']}.png"), full_page=True)
+                    page.screenshot(path=str(output / f"preview-{code}-{viewport['width']}.png"), full_page=True)
                     pixels = page.evaluate("""() => Array.from(document.querySelectorAll('canvas')).map(canvas => {
                         const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
                         const colors = new Set();
@@ -74,7 +77,7 @@ def main():
     finally:
         server.shutdown()
         server.server_close()
-    (CANDIDATE / "browser_validation.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
+    (output / "browser_validation.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
     print(json.dumps(results, ensure_ascii=False))
 
 

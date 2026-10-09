@@ -252,6 +252,20 @@ class SplitSafetyTests(unittest.TestCase):
         module.configure_profile(self.data, "local")
         self.assertEqual(module.MIN_OHLCV_ROWS, 1200)
 
+    def test_unsealed_local_builder_guards_only_explicit_repair_scope(self):
+        from scripts import incremental_jquants_update as module
+        class Logger:
+            def log(self, message):
+                pass
+        def read_config(path, default):
+            return {"codes": ["4667"]} if path.name == "september_split_targets.json" else default
+        with patch.object(module, "default_paths", return_value=self.paths(self.data)), patch.object(
+                module, "read_json", side_effect=read_config), patch.object(
+                module, "check_dataset") as guard, patch.object(
+                module, "read_ohlcv_csv", return_value=[]), patch.object(module, "write_compact_json"):
+            module.rebuild_public_json_from_ohlcv(["4667", "7203"], "2026-09-29", Logger())
+        guard.assert_called_once_with(self.data, ["4667"], official_inventory=None)
+
     def test_failed_postcheck_restores_prices_and_affected_overview_records(self):
         inventory_root = self.root / "official"
         write_json(inventory_root / "corporate_actions/4667.json", {"code": "4667", "events": self.actions})
