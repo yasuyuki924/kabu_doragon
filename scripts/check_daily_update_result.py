@@ -14,6 +14,7 @@ Exit codes:
 from __future__ import annotations
 
 import csv
+import argparse
 import json
 import sys
 from datetime import datetime, timedelta
@@ -218,11 +219,36 @@ def _check_overview_lite_index(manifest_latest: str, update_health: dict) -> dic
     return result
 
 
+def configure_profile(data_dir: Path, profile: str) -> None:
+    global LOGS_DIR, MANIFEST_JSON, UPDATE_SUMMARY_JSON, UPDATE_HEALTH_JSON, SYNC_STATE_JSON
+    global OHLCV_DIR, OHLCV_RAW_DIR, PUBLIC_JSON_DIR, OVERVIEW_LITE_DIR, MIN_OHLCV_ROWS
+    data_dir = data_dir.resolve()
+    LOGS_DIR = data_dir.parent / "logs"
+    MANIFEST_JSON = data_dir / "manifest.json"
+    UPDATE_SUMMARY_JSON = data_dir / "update_summary.json"
+    UPDATE_HEALTH_JSON = data_dir / "update_health.json"
+    SYNC_STATE_JSON = data_dir / "jquants_sync_state.json"
+    OHLCV_DIR = data_dir / "ohlcv"
+    OHLCV_RAW_DIR = data_dir / "ohlcv_raw"
+    PUBLIC_JSON_DIR = data_dir / "public_json/ticker_recent/1y/ohlcv_ma"
+    OVERVIEW_LITE_DIR = data_dir / "public_json/overview_lite"
+    # Explicit public retention profile; the local 1,200-row default is unchanged.
+    MIN_OHLCV_ROWS = 200 if profile == "public" else 1200
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-dir", type=Path)
+    parser.add_argument("--profile", choices=("local", "public"), default="local")
+    args = parser.parse_args()
+    if args.profile == "public" and args.data_dir is None:
+        parser.error("public retention profile requires an explicit --data-dir")
+    configure_profile(args.data_dir or ROOT / "data", args.profile)
     today = datetime.now().strftime("%Y%m%d")
     log = _Log(LOGS_DIR / f"daily_update_postcheck_{today}.log")
 
     log.log("[START] check_daily_update_result")
+    log.log(f"profile={args.profile} minOhlcvRows={MIN_OHLCV_ROWS}")
 
     manifest = _load_json(MANIFEST_JSON)
     update_summary = _load_json(UPDATE_SUMMARY_JSON)

@@ -33,6 +33,7 @@ from scripts.incremental_jquants_update import (  # noqa: E402
     sync_ticker_meta,
 )
 from src.data_source.local_data import build_daily_record  # noqa: E402
+from scripts.check_split_adjustment import event_digest, load_events  # noqa: E402
 from src.indicators.core import build_enriched_rows  # noqa: E402
 from src.jquants_provider import (  # noqa: E402
     build_client,
@@ -159,6 +160,7 @@ def main() -> int:
     try:
         logger.log("[START] pages J-Quants rebuild")
         paths = default_paths()
+        new_raw_baseline = not any(paths.ohlcv_raw_dir.glob("*.csv"))
         config = load_auth_config(paths.root)
         client, api_version = build_client(config)
         target_date = resolve_latest_trading_date(client, api_version)
@@ -208,6 +210,19 @@ def main() -> int:
             segments=["prime", "standard", "growth"],
             last_successful_date=target_date,
         )
+
+        if new_raw_baseline and api_version == "v2":
+            coverage = {}
+            digests = {}
+            for code in codes:
+                rows = read_ohlcv_rows(paths.ohlcv_raw_dir / f"{code}.csv")
+                if not rows:
+                    raise ValueError(f"{code}: new baseline has no official price rows")
+                coverage[code] = {"fromDate": str(rows[0]["date"]), "toDate": str(rows[-1]["date"])}
+                digests[code] = event_digest(load_events(paths.corporate_actions_dir / f"{code}.json"))
+            write_json(ROOT / ".tmp/split-bootstrap/action_inventory.json", {
+                "source": "jquants-v2", "coverage": coverage, "actionDigests": digests,
+            })
 
         build_metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger)
         daily_metrics = build_recent_daily_overviews(codes, recent_dates, logger)

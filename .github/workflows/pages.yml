@@ -8,6 +8,26 @@ on:
         required: false
         default: false
         type: boolean
+      validate_only:
+        description: "Validate scoped repair without deploying Pages"
+        required: false
+        default: false
+        type: boolean
+      legacy_cache_key:
+        description: "Optional exact legacy main cache for scoped migration validation"
+        required: false
+        default: ""
+        type: string
+      export_legacy_cache:
+        description: "Read-only cache export for isolated verification; never deploys"
+        required: false
+        default: false
+        type: boolean
+      export_cache_key:
+        description: "Exact successful main cache key for read-only export"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "53 6 * * 1-5"
     - cron: "23 7 * * 1-5"
@@ -39,11 +59,126 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.export_legacy_cache == true && format('split-cache-export-{0}', github.run_id) || inputs.validate_only == true && format('split-validation-{0}', github.run_id) || 'pages' }}
+  cancel-in-progress: false
 
 jobs:
+  export-cache:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.export_legacy_cache == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout export helper only
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/export_public_cache_snapshot.py
+            scripts/september_split_targets.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Validate exact source key
+        env:
+          SOURCE_CACHE_KEY: ${{ inputs.export_cache_key }}
+        run: |
+          python3 -c 'import os,re; assert re.fullmatch(r"kabu-pages-data-Linux-main-[0-9]+", os.environ["SOURCE_CACHE_KEY"]), "An exact main data-cache key is required"'
+
+      - name: Restore exact legacy cache read-only
+        id: export-source
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/ohlcv
+            data/ohlcv_raw
+            data/public_json
+            data/manifest.json
+            data/update_health.json
+            data/update_summary.json
+            data/update_state.json
+            data/jquants_sync_state.json
+            data/tse_listed_components.csv
+            data/watchlist.json
+            data/inactive_codes.json
+          key: ${{ inputs.export_cache_key }}
+          fail-on-cache-miss: true
+
+      - name: Package immutable source without price writes
+        env:
+          SOURCE_CACHE_KEY: ${{ inputs.export_cache_key }}
+          MATCHED_CACHE_KEY: ${{ steps.export-source.outputs.cache-matched-key }}
+        run: |
+          python3 scripts/export_public_cache_snapshot.py --data-dir data --output-dir "$RUNNER_TEMP/split-cache-export" --scope-file scripts/september_split_targets.json
+
+      - name: Upload read-only snapshot for isolated verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: split-cache-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/split-cache-export/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  validate-split-repair:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_only == true && inputs.export_legacy_cache != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+      JQUANTS_PLAN: light
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            src
+            requirements.txt
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -r requirements.txt
+      - name: Validate exact source key
+        env:
+          SOURCE_CACHE_KEY: ${{ inputs.legacy_cache_key }}
+        run: python3 -c 'import os,re; assert re.fullmatch(r"kabu-pages-data-Linux-main-[0-9]+", os.environ["SOURCE_CACHE_KEY"]), "An exact main source cache is required"'
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/ohlcv
+            data/ohlcv_raw
+            data/public_json
+            data/manifest.json
+            data/update_health.json
+            data/update_summary.json
+            data/update_state.json
+            data/jquants_sync_state.json
+            data/tse_listed_components.csv
+            data/watchlist.json
+            data/inactive_codes.json
+          key: ${{ inputs.legacy_cache_key }}
+          fail-on-cache-miss: true
+      - name: Validate and repair only the approved scope
+        run: |
+          python scripts/check_ohlcv_integrity.py --check-raw
+          python scripts/fetch_split_action_inventory.py --data-dir data --output-dir "$RUNNER_TEMP/split-official-inventory" --receipt-dir "$RUNNER_TEMP/split-official-receipts" --scope-file scripts/september_split_targets.json --fetch
+          python scripts/apply_verified_split_repair.py --data-dir data --scope-file scripts/september_split_targets.json --inventory-dir "$RUNNER_TEMP/split-official-inventory" --journal-dir "$RUNNER_TEMP/split-repair-journal" --profile public --apply
+          python scripts/check_split_adjustment.py --scope-file scripts/september_split_targets.json --require-state --public
+          python scripts/check_daily_update_result.py --data-dir data --profile public
+      - uses: actions/upload-artifact@v4
+        with:
+          name: split-repair-validation-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/split-repair-journal/repair_report.json
+            ${{ runner.temp }}/split-official-inventory
+            data/split_adjustment_state.json
+          retention-days: 3
+
   build:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && (inputs.export_legacy_cache == true || inputs.validate_only == true)) }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -86,6 +221,8 @@ jobs:
           path: |
             data/ohlcv
             data/ohlcv_raw
+            data/corporate_actions
+            data/split_adjustment_state.json
             data/public_json
             data/manifest.json
             data/update_health.json
@@ -95,10 +232,30 @@ jobs:
             data/tse_listed_components.csv
             data/watchlist.json
             data/inactive_codes.json
-          key: kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: kabu-pages-split-v1-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            kabu-pages-split-v1-${{ runner.os }}-${{ github.ref_name }}-
+
+      - name: Restore legacy data for explicit migration only
+        id: legacy-data-cache
+        if: ${{ steps.generated-data-cache.outputs.cache-matched-key == '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/ohlcv
+            data/ohlcv_raw
+            data/public_json
+            data/manifest.json
+            data/update_health.json
+            data/update_summary.json
+            data/update_state.json
+            data/jquants_sync_state.json
+            data/tse_listed_components.csv
+            data/watchlist.json
+            data/inactive_codes.json
+          key: ${{ inputs.legacy_cache_key || format('kabu-pages-legacy-readonly-{0}', github.run_id) }}
           restore-keys: |
             kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-
-            kabu-pages-data-${{ runner.os }}-
 
       - name: Inspect generated public data cache
         id: public-data-state
@@ -133,6 +290,17 @@ jobs:
           fi
           echo "needs_rebuild=$needs_rebuild" >> "$GITHUB_OUTPUT"
 
+      - name: Validate restored split metadata before any data writes
+        if: ${{ steps.public-data-state.outputs.available == 'true' }}
+        run: |
+          if [[ ! -f data/split_adjustment_state.json && -n "${{ steps.legacy-data-cache.outputs.cache-matched-key }}" ]]; then
+            python scripts/check_ohlcv_integrity.py --check-raw
+            python scripts/fetch_split_action_inventory.py --data-dir data --output-dir "$RUNNER_TEMP/split-official-inventory" --receipt-dir "$RUNNER_TEMP/split-official-receipts" --scope-file scripts/september_split_targets.json --fetch
+            python scripts/apply_verified_split_repair.py --data-dir data --scope-file scripts/september_split_targets.json --inventory-dir "$RUNNER_TEMP/split-official-inventory" --journal-dir "$RUNNER_TEMP/split-repair-journal" --profile public --apply
+          fi
+          python scripts/check_split_adjustment.py --scope-file scripts/september_split_targets.json --require-state --public
+          python scripts/check_ohlcv_integrity.py --check-raw
+
       - name: Incremental public JSON from J-Quants
         if: ${{ env.REFRESH_PUBLIC_DATA == 'true' && steps.public-data-state.outputs.available == 'true' }}
         run: python scripts/incremental_jquants_update.py
@@ -142,16 +310,29 @@ jobs:
         run: python scripts/run_pages_jquants_update.py --recent-days 430 --history-days 430
 
       - name: Rebuild public JSON from cached data
-        if: ${{ env.REFRESH_PUBLIC_DATA != 'true' && steps.public-data-state.outputs.available == 'true' && steps.rebuild-scope.outputs.needs_rebuild == 'true' }}
+        if: ${{ env.REFRESH_PUBLIC_DATA != 'true' && steps.public-data-state.outputs.available == 'true' && steps.rebuild-scope.outputs.needs_rebuild == 'true' && steps.legacy-data-cache.outputs.cache-matched-key == '' }}
         run: python scripts/rebuild_pages_public_json_from_existing.py --recent-days 430
 
+      - name: Validate and seal candidate before cache save or publication
+        shell: bash
+        run: |
+          python scripts/check_ohlcv_integrity.py --check-raw
+          python scripts/check_daily_update_result.py --data-dir data --profile public
+          if [[ "${{ steps.public-data-state.outputs.available }}" == "true" ]]; then
+            python scripts/check_split_adjustment.py --scope-file scripts/september_split_targets.json --public --seal
+          else
+            python scripts/check_split_adjustment.py --scope-file scripts/september_split_targets.json --public --seal --bootstrap-inventory .tmp/split-bootstrap/action_inventory.json
+          fi
+
       - name: Save generated public data cache
-        if: ${{ success() && (env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' || steps.rebuild-scope.outputs.needs_rebuild == 'true') }}
+        if: ${{ success() && (env.REFRESH_PUBLIC_DATA == 'true' || steps.public-data-state.outputs.available != 'true' || steps.rebuild-scope.outputs.needs_rebuild == 'true' || steps.legacy-data-cache.outputs.cache-matched-key != '') }}
         uses: actions/cache/save@v4
         with:
           path: |
             data/ohlcv
             data/ohlcv_raw
+            data/corporate_actions
+            data/split_adjustment_state.json
             data/public_json
             data/manifest.json
             data/update_health.json
@@ -161,22 +342,27 @@ jobs:
             data/tse_listed_components.csv
             data/watchlist.json
             data/inactive_codes.json
-          key: kabu-pages-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: kabu-pages-split-v1-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Build Pages artifact
+        if: ${{ inputs.validate_only != true }}
         run: python scripts/build_pages_site.py --recent-days 430
 
       - name: Configure Pages
+        if: ${{ inputs.validate_only != true }}
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
+        if: ${{ inputs.validate_only != true }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
+        if: ${{ inputs.validate_only != true }}
         uses: actions/deploy-pages@v4
 
       - name: Verify deployed public data
-        run: python scripts/check_public_pages_data.py --base-url "${{ steps.deployment.outputs.page_url }}" --retries 12 --sleep 10
+        if: ${{ inputs.validate_only != true }}
+        run: python scripts/check_public_pages_data.py --base-url "${{ steps.deployment.outputs.page_url }}" --expected-data-dir data --retries 12 --sleep 10

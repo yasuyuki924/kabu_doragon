@@ -10,6 +10,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 
@@ -22,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-url", required=True, help="GitHub Pages base URL, e.g. https://.../kabu_doragon/")
     parser.add_argument("--retries", type=int, default=6, help="Retry count while Pages propagation catches up.")
     parser.add_argument("--sleep", type=float, default=10.0, help="Seconds between retries.")
+    parser.add_argument("--expected-data-dir", type=Path, help="Compare split-affected charts with validated build inputs.")
     return parser.parse_args()
 
 
@@ -49,7 +51,7 @@ def url_exists(base_url: str, path: str) -> bool:
         raise
 
 
-def check_once(base_url: str) -> list[str]:
+def check_once(base_url: str, expected_data_dir: Path | None = None) -> list[str]:
     issues: list[str] = []
     manifest = fetch_json(base_url, "data/manifest.json")
     health = fetch_json(base_url, "data/update_health.json")
@@ -112,18 +114,31 @@ def check_once(base_url: str) -> list[str]:
             if not url_exists(base_url, path):
                 issues.append(f"public overview_lite file missing: {path}")
 
-    for code in REPRESENTATIVE_CODES:
+    codes = set(REPRESENTATIVE_CODES)
+    if expected_data_dir:
+        state = json.loads((expected_data_dir / "split_adjustment_state.json").read_text())
+        for code in state["actionDigests"]:
+            action_path = expected_data_dir / "corporate_actions" / f"{code}.json"
+            if action_path.exists() and json.loads(action_path.read_text()).get("events"):
+                codes.add(code)
+
+    for code in sorted(codes):
         path = f"data/public_json/ticker_recent/1y/ohlcv_ma/{code}.json.gz"
         payload = fetch_json(base_url, path)
         rows = payload.get("ohlcv") if isinstance(payload, dict) else None
         if not isinstance(rows, list):
             issues.append(f"public_json/{code} has no ohlcv rows")
             continue
-        if len(rows) < MIN_PUBLIC_JSON_ROWS:
+        if len(rows) < MIN_PUBLIC_JSON_ROWS and (code in REPRESENTATIVE_CODES or expected_data_dir is None):
             issues.append(f"public_json/{code} has too few rows: {len(rows)}")
         last_date = str(rows[-1].get("date") or "").strip() if rows and isinstance(rows[-1], dict) else ""
-        if latest_date and last_date != latest_date:
+        if latest_date and last_date != latest_date and (code in REPRESENTATIVE_CODES or expected_data_dir is None):
             issues.append(f"public_json/{code} lastDate={last_date or '-'} != manifest.latestDate={latest_date}")
+        if expected_data_dir:
+            expected_path = expected_data_dir / "public_json/ticker_recent/1y/ohlcv_ma" / f"{code}.json"
+            expected = json.loads(expected_path.read_text(encoding="utf-8"))
+            if payload != expected:
+                issues.append(f"public_json/{code} differs from validated build candidate (prices/volume/MA)")
 
     return issues
 
@@ -134,7 +149,7 @@ def main() -> int:
     last_issues: list[str] = []
     for attempt in range(1, attempts + 1):
         try:
-            last_issues = check_once(args.base_url)
+            last_issues = check_once(args.base_url, args.expected_data_dir)
         except Exception as exc:
             last_issues = [f"{type(exc).__name__}: {exc}"]
         if not last_issues:
