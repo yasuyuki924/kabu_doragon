@@ -694,6 +694,11 @@ def main() -> int:
             return 2
 
         paths = default_paths()
+        split_scope = ROOT / "scripts/september_split_targets.json"
+        if split_scope.exists():
+            guarded = read_json(split_scope, {}).get("codes", [])
+            check_dataset(paths.data_dir, guarded,
+                          require_state=(paths.data_dir / "split_adjustment_state.json").exists(), public=True)
         config = load_auth_config(paths.root)
         client, api_version = build_client(config)
         target_date = resolve_latest_trading_date(client, api_version)
@@ -879,7 +884,7 @@ def main() -> int:
 
         build_metrics = rebuild_public_json_from_ohlcv(codes, target_date, logger, overview_dates=overview_dates)
         logger.log(f"build_public_json=OK {json.dumps(build_metrics, ensure_ascii=False)}")
-        split_overview_metrics = repair_overviews(paths.data_dir, sorted(adjusted_codes))
+        split_overview_metrics = repair_overviews(paths.data_dir, sorted(adjusted_codes), start_date=start_date.isoformat())
         logger.log(f"split_overviews=OK {json.dumps(split_overview_metrics)}")
         index_metrics = update_overview_lite_index(overview_dates, logger)
         update_manifest(target_date, overview_dates)

@@ -21,6 +21,7 @@ from scripts.fetch_split_action_inventory import fetch_inventory
 from scripts.export_public_cache_snapshot import export_snapshot
 from scripts.migrate_split_cache_candidate import migrate_candidate
 from scripts.repair_split_overviews import repair_overviews
+from scripts.apply_verified_split_repair import repair as apply_verified_repair
 from src.jquants_provider import (
     apply_corporate_actions, default_paths, flush_pending_price_data,
     read_ohlcv_rows, sync_prices, write_corporate_action_events, write_ohlcv_rows,
@@ -203,6 +204,77 @@ class SplitSafetyTests(unittest.TestCase):
         after = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in (valid, invalid)}
         self.assertEqual(before, after)
         self.assertFalse(list(self.data.rglob(".split-*.tmp")))
+
+    def test_scoped_overview_keeps_pre_split_snapshots_and_is_idempotent(self):
+        earlier = self.data / "public_json/overview_lite/2026-09-28/market_pulse.json"
+        current = self.data / "public_json/overview_lite/2026-09-29/market_pulse.json"
+        write_json(earlier, {"date": "2026-09-28", "records": [{"code": "4667", "old": True}]})
+        write_json(current, {"date": "2026-09-29", "records": [{"code": "4667"}, {"code": "7203", "keep": True}]})
+        before = earlier.read_bytes()
+        result = repair_overviews(self.data, ["4667"], start_date="2026-09-29")
+        self.assertEqual(result["fileCount"], 1)
+        self.assertEqual(before, earlier.read_bytes())
+        after = current.read_bytes()
+        self.assertEqual(repair_overviews(self.data, ["4667"], start_date="2026-09-29")["fileCount"], 0)
+        self.assertEqual(after, current.read_bytes())
+
+    def test_overview_disk_budget_blocks_before_replacements(self):
+        path = self.data / "public_json/overview_lite/2026-09-29/market_pulse.json"
+        write_json(path, {"date": "2026-09-29", "records": [{"code": "4667"}]})
+        before = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "budget exceeded"):
+            repair_overviews(self.data, ["4667"], max_temporary_bytes=1)
+        self.assertEqual(before, path.read_bytes())
+
+    def test_overview_replacement_failure_restores_prior_target_records(self):
+        from scripts import repair_split_overviews as module
+        paths = [self.data / "public_json/overview_lite/2026-09-29" / name
+                 for name in ("market_pulse.json", "market_pulse_weekly.json")]
+        for path in paths:
+            write_json(path, {"date": "2026-09-29", "records": [{"code": "4667", "old": True}, {"code": "7203", "keep": True}]})
+        before = [json.loads(path.read_text()) for path in paths]
+        original = module.os.replace
+        calls = []
+        def fail_once(source, target):
+            calls.append(target)
+            if len(calls) == 2:
+                raise OSError("simulated replacement failure")
+            return original(source, target)
+        with patch.object(module.os, "replace", side_effect=fail_once):
+            with self.assertRaisesRegex(OSError, "simulated"):
+                repair_overviews(self.data, ["4667"])
+        self.assertEqual(before, [json.loads(path.read_text()) for path in paths])
+
+    def test_local_row_threshold_remains_1200_with_explicit_public_profile(self):
+        from scripts import check_daily_update_result as module
+        module.configure_profile(self.data, "public")
+        self.assertEqual(module.MIN_OHLCV_ROWS, 200)
+        module.configure_profile(self.data, "local")
+        self.assertEqual(module.MIN_OHLCV_ROWS, 1200)
+
+    def test_failed_postcheck_restores_prices_and_affected_overview_records(self):
+        inventory_root = self.root / "official"
+        write_json(inventory_root / "corporate_actions/4667.json", {"code": "4667", "events": self.actions})
+        write_json(inventory_root / "action_inventory.json", {
+            "source": "jquants-v2", "coverage": {"4667": {"fromDate": "2026-09-25", "toDate": "2026-09-29"}},
+            "actionDigests": {"4667": event_digest(self.actions)},
+        })
+        write_ohlcv_rows(self.data / "ohlcv/4667.csv", self.raw)
+        overview = self.data / "public_json/overview_lite/2026-09-29/market_pulse.json"
+        write_json(overview, {"date": "2026-09-29", "records": [{"code": "4667", "old": True}]})
+        raw_before = (self.data / "ohlcv_raw/4667.csv").read_bytes()
+        adjusted_before = (self.data / "ohlcv/4667.csv").read_bytes()
+        overview_before = json.loads(overview.read_text())
+        with patch("scripts.apply_verified_split_repair.check_integrity"), patch(
+                "scripts.apply_verified_split_repair.REPRESENTATIVE_CODES", []), patch(
+                "scripts.apply_verified_split_repair.subprocess.run", side_effect=OSError("postcheck failure")):
+            with self.assertRaisesRegex(OSError, "postcheck failure"):
+                apply_verified_repair(self.data, {"codes": ["4667"], "effectiveDate": "2026-09-29"},
+                                      self.root / "journal", inventory_root=inventory_root, profile="public")
+        self.assertEqual(raw_before, (self.data / "ohlcv_raw/4667.csv").read_bytes())
+        self.assertEqual(adjusted_before, (self.data / "ohlcv/4667.csv").read_bytes())
+        self.assertEqual(overview_before, json.loads(overview.read_text()))
+        self.assertFalse((self.data / "split_adjustment_state.json").exists())
 
     def test_first_sealing_requires_official_inventory(self):
         output = self.root / "candidate"
