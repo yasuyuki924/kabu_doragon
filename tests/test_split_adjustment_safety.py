@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import tempfile
+import tarfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
@@ -182,6 +183,15 @@ class SplitSafetyTests(unittest.TestCase):
             self.assertAlmostEqual(payload["records"][0]["changePercent"], expected, places=3)
             self.assertIn("strategyMatches", payload["records"][0])
 
+    def test_overview_repair_preserves_original_record_order(self):
+        path = self.data / "public_json/overview_lite/2026-09-29/market_pulse.json"
+        untouched = {"code": "9999", "close": 100}
+        write_json(path, {"date": "2026-09-29", "records": [untouched, {"code": "4667"}]})
+        repair_overviews(self.data, ["4667"])
+        after = json.loads(path.read_text())["records"]
+        self.assertEqual([item["code"] for item in after], ["9999", "4667"])
+        self.assertEqual(after[0], untouched)
+
     def test_overview_validation_failure_leaves_existing_files_unchanged(self):
         valid = self.data / "public_json/overview_lite/2026-09-29/market_pulse.json"
         invalid = self.data / "public_json/overview_lite/2026-10-01/market_pulse.json"
@@ -262,6 +272,62 @@ class SplitSafetyTests(unittest.TestCase):
     def test_inventory_receipts_cannot_overlap_source(self):
         with self.assertRaisesRegex(ValueError, "receipts must be separate"):
             fetch_inventory(None, self.data, self.root / "inventory", ["4667"], receipt_dir=self.data / "receipts")
+
+    def test_scoped_inventory_queries_only_requested_code_and_keeps_prices_unchanged(self):
+        calls = []
+        class Client:
+            def get_eq_bars_daily(inner, **kwargs):
+                calls.append(kwargs)
+                return pd.DataFrame([{"Code": "46670", "Date": row["date"],
+                                      "AdjFactor": 1 / 3 if row["date"] == "2026-09-29" else 1}
+                                     for row in self.raw])
+        before = (self.data / "ohlcv_raw/4667.csv").read_bytes()
+        inventory = fetch_inventory(Client(), self.data, self.root / "inventory", ["4667"], by_code=True)
+        self.assertEqual(calls, [{"code": "46670", "from_yyyymmdd": "20260925", "to_yyyymmdd": "20260929"}])
+        self.assertEqual(inventory["actionDigests"]["4667"], event_digest(self.actions))
+        self.assertEqual(before, (self.data / "ohlcv_raw/4667.csv").read_bytes())
+
+    def test_scoped_sealing_does_not_certify_unrelated_watchlist_codes(self):
+        output = self.root / "candidate"
+        build_candidate(self.data, self.data / "corporate_actions", output, ["4667"], [])
+        data = output / "data"
+        (data / "watchlist.json").write_text(json.dumps([{"ticker": "4667"}, {"ticker": "9999"}]))
+        scope_path = self.root / "scope.json"
+        write_json(scope_path, {"codes": ["4667"], "effectiveDate": "2026-09-29"})
+        inventory_path = self.root / "inventory.json"
+        write_json(inventory_path, {"source": "jquants-v2", "coverage": {"4667": {
+            "fromDate": self.raw[0]["date"], "toDate": self.raw[-1]["date"]}},
+            "actionDigests": {"4667": event_digest(self.actions)}})
+        with patch("sys.argv", ["check", "--data-dir", str(data), "--scope-file", str(scope_path),
+                                "--public", "--seal", "--bootstrap-inventory", str(inventory_path)]):
+            self.assertEqual(check_main(), 0)
+        state = json.loads((data / "split_adjustment_state.json").read_text())
+        self.assertEqual(state["scopeCodes"], ["4667"])
+        self.assertNotIn("9999", state["actionDigests"])
+
+    def test_scoped_export_excludes_unrelated_prices(self):
+        from scripts.build_split_repair_candidate import write_ticker_candidate
+        write_ticker_candidate(self.data, "4667", apply_corporate_actions(self.raw, self.actions), "fixture")
+        write_ohlcv_rows(self.data / "ohlcv_raw/9999.csv", self.raw)
+        # The legacy cache contract has no corporate_actions directory.
+        source = self.root / "legacy"
+        for parent in ("ohlcv", "ohlcv_raw", "public_json"):
+            shutil.copytree(self.data / parent, source / parent)
+        shutil.copy2(self.data / "manifest.json", source / "manifest.json")
+        output = self.root / "bounded-export"
+        key = "kabu-pages-data-Linux-main-123"
+        report = export_snapshot(source, output, key, key, scope={"codes": ["4667"]})
+        self.assertEqual(report["repairCodes"], ["4667"])
+        with tarfile.open(output / "public-cache.tar.gz") as archive:
+            self.assertNotIn("data/ohlcv_raw/9999.csv", archive.getnames())
+            self.assertIn("data/ohlcv_raw/4667.csv", archive.getnames())
+
+    def test_production_scope_is_exactly_53_with_four_validation_only_names(self):
+        scope = json.loads((Path(__file__).resolve().parents[1] / "scripts/september_split_targets.json").read_text())
+        self.assertEqual(len(scope["codes"]), 53)
+        self.assertEqual(len(set(scope["codes"])), 53)
+        self.assertTrue({"4667", "278A"}.issubset(scope["codes"]))
+        self.assertTrue(set(scope["codes"]).isdisjoint(scope["validationOnlyCodes"]))
 
     def test_workflow_blocks_legacy_before_fetch_and_seals_before_save(self):
         workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/pages.yml").read_text())
@@ -351,6 +417,16 @@ class SplitSafetyTests(unittest.TestCase):
             self.assertEqual((source / name).read_bytes(), original)
             if name.startswith("ohlcv_raw/") or (name.startswith("ohlcv/") and "4667" not in name):
                 self.assertEqual((output / "data" / name).read_bytes(), original)
+        (source / "ohlcv/9999.csv").write_text("unrelated fixture must never be parsed")
+        scoped = self.root / "scoped-migration"
+        report = migrate_candidate(source, inventory_root, scoped,
+                                   scope={"codes": ["4667"], "effectiveDate": "2026-09-29"})
+        self.assertEqual(report["codeCount"], 1)
+        self.assertEqual(report["changedCodes"], ["4667"])
+        self.assertEqual((scoped / "data/ohlcv/9999.csv").read_bytes(),
+                         (source / "ohlcv/9999.csv").read_bytes())
+        state = json.loads((scoped / "data/split_adjustment_state.json").read_text())
+        self.assertEqual(state["scopeCodes"], ["4667"])
 
 
 if __name__ == "__main__":

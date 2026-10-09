@@ -4,6 +4,11 @@ As of 2026-10-09 JST. Branch: `codex/fix-split-cache`.
 
 ## Status
 
+UPDATED SCOPE: the user selected ONLY the 53 September 29 split names in
+`scripts/september_split_targets.json`. 6327/7162/7203/9983 are validation only,
+not repair targets. The earlier whole-universe migration proposal below is
+superseded wherever it conflicts with this explicit scope.
+
 Implementation and bounded rehearsal only. This branch has not been pushed,
 merged, or deployed. The original local data and live public site are unchanged.
 Do not describe the production repair as complete.
@@ -18,6 +23,11 @@ runner could therefore restore prices without their split history.
 - Use a separate cache namespace with same-branch restoration only.
 - Reject legacy/unverified caches before acquisition or generated-data writes.
 - Require valid adjustment factors in J-Quants v2 price responses.
+- Export only the 53 target histories plus four validation-only histories and
+  the existing shared overview files needed to preserve unrelated records.
+- Fetch official metadata by the 53 target codes, not by full-universe dates.
+- Seal and enforce an explicit 53-code scope; never claim unrelated codes were
+  officially validated. The regular rebuild guard honors that explicit scope.
 - Compare adjusted prices with raw prices plus verified actions; independently
   validate chart OHLC, volume, coverage, and moving averages.
 - Preserve previously verified actions across subsequent updates.
@@ -34,10 +44,11 @@ fetch, production data edits, or automatic migration are included.
 
 ## Verification
 
-- 26 focused tests covering metadata loss, duplicate updates, multiple splits,
+- 31 focused tests covering metadata loss, duplicate updates, multiple splits,
   incorrect adjustment dates, official coverage, nonfinite factors, workflow
   gates, overview preservation, isolated migration, read-only cache export,
-  and interrupted official-inventory receipt reuse.
+  interrupted official-inventory receipt reuse, scoped export/acquisition/
+  certification/migration, and preservation of original overview record order.
 - Real-data candidate: 53 September split names plus 6327/7162/7203/9983.
 - 57 adjusted/chart histories, including volume and MA5/25/75/200, passed.
 - 27 overview files for nine retained dates passed; unrelated records remained
@@ -56,27 +67,29 @@ local action metadata and is not an official, whole-universe migration certifica
 The existing integrity helper emits a ResourceWarning for its unclosed CSV
 reader in tests; no unrelated change to that helper is included.
 
-## Release blockers and rollout
+## Scoped Release Blockers And Rollout
 
-1. Obtain an immutable snapshot of the currently used PUBLIC cache, not the
-   running local dataset. Local March adjustment anomalies need separate review;
-   do not publish the whole local dataset to solve the September issue.
+1. Obtain an immutable, bounded snapshot from the currently used PUBLIC cache:
+   53 repair names, four validation-only names, and shared overview data. Do not
+   substitute the running local dataset, which has separate March anomalies.
 2. With specific user approval for the long-running work, acquire official
-   J-Quants adjustment metadata for every retained raw-history date/code. Missing
-   official coverage stops migration. Do not acquire five-year price history.
-3. Build a separate whole-universe candidate. Run both required existing checks
+   J-Quants adjustment metadata ONLY for the 53 target codes across their retained
+   raw-history dates. Missing official coverage stops migration. Do not acquire
+   five-year price history or investigate unrelated names.
+3. Build a separate scoped candidate. Run both required existing checks
    and review any differences between public-cache retention and the daily
    checker's 1,200-row local-history threshold. Do not weaken thresholds silently.
 4. Validate representative and split-affected charts and overview records.
-5. Arrange an explicit, reviewed way to seed the new MAIN cache with that
-   candidate. The current branch does NOT implement a production cache-import
-   operation. A local migration certificate alone does not seed Actions cache.
+5. Arrange an explicit, reviewed import of ONLY the 53-name correction into the
+   current public cache, preserving all unrelated ticker files and records.
+   The current branch does NOT implement that production cache-import operation.
+   The 53-name certificate does not certify the rest of the market.
 6. Only then merge and publish, and verify hosted manifest, update_health,
    representative charts, and split-affected charts against the candidate.
 
 IMPORTANT: merging first would make the new fail-closed gate reject the existing
 legacy cache and stop scheduled publication. This branch is not release-ready
-until the migration and cache-seeding path above are completed. Interrupted
+until the scoped candidate and import path above are completed. Interrupted
 candidate work must never be promoted; the currently published site stays intact.
 
 Live official acquisition, full-cache copying/processing, Actions execution,
@@ -90,7 +103,8 @@ The latest successful public run is 37816788603 at commit
 The `github-pages` artifact contains generated delivery data but no raw price
 history, so it cannot substitute for this cache during whole-universe migration.
 
-The feature-branch workflow has an explicit `export_legacy_cache` mode. In that
+The feature-branch workflow has an explicit, now 53-code-bounded
+`export_legacy_cache` mode. In that
 mode the normal build job is skipped, the export job has contents-read permission
 only, no J-Quants credentials, no cache-save step, and no deployment. Its separate
 concurrency group cannot cancel a normal Pages run. The exact cache key must match;
@@ -99,7 +113,7 @@ and checks every source-file hash before/after, with no source modifications.
 
 This mode is prepared and tested locally only. Pushing the feature branch and
 executing that read-only Actions job still require specific approval. It exports
-the old source, not a repaired cache, and does not resolve the MAIN cache-seeding
+the scoped old source, not a repaired cache, and does not resolve the scoped MAIN import
 release blocker above.
 
 Live official queries independently confirmed September 29 adjustment factors:
@@ -122,5 +136,8 @@ averages can be computed from an unadjusted history.
 date. These include inactive/stale delivery files and young listings; no claim
 of missing acquisition is made without checking the official trading record.
 The full audit evidence is `public_audit.json` beside the downloaded artifact.
-Whole-universe official raw-history verification and migration have NOT run:
-the raw cache requires the separately approved export Actions job.
+Whole-universe official verification/migration are no longer planned or needed
+for this repair. The scoped official verification/migration have NOT run:
+the raw cache requires the separately approved export Actions job. A fresh check
+of the earlier isolated candidate passed for exactly 53 target codes, without
+sealing it as official or mutating the original/public datasets.

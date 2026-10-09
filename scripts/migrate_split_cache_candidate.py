@@ -21,11 +21,11 @@ from scripts.repair_split_overviews import repair_overviews
 from src.jquants_provider import apply_corporate_actions, read_ohlcv_rows, write_ohlcv_rows
 
 
-def migrate_candidate(source: Path, inventory_root: Path, output: Path) -> dict:
+def migrate_candidate(source: Path, inventory_root: Path, output: Path, *, scope: dict | None = None) -> dict:
     source, inventory_root, output = source.resolve(), inventory_root.resolve(), output.resolve()
     if output.exists() or output.is_relative_to(source) or source.is_relative_to(output):
         raise ValueError("migration output must be new and separate from the immutable source snapshot")
-    codes = active_codes(source)
+    codes = sorted(set(scope["codes"])) if scope else active_codes(source)
     if not codes:
         raise ValueError("snapshot has no active codes")
     inventory = json.loads((inventory_root / "action_inventory.json").read_text())
@@ -43,6 +43,8 @@ def migrate_candidate(source: Path, inventory_root: Path, output: Path) -> dict:
         if raw[-1]["date"] > manifest["latestDate"]:
             raise ValueError("source snapshot is changing or ahead of its manifest")
         events = load_events(inventory_root / "corporate_actions" / f"{code}.json")
+        if scope and scope.get("effectiveDate") not in {event["effectiveDate"] for event in events}:
+            raise ValueError(f"{code}: official inventory does not confirm the scoped split date")
         coverage = inventory.get("coverage", {}).get(code, {})
         if (coverage.get("fromDate", "9999") > raw[0]["date"] or
                 coverage.get("toDate", "") < raw[-1]["date"] or
@@ -71,11 +73,19 @@ def migrate_candidate(source: Path, inventory_root: Path, output: Path) -> dict:
         write_ticker_candidate(data, code, rows, now)
     overview_metrics = repair_overviews(data, sorted(changed))
     state = check_dataset(data, codes, public=True, official_inventory=inventory)
+    if scope:
+        state.update({"scope": "explicit-codes", "scopeCodes": codes,
+                      "repairEffectiveDate": scope.get("effectiveDate")})
     for name, old_digest in source_hashes.items():
         if digest(source / name) != old_digest:
             raise ValueError(f"immutable source changed during migration: {name}")
         if name.startswith("ohlcv_raw/") and digest(data / name) != old_digest:
             raise ValueError(f"raw history changed in candidate: {name}")
+        if scope and name.startswith(("ohlcv/", "public_json/ticker_meta/",
+                                      "public_json/ticker_recent/", "public_json/ticker_detail_recent/")):
+            code = Path(name).stem
+            if code not in codes and digest(data / name) != old_digest:
+                raise ValueError(f"unrelated ticker data changed in candidate: {name}")
     # Certification is the last step; an interrupted candidate is never usable.
     write_json(data / "split_adjustment_state.json", state)
     report = {"status": "candidate_validated", "candidateOnly": True, "codeCount": len(codes),
@@ -91,9 +101,11 @@ def main() -> int:
     parser.add_argument("--source-data-dir", type=Path, required=True, help="Immutable extracted public cache, not a running local dataset")
     parser.add_argument("--inventory-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--scope-file", type=Path)
     args = parser.parse_args()
     try:
-        print(json.dumps(migrate_candidate(args.source_data_dir, args.inventory_dir, args.output_dir)))
+        print(json.dumps(migrate_candidate(args.source_data_dir, args.inventory_dir, args.output_dir,
+                                          scope=json.loads(args.scope_file.read_text()) if args.scope_file else None)))
         return 0
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"[BLOCKED] {exc}", file=sys.stderr)

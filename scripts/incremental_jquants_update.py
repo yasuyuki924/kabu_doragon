@@ -415,7 +415,10 @@ def rebuild_public_json_from_ohlcv(
     paths = default_paths()
     bootstrap = ROOT / ".tmp/split-bootstrap/action_inventory.json"
     inventory = read_json(bootstrap, {}) if bootstrap.exists() and not (paths.data_dir / "split_adjustment_state.json").exists() else None
-    check_dataset(paths.data_dir, codes, official_inventory=inventory)
+    split_state = read_json(paths.data_dir / "split_adjustment_state.json", {})
+    guarded_codes = sorted(set(codes) & set(split_state["scopeCodes"])) if split_state.get("scope") == "explicit-codes" else codes
+    if guarded_codes:
+        check_dataset(paths.data_dir, guarded_codes, official_inventory=inventory)
     started = time.perf_counter()
     record_count = 0
     overview_target_dates = sorted(set(overview_dates or [target_date]))

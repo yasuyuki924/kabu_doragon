@@ -67,6 +67,8 @@ def repair_overviews(data_dir: Path, codes: list[str]) -> dict:
                     **build_overview_payload(records, target_date=day, updated_at=now,
                                              source="split_adjustment_repair", timeframe=timeframe),
                 }
+                # Keep the original ordering as well as every unrelated record.
+                updated["records"] = records
                 with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
                                                  prefix=".split-", suffix=".tmp", delete=False) as file:
                     temporary = Path(file.name)

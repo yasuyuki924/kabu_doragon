@@ -22,12 +22,12 @@ from scripts.check_split_adjustment import active_codes, event_digest, load_even
 from src.jquants_provider import (
     build_client, coerce_float, frame_to_corporate_action_events, load_auth_config,
     merge_corporate_action_events, read_ohlcv_rows, write_corporate_action_events,
-    normalize_repo_code,
+    normalize_repo_code, normalize_api_code,
 )
 
 
 def fetch_inventory(client, data_dir: Path, output: Path, codes: list[str], *,
-                    receipt_dir: Path | None = None, min_interval: float = 0) -> dict:
+                    receipt_dir: Path | None = None, min_interval: float = 0, by_code: bool = False) -> dict:
     data_dir, output = data_dir.resolve(), output.resolve()
     if output.exists() or output.is_relative_to(data_dir) or data_dir.is_relative_to(output):
         raise ValueError("inventory output must be new and separate from source data")
@@ -46,21 +46,33 @@ def fetch_inventory(client, data_dir: Path, output: Path, codes: list[str], *,
         needed_dates[code] = {row["date"] for row in rows}
         trading_dates.update(row["date"] for row in rows)
     detected = {code: [] for code in codes}
+    if by_code:
+        queries = [(f"{code}-{coverage[code]['fromDate']}-{coverage[code]['toDate']}", {
+            "code": normalize_api_code(code),
+            "from_yyyymmdd": coverage[code]["fromDate"].replace("-", ""),
+            "to_yyyymmdd": coverage[code]["toDate"].replace("-", ""),
+        }, {code: needed_dates[code]}) for code in codes]
+    else:
+        queries = [(day, {"date_yyyymmdd": date.fromisoformat(day).strftime("%Y%m%d")}, {
+            code: {day} for code in codes if day in needed_dates[code]
+        }) for day in sorted(trading_dates)]
     last_request = 0.0
-    for index, day in enumerate(sorted(trading_dates), 1):
+    for index, (day, query, required) in enumerate(queries, 1):
         receipt_path = receipt_dir / f"{day}.json" if receipt_dir is not None else None
         cached = receipt_path is not None and receipt_path.exists()
         if cached:
             receipt = json.loads(receipt_path.read_text())
             if receipt.get("source") != "jquants-v2" or receipt.get("date") != day:
                 raise ValueError(f"invalid official receipt for {day}")
+            if receipt.get("query", query) != query:
+                raise ValueError(f"official receipt query mismatch for {day}")
             frame = pd.DataFrame(receipt["records"])
         else:
             for attempt in range(5):
                 time.sleep(max(0, min_interval - (time.monotonic() - last_request)))
                 last_request = time.monotonic()
                 try:
-                    frame = client.get_eq_bars_daily(date_yyyymmdd=date.fromisoformat(day).strftime("%Y%m%d"))
+                    frame = client.get_eq_bars_daily(**query)
                     break
                 except (HTTPError, RetryError) as exc:
                     if "429" not in str(exc) or attempt == 4:
@@ -71,15 +83,14 @@ def fetch_inventory(client, data_dir: Path, output: Path, codes: list[str], *,
         if frame.empty or not {"Code", "Date", "AdjFactor"}.issubset(frame.columns):
             raise ValueError(f"official action fields unavailable for {day}")
         factors = {
-            normalize_repo_code(record["Code"]): coerce_float(record["AdjFactor"])
+            (normalize_repo_code(record["Code"]), str(record["Date"])[:10]): coerce_float(record["AdjFactor"])
             for record in frame.to_dict("records")
-            if str(record["Date"])[:10] == day
         }
-        for code in codes:
-            if day in needed_dates[code] and (
-                factors.get(code) is None or not math.isfinite(factors[code]) or factors[code] <= 0
-            ):
-                raise ValueError(f"official action coverage missing for {code} at {day}")
+        for code, days in required.items():
+            for needed_day in days:
+                factor = factors.get((code, needed_day))
+                if factor is None or not math.isfinite(factor) or factor <= 0:
+                    raise ValueError(f"official action coverage missing for {code} at {needed_day}")
         events = frame_to_corporate_action_events(frame, "v2")
         if receipt_path is not None and not cached:
             records = [{"Code": str(record["Code"]), "Date": str(record["Date"])[:10],
@@ -87,12 +98,12 @@ def fetch_inventory(client, data_dir: Path, output: Path, codes: list[str], *,
                        for record in frame.to_dict("records")]
             receipt_path.parent.mkdir(parents=True, exist_ok=True)
             temporary = receipt_path.with_suffix(".json.tmp")
-            temporary.write_text(json.dumps({"source": "jquants-v2", "date": day, "records": records},
+            temporary.write_text(json.dumps({"source": "jquants-v2", "date": day, "query": query, "records": records},
                                             allow_nan=False), encoding="utf-8")
             temporary.replace(receipt_path)
         for code in codes:
             detected[code] = merge_corporate_action_events(detected[code], events.get(code, []))
-        print(f"action metadata {index}/{len(trading_dates)} date={day} cached={cached}", flush=True)
+        print(f"action metadata {index}/{len(queries)} query={day} cached={cached}", flush=True)
     output.mkdir(parents=True)
     digests = {}
     for code in codes:
@@ -102,6 +113,7 @@ def fetch_inventory(client, data_dir: Path, output: Path, codes: list[str], *,
     inventory = {
         "source": "jquants-v2", "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
         "coverage": coverage, "actionDigests": digests, "tradingDateCount": len(trading_dates),
+        "queryMode": "by-code" if by_code else "by-date", "queryCount": len(queries),
     }
     (output / "action_inventory.json").write_text(json.dumps(inventory, indent=2), encoding="utf-8")
     return inventory
@@ -113,11 +125,15 @@ def main() -> int:
     parser.add_argument("--auth-root", type=Path, default=ROOT)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--codes")
+    parser.add_argument("--scope-file", type=Path, help="Bounded repair scope; fetch metadata by code, never the whole universe")
     parser.add_argument("--fetch", action="store_true", help="Explicit authorization to call J-Quants; default is plan only")
     parser.add_argument("--receipt-dir", type=Path, help="Isolated resumable official metadata receipts; never raw price data")
     parser.add_argument("--min-interval", type=float, default=1.1, help="Minimum seconds between official requests")
     args = parser.parse_args()
-    codes = sorted(set(value.strip().upper() for value in args.codes.split(",") if value.strip())) if args.codes else active_codes(args.data_dir)
+    if args.codes and args.scope_file:
+        parser.error("use --codes or --scope-file, not both")
+    scope = json.loads(args.scope_file.read_text()) if args.scope_file else None
+    codes = sorted(set(scope["codes"])) if scope else sorted(set(value.strip().upper() for value in args.codes.split(",") if value.strip())) if args.codes else active_codes(args.data_dir)
     if not codes:
         parser.error("no codes")
     if not args.fetch:
@@ -129,7 +145,8 @@ def main() -> int:
         if api_version != "v2":
             raise ValueError("official AdjFactor inventory requires J-Quants v2")
         inventory = fetch_inventory(client, args.data_dir, args.output_dir, codes,
-                                    receipt_dir=args.receipt_dir, min_interval=max(0, args.min_interval))
+                                    receipt_dir=args.receipt_dir, min_interval=max(0, args.min_interval),
+                                    by_code=scope is not None)
         print(json.dumps({"status": "OK", "codeCount": len(codes),
                           "tradingDateCount": inventory["tradingDateCount"]}))
         return 0

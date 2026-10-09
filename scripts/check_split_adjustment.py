@@ -189,21 +189,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=ROOT / "data")
     parser.add_argument("--codes")
+    parser.add_argument("--scope-file", type=Path, help="Explicit repair scope; unrelated codes are not certified")
     parser.add_argument("--require-state", action="store_true")
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--seal", action="store_true", help="Write a cache certificate only after all checks pass")
     parser.add_argument("--bootstrap-inventory", type=Path, help="Official retained-history action inventory required for first sealing")
     args = parser.parse_args()
-    codes = sorted({value.strip().upper() for value in args.codes.split(",") if value.strip()}) if args.codes else active_codes(args.data_dir)
+    if args.codes and args.scope_file:
+        parser.error("use --codes or --scope-file, not both")
+    scope = json.loads(args.scope_file.read_text()) if args.scope_file else None
+    codes = sorted(set(scope["codes"])) if scope else sorted({value.strip().upper() for value in args.codes.split(",") if value.strip()}) if args.codes else active_codes(args.data_dir)
     if not codes:
         parser.error("no active codes; pass --codes or supply ticker_meta")
     try:
         inventory = json.loads(args.bootstrap_inventory.read_text()) if args.bootstrap_inventory else None
         state = check_dataset(args.data_dir, codes, require_state=args.require_state, public=args.public,
                               official_inventory=inventory)
+        if scope:
+            state.update({"scope": "explicit-codes", "scopeCodes": codes,
+                          "repairEffectiveDate": scope.get("effectiveDate")})
         if args.seal:
             if not args.public or args.codes:
-                raise ValueError("sealing requires --public and the complete active universe")
+                raise ValueError("sealing requires --public and a complete active universe or explicit scope file")
             target = args.data_dir / STATE_NAME
             existing = json.loads(target.read_text()) if target.exists() else {}
             if existing.get("schemaVersion") != 1:
