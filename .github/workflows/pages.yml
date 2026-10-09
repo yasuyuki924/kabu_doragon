@@ -8,6 +8,16 @@ on:
         required: false
         default: false
         type: boolean
+      export_legacy_cache:
+        description: "Read-only cache export for isolated verification; never deploys"
+        required: false
+        default: false
+        type: boolean
+      export_cache_key:
+        description: "Exact successful main cache key for read-only export"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "53 6 * * 1-5"
     - cron: "23 7 * * 1-5"
@@ -39,11 +49,67 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.export_legacy_cache == true && format('split-cache-export-{0}', github.run_id) || 'pages' }}
   cancel-in-progress: true
 
 jobs:
+  export-cache:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.export_legacy_cache == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout export helper only
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/export_public_cache_snapshot.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Validate exact source key
+        env:
+          SOURCE_CACHE_KEY: ${{ inputs.export_cache_key }}
+        run: |
+          python3 -c 'import os,re; assert re.fullmatch(r"kabu-pages-data-Linux-main-[0-9]+", os.environ["SOURCE_CACHE_KEY"]), "An exact main data-cache key is required"'
+
+      - name: Restore exact legacy cache read-only
+        id: export-source
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/ohlcv
+            data/ohlcv_raw
+            data/public_json
+            data/manifest.json
+            data/update_health.json
+            data/update_summary.json
+            data/update_state.json
+            data/jquants_sync_state.json
+            data/tse_listed_components.csv
+            data/watchlist.json
+            data/inactive_codes.json
+          key: ${{ inputs.export_cache_key }}
+          fail-on-cache-miss: true
+
+      - name: Package immutable source without price writes
+        env:
+          SOURCE_CACHE_KEY: ${{ inputs.export_cache_key }}
+          MATCHED_CACHE_KEY: ${{ steps.export-source.outputs.cache-matched-key }}
+        run: |
+          python3 scripts/export_public_cache_snapshot.py --data-dir data --output-dir "$RUNNER_TEMP/split-cache-export"
+
+      - name: Upload read-only snapshot for isolated verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: split-cache-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/split-cache-export/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
   build:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.export_legacy_cache == true) }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

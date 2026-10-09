@@ -17,6 +17,7 @@ from scripts.build_split_repair_candidate import build_candidate, write_json
 from scripts.check_split_adjustment import check_dataset, event_digest
 from scripts.check_split_adjustment import main as check_main
 from scripts.fetch_split_action_inventory import fetch_inventory
+from scripts.export_public_cache_snapshot import export_snapshot
 from scripts.migrate_split_cache_candidate import migrate_candidate
 from scripts.repair_split_overviews import repair_overviews
 from src.jquants_provider import (
@@ -236,6 +237,32 @@ class SplitSafetyTests(unittest.TestCase):
             fetch_inventory(Client(), self.data, self.root / "inventory", ["4667"])
         self.assertFalse((self.root / "inventory").exists())
 
+    def test_interrupted_inventory_resumes_receipts_without_certifying_partial_work(self):
+        calls = []
+        class Client:
+            fail = True
+            def get_eq_bars_daily(inner, *, date_yyyymmdd):
+                calls.append(date_yyyymmdd)
+                if inner.fail and date_yyyymmdd == "20260928":
+                    raise RuntimeError("fixture interruption")
+                day = f"{date_yyyymmdd[:4]}-{date_yyyymmdd[4:6]}-{date_yyyymmdd[6:]}"
+                return pd.DataFrame([{"Code": "46670", "Date": day,
+                                      "AdjFactor": 1 / 3 if day == "2026-09-29" else 1}])
+        client = Client()
+        output, receipts = self.root / "inventory", self.root / "receipts"
+        with self.assertRaisesRegex(RuntimeError, "interruption"):
+            fetch_inventory(client, self.data, output, ["4667"], receipt_dir=receipts)
+        self.assertFalse(output.exists())
+        self.assertTrue((receipts / "2026-09-25.json").exists())
+        client.fail = False
+        inventory = fetch_inventory(client, self.data, output, ["4667"], receipt_dir=receipts)
+        self.assertEqual(calls.count("20260925"), 1)
+        self.assertEqual(inventory["actionDigests"]["4667"], event_digest(self.actions))
+
+    def test_inventory_receipts_cannot_overlap_source(self):
+        with self.assertRaisesRegex(ValueError, "receipts must be separate"):
+            fetch_inventory(None, self.data, self.root / "inventory", ["4667"], receipt_dir=self.data / "receipts")
+
     def test_workflow_blocks_legacy_before_fetch_and_seals_before_save(self):
         workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/pages.yml").read_text())
         steps = workflow["jobs"]["build"]["steps"]
@@ -251,6 +278,43 @@ class SplitSafetyTests(unittest.TestCase):
             self.assertIn("kabu-pages-split-v1-", step["with"]["key"])
         restored = steps[positions["Restore generated public data cache"]]
         self.assertNotIn("kabu-pages-data-", restored["with"]["restore-keys"])
+
+    def test_export_does_not_mutate_source_or_accept_wrong_cache(self):
+        source = self.root / "export-source"
+        write_ohlcv_rows(source / "ohlcv_raw/4667.csv", self.raw)
+        write_json(source / "manifest.json", {"latestDate": "2026-09-29"})
+        before = (source / "ohlcv_raw/4667.csv").read_bytes()
+        key = "kabu-pages-data-Linux-main-123"
+        report = export_snapshot(source, self.root / "export-output", key, key)
+        self.assertTrue(report["sourceFilesUnchanged"])
+        self.assertEqual(before, (source / "ohlcv_raw/4667.csv").read_bytes())
+        with self.assertRaisesRegex(ValueError, "exact matching"):
+            export_snapshot(source, self.root / "wrong-output", key, key + "4")
+        self.assertFalse((self.root / "wrong-output").exists())
+
+    def test_export_rejects_unexpected_files_and_symlinks(self):
+        source = self.root / "export-source"
+        source.mkdir()
+        (source / ".env").write_text("fixture")
+        key = "kabu-pages-data-Linux-main-123"
+        with self.assertRaisesRegex(ValueError, "outside"):
+            export_snapshot(source, self.root / "export-output", key, key)
+        (source / ".env").unlink()
+        (source / "ohlcv_raw").symlink_to(self.data / "ohlcv_raw", target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "symlinks"):
+            export_snapshot(source, self.root / "export-output", key, key)
+
+    def test_export_workflow_cannot_deploy_or_cancel_production(self):
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/pages.yml").read_text())
+        export = workflow["jobs"]["export-cache"]
+        self.assertEqual(export["permissions"], {"contents": "read"})
+        self.assertNotIn("environment", export)
+        self.assertIn("split-cache-export-", workflow["concurrency"]["group"])
+        self.assertIn("export_legacy_cache", workflow["jobs"]["build"]["if"])
+        for step in export["steps"]:
+            self.assertNotIn("deploy", step.get("uses", ""))
+            self.assertNotIn("cache/save", step.get("uses", ""))
+            self.assertNotIn("secrets.", json.dumps(step))
 
     def test_full_snapshot_migration_repairs_only_affected_prices_and_preserves_raw_bytes(self):
         source = self.root / "snapshot"
