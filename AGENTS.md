@@ -153,13 +153,46 @@ python3 scripts/kabu_daily_update.py
 - 実ファイルを一時的に差し替える場合は、必ず復元し、成功後に一時ファイルを削除する
 - 本番の自然実行ログは後で確認するが、基本的な実装・表示・ログ形式の確認を未来待ちにしない
 
+## Long Running Task Gate
+
+フルアクセス状態でも、5分以上かかる可能性がある処理は、
+実行前に必ずユーザー確認を取ること。
+
+対象:
+
+- `public_json` 再生成
+- `overview_lite` 再生成
+- J-Quants 取得
+- GitHub Actions 実行
+- push / deploy
+- `data/` 配下の大量コピー・同期
+- 1000件以上のファイル処理
+- 5分以上かかる可能性がある検査・ビルド・テスト
+
+確認時に必ず伝える:
+
+- 何をするか
+- 想定時間
+- 書き換えるファイル範囲
+- 中断した場合のリスク
+- 代替の軽い方法があるか
+
+ユーザーが明示的に「実行して」と言っていても、
+5分以上かかる可能性がある場合は個別確認を挟む。
+
 ---
 
 ## Pages Deployment And Data Updates
 
 - Treat UI-only changes and data acquisition as separate work.
+- Treat `main` as the canonical branch for GitHub Pages public operation unless the user explicitly chooses another branch.
+- The Pages workflow should normally deploy from cached/generated public data. Scheduled public data refreshes should use the incremental path when cache exists.
+- Use full public J-Quants regeneration only as a fallback when the generated data cache is missing or clearly unusable.
+- `workflow_dispatch` must keep data refresh explicit. Run with `refresh_data=true` only when public market data needs updating; keep it false for UI-only deploys.
 - For UI-only changes such as Pick button styling or layout updates, do not run J-Quants refresh. Push the UI commit to the Pages source branch and run a Pages deploy without `refresh_data`.
+- On `push`, do not mix UI-only changes with public data acquisition. If data scripts or runtime data generation logic changed, explain whether a cached rebuild is enough before running any J-Quants refresh.
 - If a date is missing from the public mobile site but exists in local generated data, first confirm whether the public Pages artifact is stale. Do not assume J-Quants acquisition is needed.
 - Use J-Quants refresh only when the requested market data has not been acquired/generated yet, or when the user explicitly asks to fetch fresh market data.
 - For existing generated data that simply is not public yet, prefer a cached/public-data rebuild or artifact publish path over a fresh J-Quants fetch.
 - Keep these concerns separate in status updates: UI deploy, public data publish, and J-Quants data acquisition.
+- After a public data deploy, verify the hosted `data/manifest.json`, `data/update_health.json`, and at least one representative public JSON file from the GitHub Pages URL before reporting success.
