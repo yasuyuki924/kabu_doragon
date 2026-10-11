@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 CANDIDATE = ROOT / ".tmp/split-september-candidate"
 OUTPUT = None
+CODES = ("4667", "278A")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -54,7 +55,7 @@ def main():
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(channel="chrome")
             for viewport in ({"width": 1440, "height": 1000}, {"width": 390, "height": 844}):
-                for code in ("4667", "278A"):
+                for code in CODES:
                     page = browser.new_page(viewport=viewport)
                     errors = []
                     page.on("pageerror", lambda error: errors.append(str(error)))
