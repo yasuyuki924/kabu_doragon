@@ -11,7 +11,7 @@
 
 ---
 
-## 絶対に削除・上書きしてはいけないもの
+## 通常作業で削除・手動上書きしてはいけないもの
 
 | パス | 理由 |
 |---|---|
@@ -22,6 +22,13 @@
 | `data/public_json/` | フロントエンド配信用JSON。ohlcvから生成。削除禁止 |
 | `data/cache/` | キャッシュ。再生成可能だが削除しない |
 | Google Drive バックアップ | 手動バックアップ。触らない |
+
+### 通常更新と障害修復の区別
+
+- コード整理・画面修正では、上記データを変更しない。承認された日次更新では、正規の更新入口による必要なデータ更新だけを行い、手動上書きや履歴の削除はしない。
+- 障害修復の例外は、ユーザーが銘柄・日付・変更ファイル範囲を明示承認した場合だけ。対象を限定し、復元手段を確保してから実行する。通常のコード整理を修復の承認と解釈しない。
+- 修復でも `AGENTS.md` の必須検査を省略しない。元データの検査が失敗した状態で `public_json` を再生成せず、事後検査の成功前に修復完了としない。
+- この例外は旧形式 `data/tickers` / `data/overview` の復元や、既存バックアップの削除を許可しない。バックアップの整理には別途明示承認が必要。
 
 ---
 
@@ -40,8 +47,8 @@ data/ohlcv/*.csv          # 全件禁止
 data/public_json/**/*.json # 全件禁止
 ```
 
-**例外**: データ修復・初期セットアップ専用コミットの場合のみ。
-その際は `git diff --cached --name-status` で内容を必ず確認すること。
+**例外**: ユーザーが変更範囲を明示承認したデータ修復・初期セットアップ専用コミットの場合のみ。
+必須検査後、`git diff --cached --name-status` で承認範囲だけが含まれることを確認する。通常のコードコミットには混ぜない。
 
 ---
 
@@ -86,11 +93,16 @@ git push --force origin main
 
 ### データ修復モード（障害時のみ）
 
+以下は修復範囲の明示承認が前提。処理名が表にあるだけでは実行許可にならない。
+
 | 許可 | 禁止 |
 |---|---|
 | `scripts/repair_ohlcv_from_tickers_backup.py` 実行 | Google Driveバックアップの削除 |
 | `python3 scripts/check_ohlcv_integrity.py --summary` | 修復完了前の `main` merge |
 | 修復後の `public_json` 再生成 | 修復内容の未確認 commit |
+
+既存の `scripts/apply_ohlcv_repair_plan.py` を本番で承認実行する場合は `--keep-backups` を付け、必須事後検査と別途の削除承認までは退避を保持する。
+同処理の既定の退避削除を検証するテストは、一時フォルダ内の既存動作の確認であり、本番バックアップの削除許可や修復完了の保証ではない。
 
 ### launchd 設定変更モード
 
@@ -105,7 +117,7 @@ git push --force origin main
 ## AI に対する追加指示
 
 - `data/` 以下のファイルを stage する前に、必ず `python3 scripts/preflight_guard.py` を実行すること
-- `data/ohlcv/` または `data/public_json/` が staging area に含まれていたら即座に `git reset HEAD -- data/` すること
+- 通常のコードコミットで `data/ohlcv/` または `data/public_json/` が staging area に含まれていたらコミットを止め、今回自分が追加したデータだけをステージから外す。既存のステージ済み変更を勝手に外さない。明示承認されたデータ専用コミットは上記例外に従う。
 - 「差分更新を実行してください」という依頼に対して `run_update_and_build_public_json.sh` を呼ぶことは禁止。必ず `run_incremental_public_json_update.sh` または `kabu_daily_update.py` を使うこと
 - チャートが1本になるなどの UI 表示異常が出た場合は、`check_ohlcv_integrity.py --check-raw --summary` で原因を特定してから修復すること。データを全削除して再生成するのは最終手段
 
